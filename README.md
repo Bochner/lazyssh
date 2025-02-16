@@ -1,76 +1,135 @@
 # LazySSH
 
-A comprehensive Python-based SSH toolkit for managing SSH connections, tunnels, and remote command execution.
+A comprehensive SSH toolkit for managing connections, tunnels, and remote sessions with a modern CLI interface.
 
-## Components
+## Features
 
-### 1. pyssh.py
-SSH connection manager that provides:
-- Customizable SSH connections with control socket support
-- Dynamic port forwarding
-- Verbosity control
-- User-friendly command confirmation
-
-```bash
-python pyssh.py -ip TARGET_IP -port PORT -host HOSTNAME -user USERNAME [-v] [-D DYNAMIC_PORT]
-```
-
-### 2. sshtun.py
-Advanced SSH tunnel manager with features:
+- Interactive CLI with color-coded interface
+- Multiple SSH connection management
 - Forward and reverse tunnel creation
-- Multiple tunnel management
-- SSH control socket tracking
-- Interactive CLI interface
+- Dynamic port forwarding
+- Control socket management
+- Terminal session management in Terminator
+- Automatic connection cleanup on exit
+- Real-time status display of connections and tunnels
 
-Commands:
-- `add <path> <user> <ssh_server>`: Add new SSH control socket
-- `remove <path>`: Remove SSH control socket
-- `l <path> <local_port> <remote_host> <remote_port>`: Create forward tunnel
-- `r <path> <local_port> <remote_host> <remote_port>`: Create reverse tunnel
-- `kill <tunnel_number>`: Kill specific tunnel
-- `list`: List active tunnels
-- `sockets`: List active sockets
+## Requirements
 
-### 3. sshint.py
-Interactive SSH command interface that provides:
-- Command history with arrow key support
-- Basic system information commands
-- Safe command execution through SSH socket
+- Python 3.7+
+- OpenSSH client
+- Terminator terminal emulator
+- Linux/Unix operating system
 
+### Installing Dependencies
+
+On Fedora/RHEL:
 ```bash
-python sshint.py --socket SOCKET_PATH
+sudo dnf install terminator
 ```
 
-Available commands:
-- `w`: Display logged-in users
-- `date`: Show current date/time
-- `date -u`: Show UTC date/time
-- `id`: Display user/group IDs
+On Ubuntu/Debian:
+```bash
+sudo apt install terminator
+```
+
+On Arch Linux:
+```bash
+sudo pacman -S terminator
+```
 
 ## Installation
 
-No installation required. Just clone the repository and ensure you have Python 3.x installed.
-
 ```bash
+# Clone the repository
 git clone https://github.com/yourusername/lazyssh.git
 cd lazyssh
+
+# Install the package
+pip install -e .
 ```
 
-## Requirements
-- Python 3.x
-- SSH client installed on the system
-- `readline` module (typically included with Python)
+## Usage
+
+After installation, run the tool using:
+
+```bash
+lazyssh
+```
+
+### Main Menu Options
+
+1. Create new SSH connection
+2. Manage tunnels
+3. Create tunnel
+4. Open terminal session
+5. Close connection
+q. Quit
+
+### SSH Connection Features
+
+- Custom port support
+- Identity file support
+- Dynamic port forwarding
+- Persistent connections with auto-cleanup
+- Control socket management
+- Seamless Terminator integration
+
+### Tunnel Management
+
+- Forward tunnel creation (local to remote)
+- Reverse tunnel creation (remote to local)
+- Multiple tunnels per connection
+- Real-time tunnel status monitoring
+- Easy tunnel creation and cleanup
+
+## Dependencies
+
+- click: Command line interface
+- rich: Terminal formatting and colors
+- pexpect: Terminal interaction
+- colorama: Cross-platform colored terminal text
+- python-dotenv: Environment variable management
+- terminator: Terminal emulation (system package)
+
+## Development
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/lazyssh.git
+cd lazyssh
+
+# Create a virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install development dependencies
+pip install -r requirements.txt
+
+# Install terminator
+# On Fedora/RHEL:
+sudo dnf install terminator
+# On Ubuntu/Debian:
+sudo apt install terminator
+# On Arch Linux:
+sudo pacman -S terminator
+```
+
+## Troubleshooting
+
+### Terminal Issues
+If you encounter any issues:
+1. Ensure Terminator is installed and available in your PATH
+2. Try running `terminator` directly to check for any configuration issues
+3. Check the terminal output for specific error messages
+
+### Connection Status
+- Active connections and their tunnels are always visible in the main menu
+- Real-time updates when creating/removing connections or tunnels
+- Detailed error messages and suggestions for troubleshooting
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Security Notes
-
-- Always verify SSH connections and tunnels before use
-- Be cautious with control socket permissions
-- Review tunnel configurations before implementation
-- Use strong authentication methods
 
 ## Contributing
 
