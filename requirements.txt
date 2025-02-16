@@ -1,0 +1,7 @@
+colorama>=0.4.6
+rich>=13.0.0
+click>=8.0.0
+pexpect>=4.8.0
+python-dotenv>=1.0.0
+# System dependencies:
+# terminator - Required for terminal emulation
