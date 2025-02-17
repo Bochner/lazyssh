@@ -7,6 +7,7 @@ from typing import Dict
 from lazyssh import check_dependencies
 from lazyssh.ssh import SSHManager
 from lazyssh.models import SSHConnection
+from lazyssh.command_mode import CommandMode
 from lazyssh.ui import (
     display_banner, display_menu, get_user_input, 
     display_error, display_success, display_info,
@@ -15,7 +16,7 @@ from lazyssh.ui import (
 
 ssh_manager = SSHManager()
 
-def display_current_status():
+def show_status():
     """Display current SSH connections and tunnels status"""
     if ssh_manager.connections:
         display_ssh_status(ssh_manager.connections)
@@ -38,17 +39,20 @@ def handle_menu_action(choice: str) -> bool:
         success = terminal_menu()
     elif choice == "5":
         success = close_connection_menu()
+    elif choice == "6":
+        return "mode"  # Special return value to trigger mode switch
     return success
 
 def main_menu():
-    display_current_status()
+    show_status()
     options = {
         "1": "Create new SSH connection",
         "2": "Destroy tunnel",
         "3": "Create tunnel",
         "4": "Open terminal session",
         "5": "Close connection",
-        "q": "Quit"
+        "6": "Switch mode (command/prompt)",
+        "e": "Exit"
     }
     display_menu(options)
     return get_user_input("Select an option")
@@ -102,10 +106,11 @@ def tunnel_menu():
             
             is_reverse = tunnel_type.startswith('r')
             if ssh_manager.create_tunnel(socket_path, local_port, remote_host, remote_port, is_reverse):
-                display_success("Tunnel created successfully")
+                # Success message already displayed by create_tunnel
                 return True
             else:
-                display_error("Failed to create tunnel")
+                # Error already displayed by create_tunnel
+                return False
         else:
             display_error("Invalid connection number")
     except ValueError:
@@ -177,11 +182,10 @@ def manage_tunnels_menu():
                 return
                 
             display_tunnels(socket_path, conn)
-            tunnel_choice = get_user_input("Enter tunnel number to destroy (or press Enter to cancel)")
+            tunnel_id = get_user_input("Enter tunnel ID to destroy (or press Enter to cancel)")
             
-            if tunnel_choice.isdigit():
-                tunnel_idx = int(tunnel_choice) - 1
-                if ssh_manager.close_tunnel(socket_path, tunnel_idx):
+            if tunnel_id:
+                if ssh_manager.close_tunnel(socket_path, tunnel_id):
                     display_success("Tunnel destroyed successfully")
                 else:
                     display_error("Failed to destroy tunnel")
@@ -190,8 +194,40 @@ def manage_tunnels_menu():
     except ValueError:
         display_error("Invalid input")
 
+def close_all_connections():
+    """Close all active connections and clean up"""
+    display_info("\nClosing all connections...")
+    for socket_path in list(ssh_manager.connections.keys()):
+        ssh_manager.close_connection(socket_path)
+
+def check_active_connections():
+    """Check if there are active connections and ask for confirmation if there are"""
+    if ssh_manager.connections:
+        return Confirm.ask("\nThere are active SSH connections. Are you sure you want to exit?")
+    return True
+
+def safe_exit():
+    """Safely exit the program with proper cleanup"""
+    if check_active_connections():
+        close_all_connections()
+        raise SystemExit
+
+# Rename original main to prompt_mode_main
+def prompt_mode_main():
+    while True:
+        choice = main_menu()
+        
+        if choice.lower() == "e":
+            safe_exit()
+        else:
+            result = handle_menu_action(choice)
+            if result == "mode":  # Handle mode switch
+                return  # Return to let main program switch modes
+
 @click.command()
-def main():
+@click.option('--prompt', is_flag=True, help='Start in prompt mode instead of command mode')
+def main(prompt: bool):
+    """LazySSH - A comprehensive SSH toolkit for managing connections and tunnels"""
     display_banner()
     
     # Check dependencies at startup
@@ -202,17 +238,33 @@ def main():
             display_warning(f"- {dep}")
         display_warning("Please install the missing dependencies for full functionality")
     
-    while True:
-        choice = main_menu()
-        
-        if choice.lower() == "q":
-            if Confirm.ask("Are you sure you want to quit?"):
-                # Close all connections before exiting
-                for socket_path in list(ssh_manager.connections.keys()):
-                    ssh_manager.close_connection(socket_path)
-                break
-        else:
-            handle_menu_action(choice)
+    current_mode = "prompt" if prompt else "command"
+    cmd_mode = CommandMode(ssh_manager)
+    
+    try:
+        while True:
+            try:
+                if current_mode == "prompt":
+                    display_info("\nCurrent mode: Prompt (use option 6 to switch to command mode)")
+                    prompt_mode_main()
+                    # Mode switch requested
+                    display_success("\nSwitching to command mode...")
+                    current_mode = "command"
+                else:
+                    display_info("\nCurrent mode: Command (type 'mode' to switch to prompt mode)")
+                    cmd_mode.run()
+                    # Mode switch requested
+                    display_success("\nSwitching to prompt mode...")
+                    current_mode = "prompt"
+            except KeyboardInterrupt:
+                safe_exit()
+                continue
+            except SystemExit:
+                # Exit without additional cleanup since safe_exit already did it
+                raise SystemExit
+    except (KeyboardInterrupt, SystemExit):
+        # Exit without additional cleanup
+        raise SystemExit
 
 if __name__ == "__main__":
     main()
