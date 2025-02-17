@@ -2,6 +2,8 @@
 
 A comprehensive SSH toolkit for managing connections, tunnels, and remote sessions with a modern CLI interface.
 
+![LazySSH](./lazyssh.png)
+
 ## Features
 
 - Dual interface modes:
