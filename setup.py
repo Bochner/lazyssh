@@ -9,10 +9,12 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="lazyssh",
     version="1.0.0",
-    author="Your Name",
+    author="Bochner",
+    author_email="",
     description="A comprehensive SSH toolkit for managing connections and tunnels",
     long_description=long_description,
     long_description_content_type="text/markdown",
+    url="https://github.com/Bochner/lazyssh",
     packages=find_packages(),
     install_requires=requirements,
     entry_points={
