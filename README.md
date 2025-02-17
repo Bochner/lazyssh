@@ -87,14 +87,6 @@ source venv/bin/activate  # On Unix/Linux
 pip install -e .
 ```
 
-### Method 4: System Python (Not recommended on some distributions)
-Some Linux distributions (like Kali Linux) use externally-managed environments and prevent direct pip installations. Use Method 1 or 2 instead.
-
-If you still want to install system-wide (not recommended):
-```bash
-pip install -e . --break-system-packages  # Use with caution
-```
-
 ## Usage
 
 After installation, run the tool using:
