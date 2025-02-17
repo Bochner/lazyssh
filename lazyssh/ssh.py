@@ -163,10 +163,12 @@ class SSHManager:
 
     def create_tunnel(self, socket_path: str, local_port: int, remote_host: str, remote_port: int, reverse: bool = False) -> bool:
         if socket_path not in self.connections:
+            display_error(f"Connection not found: {os.path.basename(socket_path)}")
             return False
 
         conn = self.connections[socket_path]
         try:
+            # Build command before execution to show the user
             cmd = ["ssh", "-S", socket_path, "-O", "forward"]
             if reverse:
                 cmd.extend(["-R", f"{local_port}:{remote_host}:{remote_port}"])
@@ -174,57 +176,66 @@ class SSHManager:
                 cmd.extend(["-L", f"{local_port}:{remote_host}:{remote_port}"])
             cmd.append(f"{conn.username}@{conn.host}")
 
-            # Display the command
-            display_info("Running tunnel command:")
+            # Always show the command being executed
+            display_info("\nExecuting tunnel creation command:")
             display_info(" ".join(cmd))
 
             process = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if process.stderr:
+                display_error(f"SSH error: {process.stderr.strip()}")
+            
             if process.returncode == 0:
-                tunnel_info = {
-                    "type": "reverse" if reverse else "forward",
-                    "local_port": local_port,
-                    "remote_host": remote_host,
-                    "remote_port": remote_port,
-                    "active": True
-                }
-                conn.tunnels.append(tunnel_info)
+                tunnel = conn.add_tunnel(local_port, remote_host, remote_port, reverse)
+                tunnel_type = "reverse" if reverse else "forward"
+                display_success(f"\nTunnel '{tunnel.id}' created successfully")
+                display_info(f"Type: {tunnel_type}")
+                display_info(f"Local port: {local_port}")
+                display_info(f"Remote: {remote_host}:{remote_port}")
                 return True
             return False
 
         except Exception as e:
-            console.print(f"[red]Error creating tunnel:[/red] {str(e)}")
+            display_error(f"Error creating tunnel: {str(e)}")
             return False
 
-    def close_tunnel(self, socket_path: str, tunnel_index: int) -> bool:
+    def close_tunnel(self, socket_path: str, tunnel_id: str) -> bool:
         if socket_path not in self.connections:
+            display_error(f"Connection not found: {os.path.basename(socket_path)}")
             return False
 
         conn = self.connections[socket_path]
-        if tunnel_index >= len(conn.tunnels):
+        tunnel = conn.get_tunnel(tunnel_id)
+        if not tunnel:
+            display_error(f"Tunnel {tunnel_id} not found")
             return False
 
-        tunnel = conn.tunnels[tunnel_index]
         try:
+            # Build command before execution to show the user
             cmd = ["ssh", "-S", socket_path, "-O", "cancel"]
-            if tunnel["type"] == "reverse":
-                cmd.extend(["-R", f"{tunnel['local_port']}:{tunnel['remote_host']}:{tunnel['remote_port']}"])
+            if tunnel.type == "reverse":
+                cmd.extend(["-R", f"{tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"])
             else:
-                cmd.extend(["-L", f"{tunnel['local_port']}:{tunnel['remote_host']}:{tunnel['remote_port']}"])
+                cmd.extend(["-L", f"{tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"])
             cmd.append(f"{conn.username}@{conn.host}")
 
-            # Display the command
-            display_info("Running tunnel destroy command:")
+            # Always show the command being executed
+            display_info("\nExecuting tunnel destroy command:")
             display_info(" ".join(cmd))
 
             process = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if process.stderr:
+                display_error(f"SSH error: {process.stderr.strip()}")
+            
             if process.returncode == 0:
-                # Remove the tunnel instead of just marking it inactive
-                conn.tunnels.pop(tunnel_index)
+                conn.remove_tunnel(tunnel_id)
+                display_success(f"\nTunnel '{tunnel_id}' destroyed successfully")
                 return True
             return False
 
         except Exception as e:
-            console.print(f"[red]Error closing tunnel:[/red] {str(e)}")
+            display_error(f"Error destroying tunnel: {str(e)}")
             return False
 
     def open_terminal(self, socket_path: str) -> None:
