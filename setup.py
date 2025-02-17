@@ -24,6 +24,9 @@ setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: POSIX :: Linux",
+        "Environment :: Console",
+        "Topic :: System :: Networking",
+        "Topic :: System :: Systems Administration",
     ],
     python_requires=">=3.7",
 )

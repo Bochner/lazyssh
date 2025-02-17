@@ -4,6 +4,7 @@ from rich.prompt import Prompt
 from rich.panel import Panel
 from rich import print as rprint
 from .models import SSHConnection
+import os
 
 console = Console()
 
@@ -38,7 +39,7 @@ def display_warning(message):
 
 def display_ssh_status(connections):
     table = Table(title="Active SSH Connections", border_style="blue")
-    table.add_column("Socket", style="cyan")
+    table.add_column("Name", style="cyan")
     table.add_column("Host", style="magenta")
     table.add_column("Username", style="green")
     table.add_column("Port", style="yellow")
@@ -47,13 +48,14 @@ def display_ssh_status(connections):
     
     for socket_path, conn in connections.items():
         if isinstance(conn, SSHConnection):
+            name = os.path.basename(socket_path)  # Just show the socket name, not full path
             table.add_row(
-                socket_path,
+                name,
                 conn.host,
                 conn.username,
                 str(conn.port),
                 str(conn.dynamic_port or "N/A"),
-                str(len([t for t in (conn.tunnels or []) if t.get("active", False)]))
+                str(len(conn.tunnels))
             )
     
     console.print(table)
@@ -62,21 +64,20 @@ def display_tunnels(socket_path: str, conn: SSHConnection):
     if not conn.tunnels:
         display_info("No tunnels for this connection")
         return
-
     table = Table(title=f"Tunnels for {conn.host}", border_style="blue")
     table.add_column("ID", style="cyan")
+    table.add_column("Connection", style="blue")
     table.add_column("Type", style="magenta")
     table.add_column("Local Port", style="green")
     table.add_column("Remote", style="yellow")
-    table.add_column("Status", style="blue")
     
-    for idx, tunnel in enumerate(conn.tunnels):
+    for tunnel in conn.tunnels:
         table.add_row(
-            str(idx + 1),
-            tunnel["type"],
-            str(tunnel["local_port"]),
-            f"{tunnel['remote_host']}:{tunnel['remote_port']}",
-            "Active" if tunnel["active"] else "Inactive"
+            tunnel.id,
+            tunnel.connection_name,
+            tunnel.type,
+            str(tunnel.local_port),
+            f"{tunnel.remote_host}:{tunnel.remote_port}"
         )
     
     console.print(table)
