@@ -42,13 +42,55 @@ sudo pacman -S terminator
 
 ## Installation
 
+There are several ways to install LazySSH depending on your system:
+
+### Method 1: Quick Install Script (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/lazyssh.git
+git clone https://github.com/Bochner/lazyssh.git
 cd lazyssh
+
+# Run the installer script
+./install.sh
+```
+The install script will automatically:
+- Install pipx if not present
+- Install terminator if not present
+- Install LazySSH using pipx
+- Set up all required paths
+
+### Method 2: Manual Installation Using pipx
+```bash
+# Install pipx if not already installed
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+
+# Install LazySSH
+pipx install git+https://github.com/Bochner/lazyssh.git
+```
+
+### Method 3: Using Virtual Environment (Recommended for Development)
+```bash
+# Clone the repository
+git clone https://github.com/Bochner/lazyssh.git
+cd lazyssh
+
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Unix/Linux
+# or
+.\venv\Scripts\activate  # On Windows
 
 # Install the package
 pip install -e .
+```
+
+### Method 4: System Python (Not recommended on some distributions)
+Some Linux distributions (like Kali Linux) use externally-managed environments and prevent direct pip installations. Use Method 1 or 2 instead.
+
+If you still want to install system-wide (not recommended):
+```bash
+pip install -e . --break-system-packages  # Use with caution
 ```
 
 ## Usage
@@ -143,7 +185,7 @@ close dev-server
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/lazyssh.git
+git clone https://github.com/Bochner/lazyssh.git
 cd lazyssh
 
 # Create a virtual environment

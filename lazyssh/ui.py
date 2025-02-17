@@ -48,7 +48,7 @@ def display_ssh_status(connections):
     
     for socket_path, conn in connections.items():
         if isinstance(conn, SSHConnection):
-            name = os.path.basename(socket_path)  # Just show the socket name, not full path
+            name = os.path.basename(socket_path)
             table.add_row(
                 name,
                 conn.host,
@@ -64,6 +64,7 @@ def display_tunnels(socket_path: str, conn: SSHConnection):
     if not conn.tunnels:
         display_info("No tunnels for this connection")
         return
+        
     table = Table(title=f"Tunnels for {conn.host}", border_style="blue")
     table.add_column("ID", style="cyan")
     table.add_column("Connection", style="blue")
