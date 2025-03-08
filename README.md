@@ -23,7 +23,7 @@ A comprehensive SSH toolkit for managing connections, tunnels, and remote sessio
 - Python 3.7+
 - OpenSSH client
 - Terminator terminal emulator
-- Linux/Unix operating system
+- Linux/Unix operating system (Debian/Ubuntu, Fedora, RHEL/CentOS)
 
 ## Installation
 
@@ -46,12 +46,23 @@ The installer will:
 - Add LazySSH to your PATH for the current session
 - Provide instructions for permanent PATH configuration
 
+Supported distributions:
+- Debian/Ubuntu (apt)
+- Fedora (dnf)
+- RHEL/CentOS (yum)
+
 ### Method 2: Manual Installation with pipx
 
 ```bash
 # Install pipx if not already installed
-python3 -m pip install --user pipx
-python3 -m pipx ensurepath
+# For Debian/Ubuntu:
+sudo apt install pipx
+
+# For Fedora:
+sudo dnf install python3-pipx
+
+# For RHEL/CentOS:
+sudo yum install python3-pipx
 
 # Install LazySSH
 pipx install git+https://github.com/Bochner/lazyssh.git
@@ -152,11 +163,11 @@ If you're missing any dependencies:
 # Install Terminator (Ubuntu/Debian)
 sudo apt install terminator
 
-# Install Terminator (Fedora/RHEL)
+# Install Terminator (Fedora)
 sudo dnf install terminator
 
-# Install Terminator (Arch Linux)
-sudo pacman -S terminator
+# Install Terminator (RHEL/CentOS)
+sudo yum install terminator
 ```
 
 ## License

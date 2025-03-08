@@ -20,7 +20,7 @@ print_warning() {
     echo -e "\033[1;33m[!]\033[0m $1"
 }
 
-# Function to detect package manager
+# Function to detect package manager (only apt, dnf, and yum)
 detect_package_manager() {
     if command -v apt &> /dev/null; then
         PKG_MANAGER="apt"
@@ -31,15 +31,6 @@ detect_package_manager() {
     elif command -v yum &> /dev/null; then
         PKG_MANAGER="yum"
         PKG_INSTALL="sudo yum install -y"
-    elif command -v pacman &> /dev/null; then
-        PKG_MANAGER="pacman"
-        PKG_INSTALL="sudo pacman -S --noconfirm"
-    elif command -v zypper &> /dev/null; then
-        PKG_MANAGER="zypper"
-        PKG_INSTALL="sudo zypper install -y"
-    elif command -v apk &> /dev/null; then
-        PKG_MANAGER="apk"
-        PKG_INSTALL="sudo apk add"
     else
         PKG_MANAGER="unknown"
         PKG_INSTALL=""
@@ -75,7 +66,7 @@ if ! command -v pip3 &> /dev/null; then
             exit 1
         }
     else
-        print_error "Could not detect package manager. Please install pip3 manually."
+        print_error "Unsupported package manager. This script only supports apt, dnf, and yum."
         exit 1
     fi
 else
@@ -86,15 +77,41 @@ fi
 print_status "Checking for pipx..."
 if ! command -v pipx &> /dev/null; then
     print_status "Installing pipx..."
-    python3 -m pip install --user pipx || {
-        print_error "Failed to install pipx. Please check your Python installation."
-        exit 1
-    }
     
-    # Run ensurepath to add pipx to PATH in shell config files
-    python3 -m pipx ensurepath || {
-        print_warning "Failed to add pipx to PATH automatically."
-    }
+    # First try to install pipx using the system package manager
+    detect_package_manager
+    if [ "$PKG_MANAGER" != "unknown" ]; then
+        case $PKG_MANAGER in
+            apt)
+                $PKG_INSTALL pipx
+                ;;
+            dnf)
+                $PKG_INSTALL python3-pipx
+                ;;
+            yum)
+                $PKG_INSTALL python3-pipx
+                ;;
+        esac
+    fi
+    
+    # Check if pipx is now installed
+    if ! command -v pipx &> /dev/null; then
+        print_warning "Could not install pipx using package manager. Trying with pip..."
+        
+        # Try to install with pip as a fallback
+        python3 -m pip install --user pipx || {
+            print_error "Failed to install pipx. Please install it manually."
+            print_error "For Debian/Ubuntu: sudo apt install pipx"
+            print_error "For Fedora: sudo dnf install python3-pipx"
+            print_error "For RHEL/CentOS: sudo yum install python3-pipx"
+            exit 1
+        }
+        
+        # Run ensurepath to add pipx to PATH in shell config files
+        python3 -m pipx ensurepath || {
+            print_warning "Failed to add pipx to PATH automatically."
+        }
+    fi
     
     # Update PATH for current session
     update_path
@@ -122,7 +139,7 @@ if ! command -v ssh &> /dev/null; then
             exit 1
         }
     else
-        print_error "Could not detect package manager. Please install SSH client manually."
+        print_error "Unsupported package manager. This script only supports apt, dnf, and yum."
         exit 1
     fi
 else
@@ -141,7 +158,7 @@ if ! command -v terminator &> /dev/null; then
             exit 1
         }
     else
-        print_error "Could not detect package manager. Please install terminator manually."
+        print_error "Unsupported package manager. This script only supports apt, dnf, and yum."
         exit 1
     fi
 else
