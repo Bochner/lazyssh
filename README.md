@@ -82,6 +82,25 @@ cd lazyssh
 pip install -e .
 ```
 
+### Method 4: Using the Wrapper Script
+
+If you're experiencing PATH issues, you can use the included wrapper script:
+
+```bash
+# Make the wrapper script executable (only needed once)
+chmod +x run_lazyssh.sh
+
+# Run LazySSH using the wrapper script
+./run_lazyssh.sh
+```
+
+This wrapper script automatically finds the LazySSH installation and runs it, regardless of PATH configuration. It works by:
+- First checking if LazySSH is in your PATH
+- Then looking in the common installation directory (`~/.local/bin`)
+- Finally, running directly from the repository if needed
+
+The wrapper script simply starts LazySSH with no arguments. Once LazySSH is running, you can use all its commands normally.
+
 ## Usage
 
 LazySSH has two interface modes:
@@ -154,6 +173,8 @@ export PATH="$HOME/.local/bin:$PATH"
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
+
+Alternatively, you can use the wrapper script method described in [Installation Method 4](#method-4-using-the-wrapper-script).
 
 ### Missing Dependencies
 

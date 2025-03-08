@@ -45,6 +45,57 @@ update_path() {
     fi
 }
 
+# Function to add ~/.local/bin to PATH permanently
+add_path_to_shell_config() {
+    local CONFIG_FILE=""
+    local PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+    local SHELL_TYPE=$(basename "$SHELL")
+    
+    # Determine which shell configuration file to use
+    case "$SHELL_TYPE" in
+        bash)
+            CONFIG_FILE="$HOME/.bashrc"
+            ;;
+        zsh)
+            CONFIG_FILE="$HOME/.zshrc"
+            ;;
+        fish)
+            CONFIG_FILE="$HOME/.config/fish/config.fish"
+            PATH_LINE='set -gx PATH "$HOME/.local/bin" $PATH'
+            ;;
+        *)
+            CONFIG_FILE="$HOME/.profile"
+            ;;
+    esac
+    
+    # Check if the file exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        # Create the file if it doesn't exist
+        touch "$CONFIG_FILE"
+    fi
+    
+    # Check if PATH is already in config
+    if grep -q "$HOME/.local/bin" "$CONFIG_FILE"; then
+        print_status "PATH already configured in $CONFIG_FILE"
+    else
+        # Add PATH to config file
+        echo '' >> "$CONFIG_FILE"
+        echo '# Add ~/.local/bin to PATH for LazySSH' >> "$CONFIG_FILE"
+        echo "$PATH_LINE" >> "$CONFIG_FILE"
+        print_success "Added ~/.local/bin to PATH in $CONFIG_FILE"
+        
+        # Source the file to apply changes to current session
+        if [[ "$SHELL_TYPE" != "fish" ]]; then
+            source "$CONFIG_FILE" 2>/dev/null || true
+        else
+            # fish uses a different command for sourcing
+            fish -c "source $CONFIG_FILE" 2>/dev/null || true
+        fi
+        
+        print_status "Applied changes to current session"
+    fi
+}
+
 # Check if Python3 is installed
 print_status "Checking for Python3..."
 if ! command -v python3 &> /dev/null; then
@@ -172,11 +223,21 @@ pipx install git+https://github.com/Bochner/lazyssh.git --force || {
     exit 1
 }
 
-# Update PATH again to ensure lazyssh is available
+# Update PATH for current session
 update_path
 
-print_success "Installation complete!"
-print_warning "To make sure LazySSH is in your PATH permanently, add this line to your ~/.bashrc file:"
-print_warning "  export PATH=\"$HOME/.local/bin:\$PATH\""
-print_warning "Then run: source ~/.bashrc"
-print_success "You can now run 'lazyssh' to start the program."
+# Add ~/.local/bin to PATH permanently
+print_status "Configuring PATH to include LazySSH..."
+add_path_to_shell_config
+
+# Final check to ensure lazyssh is available
+if command -v lazyssh &> /dev/null; then
+    print_success "Installation complete! LazySSH is ready to use."
+    print_success "You can now run 'lazyssh' to start the program."
+else
+    print_warning "Installation successful, but LazySSH command is not available yet."
+    print_warning "To use LazySSH, either:"
+    print_warning "  1. Start a new terminal session, or"
+    print_warning "  2. Run: source ~/.bashrc (or appropriate shell config file)"
+    print_warning "Then run 'lazyssh' to start the program."
+fi
