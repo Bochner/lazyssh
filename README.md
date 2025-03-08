@@ -8,15 +8,15 @@ A comprehensive SSH toolkit for managing connections, tunnels, and remote sessio
 
 - Dual interface modes:
   - Interactive menu mode
-  - Command mode with tab completion
-- Smart command completion for all operations
+  - Command mode with smart tab completion
 - Multiple SSH connection management
 - Forward and reverse tunnel creation
-- Dynamic port forwarding
+- Dynamic port forwarding with SOCKS proxy support
 - Control socket management
-- Terminal session management in Terminator
+- Terminal session management with Terminator
 - Automatic connection cleanup on exit
 - Real-time status display of connections and tunnels
+- Full visibility of SSH commands being executed
 
 ## Requirements
 
@@ -25,43 +25,29 @@ A comprehensive SSH toolkit for managing connections, tunnels, and remote sessio
 - Terminator terminal emulator
 - Linux/Unix operating system
 
-### Installing Dependencies
-
-On Fedora/RHEL:
-```bash
-sudo dnf install terminator
-```
-
-On Ubuntu/Debian:
-```bash
-sudo apt install terminator
-```
-
-On Arch Linux:
-```bash
-sudo pacman -S terminator
-```
-
 ## Installation
 
-There are several ways to install LazySSH depending on your system:
-
 ### Method 1: Quick Install Script (Recommended)
-```bash
-# Clone the repository
-git clone https://github.com/Bochner/lazyssh.git
-cd lazyssh
 
-# Run the installer script
+```bash
+# Download the installer
+curl -O https://raw.githubusercontent.com/Bochner/lazyssh/main/install.sh
+
+# Make it executable
+chmod +x install.sh
+
+# Run the installer
 ./install.sh
 ```
-The install script will automatically:
-- Install pipx if not present
-- Install terminator if not present
-- Install LazySSH using pipx
-- Set up all required paths
 
-### Method 2: Manual Installation Using pipx
+The installer will:
+- Check for and install required dependencies
+- Install LazySSH using pipx for isolated dependencies
+- Add LazySSH to your PATH for the current session
+- Provide instructions for permanent PATH configuration
+
+### Method 2: Manual Installation with pipx
+
 ```bash
 # Install pipx if not already installed
 python3 -m pip install --user pipx
@@ -69,168 +55,113 @@ python3 -m pipx ensurepath
 
 # Install LazySSH
 pipx install git+https://github.com/Bochner/lazyssh.git
+
+# Make sure ~/.local/bin is in your PATH
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### Method 3: Using Virtual Environment (Recommended for Development)
+### Method 3: Development Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/Bochner/lazyssh.git
 cd lazyssh
 
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Unix/Linux
-# or
-.\venv\Scripts\activate  # On Windows
-
-# Install the package
+# Install in development mode
 pip install -e .
 ```
 
 ## Usage
 
-After installation, run the tool using:
+LazySSH has two interface modes:
+
+### Command Mode (Default)
 
 ```bash
+# Start LazySSH in command mode
 lazyssh
 ```
 
-The tool supports two interaction modes:
-1. Menu Mode (Default) - Interactive menu-driven interface
-2. Command Mode - Command-line interface with smart completion
+In command mode, you can use the following commands:
+- `lazyssh` - Create a new SSH connection
+  - Basic usage: `lazyssh -ip <ip> -port <port> -socket <n> -user <username>`
+  - With dynamic proxy: `lazyssh -ip <ip> -port <port> -socket <n> -user <username> -proxy [port]`
+- `tunc` - Create a new tunnel (forward or reverse)
+  - Example (forward): `tunc ubuntu l 8080 localhost 80`
+  - Example (reverse): `tunc ubuntu r 3000 127.0.0.1 3000`
+- `tund` - Delete a tunnel by ID
+  - Example: `tund 1`
+- `list` - List connections and tunnels
+- `term` - Open a terminal for a connection
+  - Example: `term ubuntu`
+- `close` - Close a connection
+- `mode` - Switch to prompt mode
+- `help` - Show help
+- `exit` - Exit LazySSH
 
-### Menu Mode
+#### Dynamic SOCKS Proxy
 
-1. Create new SSH connection
-2. Manage tunnels
+To create a dynamic SOCKS proxy when establishing an SSH connection:
+
+```bash
+# Create connection with dynamic proxy on default port (1080)
+lazyssh -ip 192.168.1.100 -port 22 -socket myserver -user admin -proxy
+
+# Create connection with dynamic proxy on custom port
+lazyssh -ip 192.168.1.100 -port 22 -socket myserver -user admin -proxy 8080
+```
+
+You can then configure your applications to use the SOCKS proxy at `localhost:1080` (or your custom port).
+
+### Prompt Mode
+
+```bash
+# Start LazySSH in prompt mode
+lazyssh --prompt
+```
+
+In prompt mode, you'll see a menu with numbered options:
+1. Create new SSH connection (with optional SOCKS proxy)
+2. Destroy tunnel
 3. Create tunnel
-4. Open terminal session
+4. Open terminal
 5. Close connection
-q. Quit
-
-### Command Mode
-
-Command mode provides a powerful command-line interface with smart tab completion. Available commands:
-
-```
-lazyssh -ip <ip> -port <port> -socket <name> -user <username>  # Create new SSH connection
-close <ssh_id>                                                 # Close an SSH connection
-tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>  # Create tunnel
-tund <tunnel_id>                                              # Destroy tunnel
-term <ssh_id>                                                 # Open terminal
-list                                                          # Show all connections
-mode                                                          # Switch between modes
-help                                                          # Show help
-exit                                                          # Exit program
-```
-
-#### Command Mode Features
-- Tab completion for all commands
-- Context-aware argument suggestions
-- Real-time parameter completion
-- Command history support
-- Detailed help system (use 'help <command>' for specific command help)
-
-Example usage:
-```bash
-# Create SSH connection
-lazyssh -ip 192.168.1.100 -port 22 -socket dev-server -user admin
-
-# Create forward tunnel
-tunc dev-server l 8080 localhost 80
-
-# Create reverse tunnel
-tunc dev-server r 3000 127.0.0.1 3000
-
-# Open terminal
-term dev-server
-
-# Close connection
-close dev-server
-```
-
-### SSH Connection Features
-
-- Custom port support
-- Identity file support
-- Dynamic port forwarding
-- Persistent connections with auto-cleanup
-- Control socket management
-- Seamless Terminator integration
-
-### Tunnel Management
-
-- Forward tunnel creation (local to remote)
-- Reverse tunnel creation (remote to local)
-- Multiple tunnels per connection
-- Real-time tunnel status monitoring
-- Easy tunnel creation and cleanup
-
-## Dependencies
-
-- click: Command line interface
-- rich: Terminal formatting and colors
-- pexpect: Terminal interaction
-- colorama: Cross-platform colored terminal text
-- python-dotenv: Environment variable management
-- terminator: Terminal emulation (system package)
-
-## Development
-
-```bash
-# Clone the repository
-git clone https://github.com/Bochner/lazyssh.git
-cd lazyssh
-
-# Create a virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# Install development dependencies
-pip install -r requirements.txt
-
-# Install terminator
-# On Fedora/RHEL:
-sudo dnf install terminator
-# On Ubuntu/Debian:
-sudo apt install terminator
-# On Arch Linux:
-sudo pacman -S terminator
-```
+6. Switch to command mode
+7. Exit
 
 ## Troubleshooting
 
-### Terminal Issues
-If you encounter any issues:
-1. Ensure Terminator is installed and available in your PATH
-2. Try running `terminator` directly to check for any configuration issues
-3. Check the terminal output for specific error messages
+### Command Not Found
 
-### Command Mode Issues
-1. Command Completion
-   - Press Tab or Space to see available commands and arguments
-   - For `lazyssh` command, arguments will be suggested as you type
-   - If completions don't appear, press Space or Tab again
-   - Command history can be accessed with Up/Down arrows
+If you get "command not found" after installation:
 
-2. Connection Management
-   - Use `list` command to see all active connections and their IDs
-   - Connection names (socket) must be unique
-   - Use `help <command>` for detailed usage of any command
+```bash
+# Add to your PATH manually
+export PATH="$HOME/.local/bin:$PATH"
 
-3. Common Command Mode Errors
-   - "Unknown command": Make sure to use the exact command name (case-sensitive)
-   - "Missing required parameters": All parameters marked with '-' are required
-   - "Connection not found": Use `list` to verify the connection name
+# To make it permanent, add this line to your ~/.bashrc file
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
 
-### Connection Status
-- Active connections and their tunnels are always visible in the main menu
-- Real-time updates when creating/removing connections or tunnels
-- Detailed error messages and suggestions for troubleshooting
+### Missing Dependencies
+
+If you're missing any dependencies:
+
+```bash
+# Install Terminator (Ubuntu/Debian)
+sudo apt install terminator
+
+# Install Terminator (Fedora/RHEL)
+sudo dnf install terminator
+
+# Install Terminator (Arch Linux)
+sudo pacman -S terminator
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License
 
 ## Contributing
 

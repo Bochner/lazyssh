@@ -5,7 +5,7 @@ import subprocess
 
 def check_dependencies():
     """Check if required system dependencies are installed"""
-    # Only check for SSH and Terminator
+    # Check for SSH and Terminator
     dependencies = {
         "ssh": "OpenSSH client (openssh-client package)",
         "terminator": "Terminator terminal emulator (terminator package)"

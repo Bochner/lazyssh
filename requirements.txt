@@ -3,6 +3,8 @@ rich>=13.0.0
 click>=8.0.0
 pexpect>=4.8.0
 python-dotenv>=1.0.0
-prompt_toolkit>=3.0.0
+prompt_toolkit>=3.0.39,<3.1.0
+wcwidth>=0.2.5
 # System dependencies:
-# terminator - Required for terminal emulation
+# openssh-client - Required for SSH functionality 
+# terminator - Optional, for terminal emulation (alternatives will be used if not available)

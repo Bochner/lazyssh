@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import click
 import os
+import sys
 from rich.prompt import Confirm
-from typing import Dict
+from typing import Dict, List, Tuple
 
 from lazyssh import check_dependencies
 from lazyssh.ssh import SSHManager
@@ -49,41 +50,64 @@ def main_menu():
         "1": "Create new SSH connection",
         "2": "Destroy tunnel",
         "3": "Create tunnel",
-        "4": "Open terminal session",
+        "4": "Open terminal",
         "5": "Close connection",
-        "6": "Switch mode (command/prompt)",
-        "e": "Exit"
+        "6": "Switch to command mode",
+        "7": "Exit"
     }
     display_menu(options)
-    return get_user_input("Select an option")
+    return get_user_input("Choose an option")
 
 def create_connection_menu():
-    host = get_user_input("Enter host")
-    port = int(get_user_input("Enter port") or "22")
+    """Menu for creating a new SSH connection"""
+    display_info("\nCreate new SSH connection")
+    host = get_user_input("Enter hostname or IP")
+    port = get_user_input("Enter port (default: 22)")
+    if not port:
+        port = "22"
+    
+    socket_name = get_user_input("Enter connection name (used as identifier)")
+    if not socket_name:
+        display_error("Connection name is required")
+        return False
+    
     username = get_user_input("Enter username")
-    socket_name = get_user_input("Enter connection name (for socket)")
+    if not username:
+        display_error("Username is required")
+        return False
     
-    socket_path = os.path.join(ssh_manager.control_path_base, socket_name)
+    # Ask about dynamic proxy
+    use_proxy = get_user_input("Create dynamic SOCKS proxy? (y/N)").lower() == 'y'
+    dynamic_port = None
     
-    dynamic_port = get_user_input("Enter dynamic port (optional)")
-    if dynamic_port:
-        dynamic_port = int(dynamic_port)
+    if use_proxy:
+        proxy_port = get_user_input("Enter proxy port (default: 1080)")
+        if not proxy_port:
+            dynamic_port = 1080
+        else:
+            try:
+                dynamic_port = int(proxy_port)
+            except ValueError:
+                display_error("Port must be a number")
+                return False
     
-    identity_file = get_user_input("Enter identity file path (optional)")
-    
+    # Create the connection
     conn = SSHConnection(
         host=host,
-        port=port,
+        port=int(port),
         username=username,
-        socket_path=socket_path,
-        dynamic_port=dynamic_port,
-        identity_file=identity_file
+        socket_path=f"/tmp/lazyssh/{socket_name}",
+        dynamic_port=dynamic_port
     )
     
+    # The SSH command will be displayed by the create_connection method
+    
     if ssh_manager.create_connection(conn):
-        display_success(f"Connection established to {host}")
-    else:
-        display_error("Failed to create connection")
+        display_success(f"Connection '{socket_name}' established")
+        if dynamic_port:
+            display_success(f"Dynamic proxy created on port {dynamic_port}")
+        return True
+    return False
 
 def tunnel_menu():
     if not ssh_manager.connections:
@@ -105,8 +129,23 @@ def tunnel_menu():
             remote_port = int(get_user_input("Enter remote port"))
             
             is_reverse = tunnel_type.startswith('r')
+            
+            # Build the command for display
+            if is_reverse:
+                tunnel_args = f"-O forward -R {local_port}:{remote_host}:{remote_port}"
+                tunnel_type_str = "reverse"
+            else:
+                tunnel_args = f"-O forward -L {local_port}:{remote_host}:{remote_port}"
+                tunnel_type_str = "forward"
+            
+            cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
+            
+            # Display the command that will be executed
+            display_info("The following SSH command will be executed:")
+            display_info(cmd)
+            
             if ssh_manager.create_tunnel(socket_path, local_port, remote_host, remote_port, is_reverse):
-                # Success message already displayed by create_tunnel
+                display_success(f"{tunnel_type_str.capitalize()} tunnel created: {local_port} -> {remote_host}:{remote_port}")
                 return True
             else:
                 # Error already displayed by create_tunnel
@@ -130,6 +169,9 @@ def terminal_menu():
         choice = int(get_user_input("Enter connection number")) - 1
         if 0 <= choice < len(ssh_manager.connections):
             socket_path = list(ssh_manager.connections.keys())[choice]
+            
+            # The SSH command will be displayed by the open_terminal method
+            
             ssh_manager.open_terminal(socket_path)
             return True
         else:
@@ -151,6 +193,14 @@ def close_connection_menu():
         choice = int(get_user_input("Enter connection number")) - 1
         if 0 <= choice < len(ssh_manager.connections):
             socket_path = list(ssh_manager.connections.keys())[choice]
+            
+            # Build the command for display
+            cmd = f"ssh -S {socket_path} -O exit dummy"
+            
+            # Display the command that will be executed
+            display_info("The following SSH command will be executed:")
+            display_info(cmd)
+            
             if ssh_manager.close_connection(socket_path):
                 display_success("Connection closed successfully")
                 return True
@@ -185,6 +235,21 @@ def manage_tunnels_menu():
             tunnel_id = get_user_input("Enter tunnel ID to destroy (or press Enter to cancel)")
             
             if tunnel_id:
+                # Find the tunnel
+                tunnel = conn.get_tunnel(tunnel_id)
+                if tunnel:
+                    # Build the command for display
+                    if tunnel.type == "reverse":
+                        tunnel_args = f"-O cancel -R {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
+                    else:
+                        tunnel_args = f"-O cancel -L {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
+                    
+                    cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
+                    
+                    # Display the command that will be executed
+                    display_info("The following SSH command will be executed:")
+                    display_info(cmd)
+                
                 if ssh_manager.close_tunnel(socket_path, tunnel_id):
                     display_success("Tunnel destroyed successfully")
                 else:
@@ -207,64 +272,66 @@ def check_active_connections():
     return True
 
 def safe_exit():
-    """Safely exit the program with proper cleanup"""
-    if check_active_connections():
-        close_all_connections()
-        raise SystemExit
+    """Safely exit the program, closing all connections"""
+    display_info("\nClosing all connections...")
+    for socket_path in list(ssh_manager.connections.keys()):
+        ssh_manager.close_connection(socket_path)
+    sys.exit(0)
 
-# Rename original main to prompt_mode_main
 def prompt_mode_main():
+    """Main function for prompt (menu-based) mode"""
     while True:
-        choice = main_menu()
-        
-        if choice.lower() == "e":
-            safe_exit()
-        else:
+        try:
+            choice = main_menu()
+            if choice == "7":
+                if check_active_connections():
+                    safe_exit()
+                return
+            
             result = handle_menu_action(choice)
-            if result == "mode":  # Handle mode switch
-                return  # Return to let main program switch modes
+            if result == "mode":
+                return  # Return to trigger mode switch
+        except KeyboardInterrupt:
+            display_info("\nUse option 7 to exit.")
+        except Exception as e:
+            display_error(f"Error: {str(e)}")
 
 @click.command()
 @click.option('--prompt', is_flag=True, help='Start in prompt mode instead of command mode')
 def main(prompt: bool):
     """LazySSH - A comprehensive SSH toolkit for managing connections and tunnels"""
-    display_banner()
-    
-    # Check dependencies at startup
-    missing_deps = check_dependencies()
-    if missing_deps:
-        display_warning("Missing system dependencies:")
-        for dep in missing_deps:
-            display_warning(f"- {dep}")
-        display_warning("Please install the missing dependencies for full functionality")
-    
-    current_mode = "prompt" if prompt else "command"
-    cmd_mode = CommandMode(ssh_manager)
-    
     try:
+        # Check dependencies 
+        missing_deps = check_dependencies()
+        if missing_deps:
+            display_error("Missing required dependencies:")
+            for dep in missing_deps:
+                display_error(f"  - {dep}")
+            display_info("Please install the required dependencies and try again.")
+            sys.exit(1)
+        
+        # Display banner
+        display_banner()
+        
+        # Start in the specified mode
+        current_mode = "prompt" if prompt else "command"
+        
         while True:
-            try:
-                if current_mode == "prompt":
-                    display_info("\nCurrent mode: Prompt (use option 6 to switch to command mode)")
-                    prompt_mode_main()
-                    # Mode switch requested
-                    display_success("\nSwitching to command mode...")
-                    current_mode = "command"
-                else:
-                    display_info("\nCurrent mode: Command (type 'mode' to switch to prompt mode)")
-                    cmd_mode.run()
-                    # Mode switch requested
-                    display_success("\nSwitching to prompt mode...")
-                    current_mode = "prompt"
-            except KeyboardInterrupt:
-                safe_exit()
-                continue
-            except SystemExit:
-                # Exit without additional cleanup since safe_exit already did it
-                raise SystemExit
-    except (KeyboardInterrupt, SystemExit):
-        # Exit without additional cleanup
-        raise SystemExit
+            if current_mode == "prompt":
+                display_info("Current mode: Prompt (use option 6 to switch to command mode)")
+                prompt_mode_main()
+                current_mode = "command"
+            else:
+                display_info("Current mode: Command (type 'mode' to switch to prompt mode)")
+                cmd_mode = CommandMode(ssh_manager)
+                cmd_mode.run()
+                current_mode = "prompt"
+    
+    except KeyboardInterrupt:
+        safe_exit()
+    except Exception as e:
+        display_error(f"An unexpected error occurred: {str(e)}")
+        safe_exit()
 
 if __name__ == "__main__":
     main()
