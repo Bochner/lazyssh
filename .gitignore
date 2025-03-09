@@ -1,8 +1,12 @@
-# Python byte-compiled / optimized files
+# Python byte-compiled / optimized / DLL files
 __pycache__/
+*/__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.dll
+*.dylib
 
 # Distribution / packaging
 .Python
@@ -23,6 +27,8 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+*.manifest
+*.spec
 
 # Unit test / coverage reports
 htmlcov/
@@ -38,6 +44,9 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+.pytest_report/
+junit-*.xml
+report.xml
 
 # Environments
 .env
@@ -47,29 +56,37 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-test_env/
-test_venv/
-build_venv/
-check_env/
-*_venv/
 *_env/
+*_venv/
 .python-version
+.pre-commit-venv/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+.*.sw[a-p]
 .spyderproject
 .spyproject
 .ropeproject
 .project
 .pydevproject
+.settings/
+*.sublime-*
 
-# mypy
+# Type checking
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.pyre/
+.pytype/
+
+# Documentation
+docs/_build/
+docs/api/
+site/
 
 # SSH
 .ssh/
@@ -87,6 +104,35 @@ logs/
 .DS_Store
 Thumbs.db
 desktop.ini
+*.lnk
+$RECYCLE.BIN/
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
 
 # Project specific
 lazyssh.cfg
+.lazyssh/
+
+# Temporary files
+tmp/
+temp/
+.temp/
+*.tmp
+*.bak
+*.swp
+*.orig
+
+# Virtual environment
+.pre-commit-venv/
+.venv/
+venv/
+
+# Build artifacts
+*.c
+*.so
+*.pyd
+*.dll
+*.exe
+*.out
+*.app
