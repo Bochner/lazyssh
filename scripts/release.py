@@ -151,11 +151,35 @@ def create_git_tag(version):
     
     return True
 
+def clean_build_directories():
+    """Clean build directories to ensure fresh builds."""
+    import shutil
+    
+    # Directories to clean
+    build_dirs = ["dist", "build", "*.egg-info"]
+    
+    for dir_pattern in build_dirs:
+        if "*" in dir_pattern:
+            # Handle wildcard patterns
+            import glob
+            for dir_path in glob.glob(dir_pattern):
+                if os.path.isdir(dir_path):
+                    shutil.rmtree(dir_path)
+                    print(f"Cleaned {dir_path}")
+        else:
+            # Handle direct directory paths
+            if os.path.isdir(dir_pattern):
+                shutil.rmtree(dir_pattern)
+                print(f"Cleaned {dir_pattern}")
+    
+    return True
+
 def main():
     parser = argparse.ArgumentParser(description="Release a new version of LazySSH")
     parser.add_argument("version", help="New version number (e.g., 1.0.1)")
     parser.add_argument("--no-tag", action="store_true", help="Don't create a Git tag")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be updated without making changes")
+    parser.add_argument("--clean", action="store_true", help="Clean build directories before updating version")
     
     args = parser.parse_args()
     
@@ -163,6 +187,10 @@ def main():
     if not re.match(r"^\d+\.\d+\.\d+$", args.version):
         print("Error: Version must be in the format X.Y.Z")
         sys.exit(1)
+    
+    # Clean build directories if requested
+    if args.clean and not args.dry_run:
+        clean_build_directories()
     
     # Update version numbers
     if args.dry_run:
@@ -179,10 +207,13 @@ def main():
     
     if not args.dry_run:
         print("\nNext steps:")
-        print(f"1. Commit the changes: git commit -am 'Bump version to {args.version}'")
-        print("2. Push the changes: git push")
-        print(f"3. Push the tag: git push origin v{args.version}")
-        print("4. Create a release on GitHub")
+        print(f"1. Clean build directories: rm -rf dist/ build/ *.egg-info/")
+        print(f"2. Commit the changes: git commit -am 'Bump version to {args.version}'")
+        print("3. Push the changes: git push")
+        print(f"4. Push the tag: git push origin v{args.version}")
+        print("5. Build the package: python -m build")
+        print("6. Create a release on GitHub")
+        print("7. Publish to PyPI: twine upload dist/*")
 
 if __name__ == "__main__":
     main() 

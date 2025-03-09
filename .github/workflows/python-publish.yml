@@ -60,6 +60,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install build wheel twine
     
+    - name: Clean build directories
+      run: |
+        rm -rf dist/ build/ *.egg-info/
+    
     - name: Build package
       run: |
         python -m build
@@ -67,6 +71,32 @@ jobs:
     - name: Verify package with twine
       run: |
         twine check dist/*
+    
+    - name: Verify package version
+      run: |
+        # Extract version from pyproject.toml
+        EXPECTED_VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+        echo "Expected version: $EXPECTED_VERSION"
+        
+        # Check if the wheel filename contains the expected version
+        if ls dist/lazyssh-$EXPECTED_VERSION-*.whl 1> /dev/null 2>&1; then
+          echo "✅ Wheel package has correct version: $EXPECTED_VERSION"
+        else
+          echo "❌ Wheel package version mismatch!"
+          echo "Expected: lazyssh-$EXPECTED_VERSION-*.whl"
+          echo "Found: $(ls dist/*.whl)"
+          exit 1
+        fi
+        
+        # Check if the source dist filename contains the expected version
+        if ls dist/lazyssh-$EXPECTED_VERSION.tar.gz 1> /dev/null 2>&1; then
+          echo "✅ Source package has correct version: $EXPECTED_VERSION"
+        else
+          echo "❌ Source package version mismatch!"
+          echo "Expected: lazyssh-$EXPECTED_VERSION.tar.gz"
+          echo "Found: $(ls dist/*.tar.gz)"
+          exit 1
+        fi
     
     - name: Publish to PyPI
       if: github.event_name == 'release'
