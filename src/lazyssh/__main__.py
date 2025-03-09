@@ -6,19 +6,25 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Dict, List, Tuple, Optional, Union, Literal, Any
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import click
 from rich.prompt import Confirm
 
 from lazyssh import check_dependencies
-from lazyssh.ssh import SSHManager
-from lazyssh.models import SSHConnection
 from lazyssh.command_mode import CommandMode
+from lazyssh.models import SSHConnection
+from lazyssh.ssh import SSHManager
 from lazyssh.ui import (
-    display_banner, display_menu, get_user_input, 
-    display_error, display_success, display_info,
-    display_warning, display_ssh_status, display_tunnels
+    display_banner,
+    display_error,
+    display_info,
+    display_menu,
+    display_ssh_status,
+    display_success,
+    display_tunnels,
+    display_warning,
+    get_user_input,
 )
 
 # Initialize the SSH manager for the application
@@ -28,8 +34,8 @@ ssh_manager = SSHManager()
 def show_status() -> None:
     """
     Display current SSH connections and tunnels status.
-    
-    This function will print a table of active SSH connections and 
+
+    This function will print a table of active SSH connections and
     detailed information about any tunnels associated with them.
     """
     if ssh_manager.connections:
@@ -42,10 +48,10 @@ def show_status() -> None:
 def handle_menu_action(choice: str) -> Union[bool, Literal["mode"]]:
     """
     Process the menu choice and execute the corresponding action.
-    
+
     Args:
         choice: The menu option selected by the user
-        
+
     Returns:
         True if the action was successful, False if it failed,
         or "mode" to indicate a mode switch is requested.
@@ -71,7 +77,7 @@ def handle_menu_action(choice: str) -> Union[bool, Literal["mode"]]:
 def main_menu() -> str:
     """
     Display the main menu and get the user's choice.
-    
+
     Returns:
         The user's menu selection
     """
@@ -83,7 +89,7 @@ def main_menu() -> str:
         "4": "Open terminal",
         "5": "Close connection",
         "6": "Switch to command mode",
-        "7": "Exit"
+        "7": "Exit",
     }
     display_menu(options)
     return get_user_input("Choose an option")
@@ -92,10 +98,10 @@ def main_menu() -> str:
 def create_connection_menu() -> bool:
     """
     Interactive menu for creating a new SSH connection.
-    
+
     Prompts the user for connection details including host, port, username,
     and optional dynamic proxy settings.
-    
+
     Returns:
         True if the connection was successfully created, False otherwise.
     """
@@ -104,21 +110,21 @@ def create_connection_menu() -> bool:
     port = get_user_input("Enter port (default: 22)")
     if not port:
         port = "22"
-    
+
     socket_name = get_user_input("Enter connection name (used as identifier)")
     if not socket_name:
         display_error("Connection name is required")
         return False
-    
+
     username = get_user_input("Enter username")
     if not username:
         display_error("Username is required")
         return False
-    
+
     # Ask about dynamic proxy
-    use_proxy = get_user_input("Create dynamic SOCKS proxy? (y/N)").lower() == 'y'
+    use_proxy = get_user_input("Create dynamic SOCKS proxy? (y/N)").lower() == "y"
     dynamic_port = None
-    
+
     if use_proxy:
         proxy_port = get_user_input("Enter proxy port (default: 1080)")
         if not proxy_port:
@@ -129,18 +135,18 @@ def create_connection_menu() -> bool:
             except ValueError:
                 display_error("Port must be a number")
                 return False
-    
+
     # Create the connection
     conn = SSHConnection(
         host=host,
         port=int(port),
         username=username,
         socket_path=f"/tmp/lazyssh/{socket_name}",
-        dynamic_port=dynamic_port
+        dynamic_port=dynamic_port,
     )
-    
+
     # The SSH command will be displayed by the create_connection method
-    
+
     if ssh_manager.create_connection(conn):
         display_success(f"Connection '{socket_name}' established")
         if dynamic_port:
@@ -152,10 +158,10 @@ def create_connection_menu() -> bool:
 def tunnel_menu() -> bool:
     """
     Interactive menu for creating a new tunnel.
-    
+
     Allows the user to select an active SSH connection and create either
     a forward or reverse tunnel with specified ports and hosts.
-    
+
     Returns:
         True if the tunnel was successfully created, False otherwise.
     """
@@ -166,19 +172,19 @@ def tunnel_menu() -> bool:
     display_info("Select connection:")
     for i, (socket_path, conn) in enumerate(ssh_manager.connections.items(), 1):
         display_info(f"{i}. {conn.host} ({conn.username})")
-    
+
     try:
         choice = int(get_user_input("Enter connection number")) - 1
         if 0 <= choice < len(ssh_manager.connections):
             socket_path = list(ssh_manager.connections.keys())[choice]
-            
+
             tunnel_type = get_user_input("Tunnel type (f)orward or (r)everse").lower()
             local_port = int(get_user_input("Enter local port"))
             remote_host = get_user_input("Enter remote host")
             remote_port = int(get_user_input("Enter remote port"))
-            
-            is_reverse = tunnel_type.startswith('r')
-            
+
+            is_reverse = tunnel_type.startswith("r")
+
             # Build the command for display
             if is_reverse:
                 tunnel_args = f"-O forward -R {local_port}:{remote_host}:{remote_port}"
@@ -186,15 +192,19 @@ def tunnel_menu() -> bool:
             else:
                 tunnel_args = f"-O forward -L {local_port}:{remote_host}:{remote_port}"
                 tunnel_type_str = "forward"
-            
+
             cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
-            
+
             # Display the command that will be executed
             display_info("The following SSH command will be executed:")
             display_info(cmd)
-            
-            if ssh_manager.create_tunnel(socket_path, local_port, remote_host, remote_port, is_reverse):
-                display_success(f"{tunnel_type_str.capitalize()} tunnel created: {local_port} -> {remote_host}:{remote_port}")
+
+            if ssh_manager.create_tunnel(
+                socket_path, local_port, remote_host, remote_port, is_reverse
+            ):
+                display_success(
+                    f"{tunnel_type_str.capitalize()} tunnel created: {local_port} -> {remote_host}:{remote_port}"
+                )
                 return True
             else:
                 # Error already displayed by create_tunnel
@@ -209,10 +219,10 @@ def tunnel_menu() -> bool:
 def terminal_menu() -> bool:
     """
     Interactive menu for opening a terminal connection.
-    
+
     Allows the user to select an active SSH connection and open
     a terminal session to that host.
-    
+
     Returns:
         True if the terminal was successfully opened, False otherwise.
     """
@@ -223,14 +233,14 @@ def terminal_menu() -> bool:
     display_info("Select connection:")
     for i, (socket_path, conn) in enumerate(ssh_manager.connections.items(), 1):
         display_info(f"{i}. {conn.host} ({conn.username})")
-    
+
     try:
         choice = int(get_user_input("Enter connection number")) - 1
         if 0 <= choice < len(ssh_manager.connections):
             socket_path = list(ssh_manager.connections.keys())[choice]
-            
+
             # The SSH command will be displayed by the open_terminal method
-            
+
             ssh_manager.open_terminal(socket_path)
             return True
         else:
@@ -243,10 +253,10 @@ def terminal_menu() -> bool:
 def close_connection_menu() -> bool:
     """
     Interactive menu for closing an SSH connection.
-    
+
     Allows the user to select an active SSH connection to close.
     All tunnels associated with the connection will also be closed.
-    
+
     Returns:
         True if the connection was successfully closed, False otherwise.
     """
@@ -257,19 +267,19 @@ def close_connection_menu() -> bool:
     display_info("Select connection to close:")
     for i, (socket_path, conn) in enumerate(ssh_manager.connections.items(), 1):
         display_info(f"{i}. {conn.host} ({conn.username})")
-    
+
     try:
         choice = int(get_user_input("Enter connection number")) - 1
         if 0 <= choice < len(ssh_manager.connections):
             socket_path = list(ssh_manager.connections.keys())[choice]
-            
+
             # Build the command for display
             cmd = f"ssh -S {socket_path} -O exit dummy"
-            
+
             # Display the command that will be executed
             display_info("The following SSH command will be executed:")
             display_info(cmd)
-            
+
             if ssh_manager.close_connection(socket_path):
                 display_success("Connection closed successfully")
                 return True
@@ -285,7 +295,7 @@ def close_connection_menu() -> bool:
 def manage_tunnels_menu() -> None:
     """
     Interactive menu for managing (deleting) tunnels.
-    
+
     Allows the user to select an active SSH connection and then
     delete a specific tunnel associated with that connection.
     """
@@ -296,20 +306,20 @@ def manage_tunnels_menu() -> None:
     display_info("Select connection to destroy tunnel:")
     for i, (socket_path, conn) in enumerate(ssh_manager.connections.items(), 1):
         display_info(f"{i}. {conn.host} ({conn.username})")
-    
+
     try:
         choice = int(get_user_input("Enter connection number")) - 1
         if 0 <= choice < len(ssh_manager.connections):
             socket_path = list(ssh_manager.connections.keys())[choice]
             conn = ssh_manager.connections[socket_path]
-            
+
             if not conn.tunnels:
                 display_info("No tunnels for this connection")
                 return
-                
+
             display_tunnels(socket_path, conn)
             tunnel_id = get_user_input("Enter tunnel ID to destroy (or press Enter to cancel)")
-            
+
             if tunnel_id:
                 # Find the tunnel
                 tunnel = conn.get_tunnel(tunnel_id)
@@ -319,24 +329,24 @@ def manage_tunnels_menu() -> None:
                         tunnel_args = f"-O cancel -R {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
                     else:
                         tunnel_args = f"-O cancel -L {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
-                    
+
                     cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
-                    
+
                     # Display the command that will be executed
                     display_info("The following SSH command will be executed:")
                     display_info(cmd)
-                    
+
                     if ssh_manager.close_tunnel(socket_path, tunnel_id):
                         display_success(f"Tunnel {tunnel_id} closed")
                         return
                     return
-        
+
         display_error(f"Tunnel with ID {tunnel_id} not found")
         return
-        
+
     except ValueError:
         display_error("Invalid input")
-    
+
     return
 
 
@@ -349,11 +359,13 @@ def close_all_connections() -> None:
 def check_active_connections() -> bool:
     """
     Check if there are active connections and prompt for confirmation before closing.
-    
+
     Returns:
         True if the user confirmed or there are no active connections, False otherwise.
     """
-    if ssh_manager.connections and not Confirm.ask("You have active connections. Close them and exit?"):
+    if ssh_manager.connections and not Confirm.ask(
+        "You have active connections. Close them and exit?"
+    ):
         return False
     return True
 
@@ -368,7 +380,7 @@ def safe_exit() -> None:
 def prompt_mode_main() -> Optional[Literal["mode"]]:
     """
     Main function for prompt (menu-based) mode.
-    
+
     Returns:
         "mode" if the user wants to switch to command mode, None if the program should exit.
     """
@@ -379,7 +391,7 @@ def prompt_mode_main() -> Optional[Literal["mode"]]:
                 if check_active_connections():
                     safe_exit()
                 return
-            
+
             result = handle_menu_action(choice)
             if result == "mode":
                 return "mode"  # Return to trigger mode switch
@@ -390,16 +402,16 @@ def prompt_mode_main() -> Optional[Literal["mode"]]:
 
 
 @click.command()
-@click.option('--prompt', is_flag=True, help='Start in prompt mode instead of command mode')
+@click.option("--prompt", is_flag=True, help="Start in prompt mode instead of command mode")
 def main(prompt: bool) -> None:
     """
     LazySSH - A comprehensive SSH toolkit for managing connections and tunnels.
-    
+
     This is the main entry point for the application. It initializes the program,
     checks dependencies, and starts the appropriate interface mode (command or prompt).
     """
     try:
-        # Check dependencies 
+        # Check dependencies
         missing_deps = check_dependencies()
         if missing_deps:
             display_error("Missing required dependencies:")
@@ -407,17 +419,17 @@ def main(prompt: bool) -> None:
                 display_error(f"  - {dep}")
             display_info("Please install the required dependencies and try again.")
             sys.exit(1)
-        
+
         # Display banner
         display_banner()
-        
+
         # Start in the specified mode
         current_mode = "prompt" if prompt else "command"
-        
+
         while True:
             if current_mode == "prompt":
                 display_info("Current mode: Prompt (use option 6 to switch to command mode)")
-                result = prompt_mode_main()
+                _ = prompt_mode_main()  # Use _ to indicate unused result
                 current_mode = "command"
             else:
                 display_info("Current mode: Command (type 'mode' to switch to prompt mode)")

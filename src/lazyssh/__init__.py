@@ -14,35 +14,36 @@ import os
 import subprocess
 from typing import List, Optional
 
+
 def check_dependencies() -> List[str]:
     """
     Check for required external dependencies.
-    
+
     Returns:
         A list of missing dependencies, empty if all are installed.
     """
     missing_deps = []
-    
+
     # Check for SSH client
     ssh_path = _check_executable("ssh")
     if not ssh_path:
         missing_deps.append("OpenSSH Client (ssh)")
-    
+
     # Check for terminator (recommended but not strictly required)
     terminator_path = _check_executable("terminator")
     if not terminator_path:
         missing_deps.append("Terminator terminal emulator (optional)")
-    
+
     return missing_deps
 
 
 def _check_executable(name: str) -> Optional[str]:
     """
     Check if an executable is available in the PATH.
-    
+
     Args:
         name: The name of the executable to check for
-        
+
     Returns:
         The path to the executable if found, None otherwise
     """

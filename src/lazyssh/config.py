@@ -1,28 +1,14 @@
-"""Configuration management for LazySSH"""
+"""Configuration utilities for LazySSH"""
+
 import os
-from pathlib import Path
-import json
+from typing import Any, Dict
 
-CONFIG_DIR = os.path.expanduser("~/.config/lazyssh")
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
-def ensure_config_dir():
-    """Ensure configuration directory exists"""
-    os.makedirs(CONFIG_DIR, exist_ok=True)
-
-def load_config():
-    """Load configuration from file"""
-    ensure_config_dir()
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-def save_config(config):
-    """Save configuration to file"""
-    ensure_config_dir()
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=2)
+def load_config() -> Dict[str, Any]:
+    """Load configuration from environment variables or config file"""
+    config = {
+        "ssh_path": os.environ.get("LAZYSSH_SSH_PATH", "/usr/bin/ssh"),
+        "terminal_emulator": os.environ.get("LAZYSSH_TERMINAL", "terminator"),
+        "control_path_base": os.environ.get("LAZYSSH_CONTROL_PATH", "/tmp/lazyssh/"),
+    }
+    return config

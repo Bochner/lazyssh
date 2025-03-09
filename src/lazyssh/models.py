@@ -1,8 +1,9 @@
 """Models and shared types for LazySSH"""
-from dataclasses import dataclass
-from typing import Dict, Optional, List
+
 import os
-import uuid
+from dataclasses import dataclass
+from typing import List, Optional
+
 
 @dataclass
 class Tunnel:
@@ -13,6 +14,7 @@ class Tunnel:
     remote_port: int
     active: bool = True
     connection_name: str = ""
+
 
 @dataclass
 class SSHConnection:
@@ -28,20 +30,22 @@ class SSHConnection:
     def __post_init__(self):
         self.tunnels = self.tunnels or []
         # Ensure socket path is in /tmp/lazyssh/
-        if not self.socket_path.startswith('/tmp/lazyssh/'):
+        if not self.socket_path.startswith("/tmp/lazyssh/"):
             name = os.path.basename(self.socket_path)
-            self.socket_path = f'/tmp/lazyssh/{name}'
+            self.socket_path = f"/tmp/lazyssh/{name}"
         self.socket_path = os.path.expanduser(self.socket_path)
 
-    def add_tunnel(self, local_port: int, remote_host: str, remote_port: int, is_reverse: bool = False) -> Tunnel:
+    def add_tunnel(
+        self, local_port: int, remote_host: str, remote_port: int, is_reverse: bool = False
+    ) -> Tunnel:
         """Add a new tunnel with a sequential identifier"""
         tunnel = Tunnel(
             id=str(self._next_tunnel_id),
-            type='reverse' if is_reverse else 'forward',
+            type="reverse" if is_reverse else "forward",
             local_port=local_port,
             remote_host=remote_host,
             remote_port=remote_port,
-            connection_name=os.path.basename(self.socket_path)
+            connection_name=os.path.basename(self.socket_path),
         )
         self.tunnels.append(tunnel)
         self._next_tunnel_id += 1
