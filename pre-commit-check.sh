@@ -36,7 +36,7 @@ pip install --upgrade pip
 # Install all development dependencies
 echo "📦 Installing development dependencies..."
 pip install -e ".[dev]" || { echo "❌ Failed to install development dependencies"; exit 1; }
-pip install black isort flake8 mypy pytest || { echo "❌ Failed to install test tools"; exit 1; }
+pip install black isort flake8 mypy pytest build wheel twine || { echo "❌ Failed to install test tools"; exit 1; }
 
 # Function to handle errors and cleanup
 cleanup_and_exit() {
@@ -78,6 +78,16 @@ else
     echo "⚠️ No test files found in tests directory."
     echo "Please add tests to ensure code quality."
 fi
+
+# Check 6: Build package
+echo "🔍 Building package..."
+python -m build
+echo "✅ Package built successfully"
+
+# Check 7: Verify package with twine
+echo "🔍 Verifying package with twine..."
+twine check dist/*
+echo "✅ Package verification passed"
 
 # Deactivate and remove the virtual environment
 deactivate || true

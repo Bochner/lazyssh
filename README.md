@@ -193,6 +193,8 @@ This script:
   - flake8 linting
   - mypy type checking
   - pytest (if test files exist)
+  - Package building
+  - Package verification with twine
 - Cleans up the repository by removing:
   - The temporary virtual environment
   - Python cache files
