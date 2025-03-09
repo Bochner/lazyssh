@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lazyssh"
-version = "1.0.0"
+version = "1.1.1"
 description = "A comprehensive SSH toolkit for managing connections and tunnels"
 readme = "README.md"
 authors = [
@@ -77,7 +77,7 @@ python_functions = "test_*"
 python_classes = "Test*"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "1.1.1"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
