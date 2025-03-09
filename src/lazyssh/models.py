@@ -1,7 +1,7 @@
 """Models and shared types for LazySSH"""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 
@@ -24,11 +24,10 @@ class SSHConnection:
     socket_path: str
     dynamic_port: Optional[int] = None
     identity_file: Optional[str] = None
-    tunnels: List[Tunnel] = None
+    tunnels: List[Tunnel] = field(default_factory=list)
     _next_tunnel_id: int = 1
 
     def __post_init__(self):
-        self.tunnels = self.tunnels or []
         # Ensure socket path is in /tmp/lazyssh/
         if not self.socket_path.startswith("/tmp/lazyssh/"):
             name = os.path.basename(self.socket_path)

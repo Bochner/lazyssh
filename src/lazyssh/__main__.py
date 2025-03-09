@@ -91,7 +91,8 @@ def main_menu() -> str:
         "7": "Exit",
     }
     display_menu(options)
-    return get_user_input("Choose an option")
+    choice = get_user_input("Choose an option")
+    return str(choice)  # Ensure we return a string
 
 
 def create_connection_menu() -> bool:
@@ -395,7 +396,7 @@ def prompt_mode_main() -> Optional[Literal["mode"]]:
             if choice == "7":
                 if check_active_connections():
                     safe_exit()
-                return
+                return None
 
             result = handle_menu_action(choice)
             if result == "mode":
@@ -445,7 +446,8 @@ def main(prompt: bool) -> None:
         display_warning("\nUse the exit command to safely exit LazySSH.")
         try:
             input("\nPress Enter to continue...")
-            return main(prompt)  # Restart the main function
+            main(prompt)  # Restart the main function
+            return None  # Explicitly return None
         except KeyboardInterrupt:
             display_info("\nExiting...")
             if check_active_connections():

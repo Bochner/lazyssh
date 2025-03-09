@@ -2,7 +2,7 @@
 
 import os
 import shlex
-from typing import Iterable, List
+from typing import Iterable, List, Dict, Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
@@ -49,12 +49,12 @@ class LazySSHCompleter(Completer):
 
         if command == "lazyssh":
             # Get used arguments and their positions
-            used_args = {}
+            used_args: Dict[str, int] = {}
             expecting_value = False
-            last_arg = None
+            last_arg: Optional[str] = None
 
             for i, word in enumerate(words[1:], 1):  # Start from 1 to skip the command
-                if expecting_value:
+                if expecting_value and last_arg is not None:
                     # This word is a value for the previous argument
                     used_args[last_arg] = i
                     expecting_value = False
@@ -207,7 +207,7 @@ class CommandMode:
 
         # Initialize prompt_toolkit components
         self.completer = LazySSHCompleter(self)
-        self.session = PromptSession()
+        self.session: PromptSession = PromptSession()
         self.style = Style.from_dict(
             {
                 "prompt": "ansicyan bold",
@@ -312,7 +312,7 @@ class CommandMode:
                             i += 2
                         else:
                             # Otherwise, just set it to True to indicate it's present
-                            params[param_name] = True
+                            params[param_name] = "true"  # Use string "true" instead of boolean
                             i += 1
                     elif i + 1 < len(args):
                         params[param_name] = args[i + 1]
@@ -343,7 +343,7 @@ class CommandMode:
 
             # Handle dynamic proxy port if specified
             if "proxy" in params:
-                if params["proxy"] is True:
+                if params["proxy"] == "true":
                     # If -proxy was specified without a value, use a default port
                     conn.dynamic_port = 1080
                     display_info(f"Using default dynamic proxy port: {conn.dynamic_port}")
@@ -377,8 +377,8 @@ class CommandMode:
         socket_path = f"/tmp/lazyssh/{ssh_id}"
 
         try:
-            local_port = int(local_port)
-            remote_port = int(remote_port)
+            local_port_int = int(local_port)
+            remote_port_int = int(remote_port)
             is_reverse = tunnel_type.lower() == "r"
 
             # Build the command for display
@@ -396,7 +396,7 @@ class CommandMode:
             display_info(cmd)
 
             if self.ssh_manager.create_tunnel(
-                socket_path, local_port, remote_host, remote_port, is_reverse
+                socket_path, local_port_int, remote_host, remote_port_int, is_reverse
             ):
                 display_success(
                     f"{tunnel_type_str.capitalize()} tunnel created: "
@@ -560,7 +560,7 @@ class CommandMode:
 
         return True
 
-    def cmd_mode(self, args: List[str]) -> bool:
+    def cmd_mode(self, args: List[str]) -> str:
         """Switch mode (command/prompt)"""
         return "mode"
 
@@ -594,10 +594,9 @@ class CommandMode:
             display_info("Opening terminal with command:")
             display_info(ssh_cmd)
 
-            if self.ssh_manager.open_terminal(socket_path):
-                display_success(f"Terminal opened for connection '{ssh_id}'")
-                return True
-            return False
+            self.ssh_manager.open_terminal(socket_path)
+            display_success(f"Terminal opened for connection '{ssh_id}'")
+            return True
         except ValueError:
             display_error("Invalid SSH ID")
             return False
