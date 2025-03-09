@@ -47,6 +47,7 @@ dependencies = [
 dev = [
     "black",
     "isort",
+    "flake8",
     "pylint",
     "pytest",
     "pytest-cov",

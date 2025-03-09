@@ -46,7 +46,10 @@ pip install --upgrade pip
 # Install all development dependencies
 echo "📦 Installing development dependencies..."
 pip install -e ".[dev]" || { echo "❌ Failed to install development dependencies"; exit 1; }
-pip install black isort flake8 mypy pytest build wheel twine pyupgrade typing_extensions || { echo "❌ Failed to install test tools"; exit 1; }
+pip install pyupgrade typing_extensions || { echo "❌ Failed to install additional tools"; exit 1; }
+
+# Verify flake8 is installed and available
+which flake8 || { echo "❌ flake8 not found in PATH after installation"; exit 1; }
 
 # Function to handle errors and cleanup
 cleanup_and_exit() {

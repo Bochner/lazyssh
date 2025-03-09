@@ -21,9 +21,12 @@ jobs:
     
     - name: Install dependencies
       run: |
+        set -e
         python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-        pip install pyupgrade typing_extensions
+        pip install -e ".[dev]" || { echo "Failed to install package dependencies"; exit 1; }
+        pip install pyupgrade typing_extensions || { echo "Failed to install additional tools"; exit 1; }
+        # Verify flake8 is installed and available
+        which flake8 || { echo "flake8 not found in PATH after installation"; exit 1; }
     
     - name: Check Python 3.11+ code optimizations
       run: |
