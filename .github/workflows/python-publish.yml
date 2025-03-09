@@ -22,13 +22,54 @@ jobs:
         set -e
         python -m pip install --upgrade pip
         pip install -e ".[dev]" || { echo "Failed to install package dependencies"; exit 1; }
-        pip install pyupgrade typing_extensions || { echo "Failed to install additional tools"; exit 1; }
-        # Verify flake8 is installed and available
+        pip install --user pyupgrade typing_extensions black isort flake8 mypy || { echo "Failed to install linting tools"; exit 1; }
+        
+        # Show environment info for debugging
+        echo "Python location: $(which python)"
+        echo "Pip location: $(which pip)"
+        echo "PATH: $PATH"
+        echo "Pip install location: $(pip -V)"
+        echo "Installed packages:"
+        pip list | grep -E "pyupgrade|black|isort|flake8|mypy"
+        
+        # Look for pyupgrade in various locations
+        echo "Looking for pyupgrade in different locations..."
+        ls -la ~/.local/bin/ || echo "~/.local/bin not found"
+        find ~/.local -name pyupgrade || echo "pyupgrade not found in ~/.local"
+        find /opt -name pyupgrade || echo "pyupgrade not found in /opt"
+        find $pythonLocation -name pyupgrade || echo "pyupgrade not found in pythonLocation"
+        
+        # Add ~/.local/bin to PATH if it exists
+        if [ -d ~/.local/bin ]; then
+          export PATH=~/.local/bin:$PATH
+          echo "Added ~/.local/bin to PATH: $PATH"
+        fi
+        
+        # Verify tools are installed and available
+        echo "Verifying installed tools..."
+        which pyupgrade || { echo "pyupgrade not found in PATH after installation"; exit 1; }
+        which black || { echo "black not found in PATH after installation"; exit 1; }
+        which isort || { echo "isort not found in PATH after installation"; exit 1; }
         which flake8 || { echo "flake8 not found in PATH after installation"; exit 1; }
+        which mypy || { echo "mypy not found in PATH after installation"; exit 1; }
     
     - name: Check Python 3.11+ code optimizations
       run: |
-        pyupgrade --py311-plus $(find src -name "*.py")
+        echo "Running pyupgrade using multiple methods..."
+        
+        # Try the direct command first
+        if command -v pyupgrade &> /dev/null; then
+          echo "Using direct pyupgrade command"
+          pyupgrade --py311-plus $(find src -name "*.py") && echo "Direct pyupgrade completed successfully"
+        elif python -m pip show pyupgrade &> /dev/null; then
+          echo "Using python -m pyupgrade"
+          python -m pyupgrade --py311-plus $(find src -name "*.py") && echo "Python module pyupgrade completed successfully"
+        else
+          echo "Installing pyupgrade again with different method"
+          pip install --upgrade --force-reinstall pyupgrade
+          export PATH=$PATH:~/.local/bin
+          pyupgrade --py311-plus $(find src -name "*.py") && echo "Pyupgrade after reinstall completed successfully"
+        fi
     
     - name: Check formatting with Black
       run: |
