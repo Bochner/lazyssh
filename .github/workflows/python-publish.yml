@@ -51,15 +51,26 @@ jobs:
     
     - name: Update version in __init__.py
       run: |
-        # Get version from pyproject.toml
-        VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
-        echo "Version in pyproject.toml: $VERSION"
+        # Get GitHub release tag version (strips the 'v' prefix if present)
+        if [ "${{ github.event_name }}" == "release" ]; then
+          RELEASE_TAG="${{ github.ref_name }}"
+          VERSION="${RELEASE_TAG#v}"  # Remove 'v' prefix if present
+          echo "Using version from release tag: $VERSION"
+        else
+          # Fallback to pyproject.toml for workflow_dispatch
+          VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+          echo "Using version from pyproject.toml: $VERSION"
+        fi
+        
+        # Update pyproject.toml to match the release version
+        sed -i "s/version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+        echo "Updated pyproject.toml:"
+        grep -n "version" pyproject.toml
         
         # Update __init__.py
         sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" src/lazyssh/__init__.py
-        
-        # Verify the update worked
-        cat src/lazyssh/__init__.py | grep "__version__"
+        echo "Updated __init__.py:"
+        grep -n "__version__" src/lazyssh/__init__.py
         
         # Double-check by importing
         pip uninstall -y lazyssh
@@ -75,8 +86,15 @@ jobs:
         # Build the package
         python -m build
         
-        # Verify the built package has the correct version in the filename
-        VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+        # Get the expected version again to be safe
+        if [ "${{ github.event_name }}" == "release" ]; then
+          RELEASE_TAG="${{ github.ref_name }}"
+          VERSION="${RELEASE_TAG#v}"  # Remove 'v' prefix if present
+        else
+          VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+        fi
+        
+        echo "Expected version: $VERSION"
         ls -la dist/
         if ! ls dist/lazyssh-$VERSION-*.whl > /dev/null 2>&1; then
           echo "ERROR: Built wheel does not have the correct version ($VERSION)"
