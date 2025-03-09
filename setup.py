@@ -18,7 +18,7 @@ if "art>=5.9" not in requirements:
 
 setup(
     name="lazyssh",
-    version="1.0.0",
+    version="1.1.1",
     author="Bochner",
     author_email="lazyssh@example.com",
     description="A comprehensive SSH toolkit for managing connections and tunnels",
