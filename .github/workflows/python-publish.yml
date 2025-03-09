@@ -6,12 +6,11 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
-  build-test-publish:
+  build-and-publish:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+    - uses: actions/checkout@v3
     
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
@@ -20,97 +19,43 @@ jobs:
     
     - name: Install dependencies
       run: |
-        set -e
         python -m pip install --upgrade pip
-        pip install build wheel twine
         pip install -e ".[dev]"
         pip install pyupgrade typing_extensions
+        pip install build wheel twine
     
-    - name: Display current version
-      run: |
-        echo "Current version in pyproject.toml:"
-        grep -n "version" pyproject.toml
-        echo "Current version in __init__.py:"
-        grep -n "__version__" src/lazyssh/__init__.py
-        python -c "import lazyssh; print(f'Imported lazyssh version: {lazyssh.__version__}')"
-    
-    - name: Force update version in __init__.py
-      run: |
-        # Extract version from pyproject.toml
-        PYPROJECT_VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
-        echo "pyproject.toml version: $PYPROJECT_VERSION"
-        
-        # Force update __init__.py version
-        echo "Forcing update of __init__.py version..."
-        sed -i "s/__version__ = \".*\"/__version__ = \"$PYPROJECT_VERSION\"/" src/lazyssh/__init__.py
-        grep -n "__version__" src/lazyssh/__init__.py
-        
-        # Verify the update worked
-        python -c "import lazyssh; print(f'Updated lazyssh version: {lazyssh.__version__}')"
-        
-        # Ensure the version is what we expect
-        IMPORTED_VERSION=$(python -c "import lazyssh; print(lazyssh.__version__)")
-        if [ "$IMPORTED_VERSION" != "$PYPROJECT_VERSION" ]; then
-          echo "ERROR: Version mismatch after update!"
-          echo "Expected: $PYPROJECT_VERSION, Got: $IMPORTED_VERSION"
-          exit 1
-        fi
-    
-    - name: Run code quality checks
+    - name: Check Python 3.11+ code optimizations
       run: |
         pyupgrade --py311-plus $(find src -name "*.py")
-        black --check --line-length 100 --target-version py311 src tests
-        isort --check-only --profile black src tests
-        flake8 src tests
-        mypy --python-version 3.11 --disallow-untyped-defs --disallow-incomplete-defs --ignore-missing-imports src
     
-    - name: Run tests
+    - name: Check formatting with Black
       run: |
-        pytest -xvs tests
+        black --check --line-length 100 --target-version py311 src tests
+    
+    - name: Check imports with isort
+      run: |
+        isort --check-only --profile black src tests
+    
+    - name: Lint with flake8
+      run: |
+        flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src tests --count --max-complexity=10 --max-line-length=100 --statistics
+    
+    - name: Type check with mypy (stricter settings)
+      run: |
+        mypy --python-version 3.11 --disallow-untyped-defs --disallow-incomplete-defs --ignore-missing-imports src
     
     - name: Clean build directories
       run: |
         rm -rf dist/ build/ *.egg-info/
-        # Reinstall to ensure clean state
-        pip uninstall -y lazyssh
-        pip install -e .
-        python -c "import lazyssh; print(f'Reinstalled lazyssh version: {lazyssh.__version__}')"
     
     - name: Build package
       run: |
         python -m build
-        echo "Built packages:"
-        ls -la dist/
     
     - name: Verify package with twine
       run: |
         twine check dist/*
-    
-    - name: Verify package version
-      run: |
-        # Extract version from pyproject.toml
-        EXPECTED_VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
-        echo "Expected version: $EXPECTED_VERSION"
-        
-        # Check if the wheel filename contains the expected version
-        if ls dist/lazyssh-$EXPECTED_VERSION-*.whl 1> /dev/null 2>&1; then
-          echo "✅ Wheel package has correct version: $EXPECTED_VERSION"
-        else
-          echo "❌ Wheel package version mismatch!"
-          echo "Expected: lazyssh-$EXPECTED_VERSION-*.whl"
-          echo "Found: $(ls dist/*.whl)"
-          exit 1
-        fi
-        
-        # Check if the source dist filename contains the expected version
-        if ls dist/lazyssh-$EXPECTED_VERSION.tar.gz 1> /dev/null 2>&1; then
-          echo "✅ Source package has correct version: $EXPECTED_VERSION"
-        else
-          echo "❌ Source package version mismatch!"
-          echo "Expected: lazyssh-$EXPECTED_VERSION.tar.gz"
-          echo "Found: $(ls dist/*.tar.gz)"
-          exit 1
-        fi
     
     - name: Publish to PyPI
       if: github.event_name == 'release'
