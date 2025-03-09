@@ -2,6 +2,7 @@
 
 import os
 import shlex
+import sys
 from typing import Dict, Iterable, List, Optional
 
 from prompt_toolkit import PromptSession
@@ -11,6 +12,7 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
 
 from .models import SSHConnection
+from .scp_mode import SCPMode
 from .ssh import SSHManager
 from .ui import (
     display_error,
@@ -72,11 +74,17 @@ class LazySSHCompleter(Completer):
                     i += 1
 
             # Available arguments for lazyssh
-            all_args = {"-ip", "-port", "-user", "-socket", "-proxy"}
+            all_args = {"-ip", "-port", "-user", "-socket", "-proxy", "-ssh-key"}
             remaining_args = all_args - set(used_args.keys())
 
             # Define the specific order for arguments
             ordered_args = ["-ip", "-port", "-user", "-socket", "-proxy"]
+
+            # Only add -ssh-key to the ordered arguments if -proxy is already used
+            # This ensures -ssh-key is only suggested after -proxy
+            if "-proxy" not in remaining_args and "-ssh-key" in remaining_args:
+                ordered_args.append("-ssh-key")
+
             # Filter ordered_args to only include remaining args
             ordered_remaining_args = [arg for arg in ordered_args if arg in remaining_args]
 
@@ -134,39 +142,20 @@ class LazySSHCompleter(Completer):
             arg_position = len(words) - 1
 
             # If we're at the end of a word, we're expecting the next argument
-            if text.endswith(" "):
-                arg_position += 1
-
-            if arg_position == 1:  # First and only argument: tunnel ID
+            if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
                 # Show available tunnel IDs
                 for socket_path, conn in self.command_mode.ssh_manager.connections.items():
                     for tunnel in conn.tunnels:
                         if not word_before_cursor or tunnel.id.startswith(word_before_cursor):
                             yield Completion(tunnel.id, start_position=-len(word_before_cursor))
 
-        elif command == "terminal" or command == "close":
-            # For terminal and close commands, we only expect one argument: the SSH connection name
+        elif command == "terminal" or command == "close" or command == "term":
+            # For terminal, term and close commands, we only expect one argument: the SSH connection name
             arg_position = len(words) - 1
 
             # If we're at the end of a word, we're expecting the next argument
-            if text.endswith(" "):
-                arg_position += 1
-
-            if arg_position == 1:  # First and only argument: SSH connection name
-                # Show available connections
-                for conn_name in self.command_mode._get_connection_completions():
-                    if not word_before_cursor or conn_name.startswith(word_before_cursor):
-                        yield Completion(conn_name, start_position=-len(word_before_cursor))
-
-        elif command == "term":
-            # For term command, we only expect one argument: the SSH connection name
-            arg_position = len(words) - 1
-
-            # If we're at the end of a word, we're expecting the next argument
-            if text.endswith(" "):
-                arg_position += 1
-
-            if arg_position == 1:  # First and only argument: SSH connection name
+            # Or if we've just typed the command and a space, show completions
+            if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
                 # Show available connections
                 for conn_name in self.command_mode._get_connection_completions():
                     if not word_before_cursor or conn_name.startswith(word_before_cursor):
@@ -177,14 +166,28 @@ class LazySSHCompleter(Completer):
             arg_position = len(words) - 1
 
             # If we're at the end of a word, we're expecting the next argument
-            if text.endswith(" "):
-                arg_position += 1
-
-            if arg_position == 1:  # First and only argument: command name
+            # Or if we've just typed the command and a space, show completions
+            if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
                 # Show available commands for help
                 for cmd in self.command_mode.commands:
                     if not word_before_cursor or cmd.startswith(word_before_cursor):
                         yield Completion(cmd, start_position=-len(word_before_cursor))
+
+        # Handle completion for close command
+        elif command == "close" and len(words) == 2:
+            connections = self.command_mode._get_connection_completions()
+            for conn in connections:
+                if conn.startswith(word_before_cursor):
+                    yield Completion(conn, start_position=-len(word_before_cursor))
+
+        # Handle completion for scp command
+        elif command == "scp" and (len(words) == 1 or len(words) == 2):
+            # Check if we have a space after "scp" to show completions immediately
+            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
+                connections = self.command_mode._get_connection_completions()
+                for conn in connections:
+                    if not word_before_cursor or conn.startswith(word_before_cursor):
+                        yield Completion(conn, start_position=-len(word_before_cursor))
 
 
 class CommandMode:
@@ -203,6 +206,7 @@ class CommandMode:
             "term": self.cmd_terminal,  # Alias for terminal
             "mode": self.cmd_mode,
             "clear": self.cmd_clear,
+            "scp": self.cmd_scp,  # New SCP mode command
         }
 
         # Initialize prompt_toolkit components
@@ -293,6 +297,10 @@ class CommandMode:
         for cmd in sorted(self.commands.keys()):
             display_info(f"  {cmd}")
 
+        display_info("  exit    : Exit lazyssh")
+        display_info("  quit    : Alias for exit")
+        display_info("  scp     : Enter SCP mode for file transfers")
+
     # Command implementations
     def cmd_lazyssh(self, args: List[str]) -> bool:
         """Handle lazyssh command for creating new connections"""
@@ -329,7 +337,7 @@ class CommandMode:
                 display_error(f"Missing required parameters: {', '.join(missing)}")
                 display_info(
                     "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                    "[-proxy [port]]"
+                    "[-proxy [port]] [-ssh-key <identity_file>]"
                 )
                 return False
 
@@ -338,8 +346,12 @@ class CommandMode:
                 host=params["ip"],
                 port=int(params["port"]),
                 username=params["user"],
-                socket_path=f"/tmp/lazyssh/{params['socket']}",
+                socket_path=f"/tmp/{params['socket']}",
             )
+
+            # Set identity file if provided
+            if "ssh-key" in params:
+                conn.identity_file = params["ssh-key"]
 
             # Handle dynamic proxy port if specified
             if "proxy" in params:
@@ -374,7 +386,7 @@ class CommandMode:
             return False
 
         ssh_id, tunnel_type, local_port, remote_host, remote_port = args
-        socket_path = f"/tmp/lazyssh/{ssh_id}"
+        socket_path = f"/tmp/{ssh_id}"
 
         try:
             local_port_int = int(local_port)
@@ -486,6 +498,10 @@ class CommandMode:
             display_info("  term <ssh_id>")
             display_info("  Example: term ubuntu\n")
 
+            display_info("File Transfer:")
+            display_info("  scp [<ssh_id>]")
+            display_info("  Example: scp ubuntu\n")
+
             display_info("System Commands:")
             display_info("  list    - Show all connections and tunnels")
             display_info("  mode    - Switch mode (command/prompt)")
@@ -498,7 +514,7 @@ class CommandMode:
             display_info("\nCreate new SSH connection:")
             display_info(
                 "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                "[-proxy [port]]"
+                "[-proxy [port]] [-ssh-key <identity_file>]"
             )
             display_info("Required parameters:")
             display_info("  -ip     : IP address or hostname of the SSH server")
@@ -507,11 +523,16 @@ class CommandMode:
             display_info("  -socket : Name for the connection (used as identifier)")
             display_info("Optional parameters:")
             display_info("  -proxy  : Create a dynamic SOCKS proxy (default port: 1080)")
+            display_info("  -ssh-key: Path to an SSH identity file")
             display_info("\nExamples:")
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu")
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy")
             display_info(
                 "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy " "8080"
+            )
+            display_info(
+                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu "
+                "-ssh-key ~/.ssh/id_rsa"
             )
         elif cmd == "tunc":
             display_info("\nCreate a new tunnel:")
@@ -547,18 +568,85 @@ class CommandMode:
             display_info("  ssh_id : The identifier of the SSH connection")
             display_info("\nExample:")
             display_info("  term ubuntu")
-        # Other help commands remain the same
+        elif cmd == "mode":
+            display_info("\nSwitch between command and interactive modes:")
+            display_info("Usage: mode")
+        elif cmd == "clear":
+            display_info("\nClear the terminal screen:")
+            display_info("Usage: clear")
+        elif cmd == "scp":
+            display_info("\nEnter SCP mode for file transfers:")
+            display_info("Usage: scp [<connection_name>]")
+            display_info("Parameters:")
+            display_info(
+                "  connection_name : The identifier of the SSH connection to use (optional)"
+            )
+            display_info("\nSCP mode leverages your existing SSH connection's master socket")
+            display_info(
+                "to perform secure file transfers without requiring additional authentication."
+            )
+            display_info("\nSCP mode commands:")
+            display_info("  put <local_file> [<remote_file>]  - Upload file to remote server")
+            display_info("  get <remote_file> [<local_file>]  - Download file from remote server")
+            display_info("  ls [<remote_path>]                - List files in remote directory")
+            display_info("  cd <remote_path>                  - Change remote working directory")
+            display_info("  pwd                               - Show current remote directory")
+            display_info(
+                "  mget <pattern>                    - Download multiple files matching pattern"
+            )
+            display_info(
+                "  local [<path>]                    - Set or show local download directory"
+            )
+            display_info("  exit                              - Exit SCP mode")
+            display_info("\nExamples:")
+            display_info(
+                "  scp ubuntu                        # Enter SCP mode with the 'ubuntu' connection"
+            )
+            display_info(
+                "  scp                               # Enter SCP mode and select a connection interactively"
+            )
+        else:
+            display_error(f"Unknown command: {cmd}")
+            self.cmd_help([])
         return True
 
     def cmd_exit(self, args: List[str]) -> bool:
-        """Handle exit command"""
-        from lazyssh.__main__ import check_active_connections, safe_exit
+        """Exit lazyssh and close all connections"""
+        display_info("Exiting lazyssh...")
 
-        # Check for active connections and prompt for confirmation
-        if check_active_connections():
-            safe_exit()
+        # Check if there are active connections and prompt for confirmation
+        if self.ssh_manager.connections:
+            # Prompt user for confirmation
+            confirmation = input("You have active connections. Close them and exit? (y/N): ")
+            if confirmation.lower() != "y":
+                display_info("Exit cancelled")
+                return True
 
-        return True
+            # User confirmed, proceed with closing connections
+            display_info("Closing all connections...")
+            successful_closures = 0
+            total_connections = len(self.ssh_manager.connections)
+
+            # Create a copy of the connections to avoid modification during iteration
+            for socket_path in list(self.ssh_manager.connections.keys()):
+                try:
+                    if self.ssh_manager.close_connection(socket_path):
+                        successful_closures += 1
+                except Exception as e:
+                    display_warning(f"Failed to close connection for {socket_path}: {str(e)}")
+
+            # Report closure results
+            if successful_closures == total_connections:
+                display_success(f"Successfully closed all {total_connections} connections")
+            else:
+                display_warning(
+                    f"Closed {successful_closures} out of {total_connections} connections"
+                )
+                display_info("Some connections may require manual cleanup")
+
+        # Now exit
+        display_success("Goodbye!")
+        sys.exit(0)
 
     def cmd_mode(self, args: List[str]) -> str:
         """Switch mode (command/prompt)"""
@@ -576,15 +664,14 @@ class CommandMode:
             display_info("Example: term ubuntu")
             return False
 
-        ssh_id = args[0]
-        socket_path = f"/tmp/lazyssh/{ssh_id}"
+        conn_name = args[0]
+        socket_path = f"/tmp/{conn_name}"
+
+        if socket_path not in self.ssh_manager.connections:
+            display_error(f"SSH connection '{conn_name}' not found")
+            return False
 
         try:
-            # Check if the connection exists
-            if socket_path not in self.ssh_manager.connections:
-                display_error(f"SSH connection '{ssh_id}' not found")
-                return False
-
             conn = self.ssh_manager.connections[socket_path]
 
             # Build the SSH command for display
@@ -595,7 +682,7 @@ class CommandMode:
             display_info(ssh_cmd)
 
             self.ssh_manager.open_terminal(socket_path)
-            display_success(f"Terminal opened for connection '{ssh_id}'")
+            display_success(f"Terminal opened for connection '{conn_name}'")
             return True
         except ValueError:
             display_error("Invalid SSH ID")
@@ -608,14 +695,39 @@ class CommandMode:
             display_info("Example: close ubuntu")
             return False
 
-        ssh_id = args[0]
-        socket_path = f"/tmp/lazyssh/{ssh_id}"
+        conn_name = args[0]
+        socket_path = f"/tmp/{conn_name}"
+
+        if socket_path not in self.ssh_manager.connections:
+            display_error(f"SSH connection '{conn_name}' not found")
+            return False
 
         try:
             if self.ssh_manager.close_connection(socket_path):
-                display_success(f"Connection '{ssh_id}' closed")
+                display_success(f"Connection '{conn_name}' closed")
                 return True
             return False
         except ValueError:
             display_error("Invalid SSH ID")
             return False
+
+    def cmd_scp(self, args: List[str]) -> bool:
+        """Enter SCP mode for file transfers"""
+        selected_connection = None
+
+        # If a connection name is provided, use it
+        if args:
+            selected_connection = args[0]
+
+            # Validate the connection exists
+            socket_path = f"/tmp/{selected_connection}"
+            if socket_path not in self.ssh_manager.connections:
+                display_error(f"Connection '{selected_connection}' not found")
+                return False
+
+        # Start SCP mode
+        display_info("Entering SCP mode...")
+        scp_mode = SCPMode(self.ssh_manager, selected_connection)
+        scp_mode.run()
+        display_info("Exited SCP mode")
+        return True

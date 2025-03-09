@@ -48,7 +48,7 @@ def _check_executable(name: str) -> Optional[str]:
         The path to the executable if found, None otherwise
     """
     try:
-        path = subprocess.check_output(["which", name], universal_newlines=True).strip()
+        path = subprocess.check_output(["which", name], text=True).strip()
         if os.path.isfile(path) and os.access(path, os.X_OK):
             return path
         return None

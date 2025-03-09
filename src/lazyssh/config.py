@@ -9,6 +9,6 @@ def load_config() -> Dict[str, Any]:
     config = {
         "ssh_path": os.environ.get("LAZYSSH_SSH_PATH", "/usr/bin/ssh"),
         "terminal_emulator": os.environ.get("LAZYSSH_TERMINAL", "terminator"),
-        "control_path_base": os.environ.get("LAZYSSH_CONTROL_PATH", "/tmp/lazyssh/"),
+        "control_path_base": os.environ.get("LAZYSSH_CONTROL_PATH", "/tmp/"),
     }
     return config

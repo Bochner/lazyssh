@@ -28,11 +28,36 @@ class SSHConnection:
     _next_tunnel_id: int = 1
 
     def __post_init__(self):
-        # Ensure socket path is in /tmp/lazyssh/
-        if not self.socket_path.startswith("/tmp/lazyssh/"):
+        # Ensure socket path is in /tmp/
+        if not self.socket_path.startswith("/tmp/"):
             name = os.path.basename(self.socket_path)
-            self.socket_path = f"/tmp/lazyssh/{name}"
+            self.socket_path = f"/tmp/{name}"
+
+        # Expand user paths (like ~)
         self.socket_path = os.path.expanduser(self.socket_path)
+
+        # Create the downloads directory structure
+        self._create_connection_dirs()
+
+    def _create_connection_dirs(self):
+        """Create the directory structure for this connection"""
+        # Get the connection name from the socket path
+        conn_name = os.path.basename(self.socket_path)
+
+        # Create connection download directory
+        self.connection_dir = f"/tmp/lazyssh/{conn_name}.d"
+        os.makedirs(self.connection_dir, exist_ok=True)
+        os.chmod(self.connection_dir, 0o700)
+
+        # Create downloads directory
+        self.downloads_dir = f"{self.connection_dir}/downloads"
+        os.makedirs(self.downloads_dir, exist_ok=True)
+        os.chmod(self.downloads_dir, 0o700)
+
+    @property
+    def conn_name(self) -> str:
+        """Get the connection name"""
+        return os.path.basename(self.socket_path)
 
     def add_tunnel(
         self, local_port: int, remote_host: str, remote_port: int, is_reverse: bool = False
