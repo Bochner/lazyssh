@@ -76,7 +76,8 @@ echo "✅ isort check passed"
 
 # Check 4: flake8 linting
 echo "🔍 Running flake8 linting check..."
-flake8 src tests
+flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+flake8 src tests --count --max-complexity=10 --max-line-length=100 --statistics
 echo "✅ flake8 linting check passed"
 
 # Check 5: mypy type checking with stricter settings
