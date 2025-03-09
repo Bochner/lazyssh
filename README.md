@@ -23,83 +23,34 @@ A comprehensive SSH toolkit for managing connections, tunnels, and remote sessio
 - Python 3.7+
 - OpenSSH client
 - Terminator terminal emulator
-- Linux/Unix operating system (Debian/Ubuntu, Fedora, RHEL/CentOS)
 
 ## Installation
 
-### Method 1: Quick Install Script (Recommended)
+LazySSH can be installed using standard Python packaging tools:
+
+### Option 1: Install with pip (Recommended)
 
 ```bash
-# Download the installer
-curl -O https://raw.githubusercontent.com/Bochner/lazyssh/main/install.sh
+# Install globally
+pip install lazyssh
 
-# Make it executable
-chmod +x install.sh
-
-# Run the installer
-./install.sh
+# Or install for the current user only
+pip install --user lazyssh
 ```
 
-The installer will:
-- Check for and install required dependencies
-- Install LazySSH using pipx for isolated dependencies
-- Add LazySSH to your PATH for the current session
-- Provide instructions for permanent PATH configuration
-
-Supported distributions:
-- Debian/Ubuntu (apt)
-- Fedora (dnf)
-- RHEL/CentOS (yum)
-
-### Method 2: Manual Installation with pipx
-
-```bash
-# Install pipx if not already installed
-# For Debian/Ubuntu:
-sudo apt install pipx
-
-# For Fedora:
-sudo dnf install python3-pipx
-
-# For RHEL/CentOS:
-sudo yum install python3-pipx
-
-# Install LazySSH
-pipx install git+https://github.com/Bochner/lazyssh.git
-
-# Make sure ~/.local/bin is in your PATH
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-### Method 3: Development Installation
+### Option 2: Install from repository
 
 ```bash
 # Clone the repository
 git clone https://github.com/Bochner/lazyssh.git
 cd lazyssh
 
-# Install in development mode
+# Install
+pip install .
+
+# Or for development mode
 pip install -e .
 ```
-
-### Method 4: Using the Wrapper Script
-
-If you're experiencing PATH issues, you can use the included wrapper script:
-
-```bash
-# Make the wrapper script executable (only needed once)
-chmod +x run_lazyssh.sh
-
-# Run LazySSH using the wrapper script
-./run_lazyssh.sh
-```
-
-This wrapper script automatically finds the LazySSH installation and runs it, regardless of PATH configuration. It works by:
-- First checking if LazySSH is in your PATH
-- Then looking in the common installation directory (`~/.local/bin`)
-- Finally, running directly from the repository if needed
-
-The wrapper script simply starts LazySSH with no arguments. Once LazySSH is running, you can use all its commands normally.
 
 ## Usage
 
@@ -163,7 +114,7 @@ In prompt mode, you'll see a menu with numbered options:
 
 ### Command Not Found
 
-If you get "command not found" after installation:
+If you installed with `pip install --user` and get "command not found":
 
 ```bash
 # Add to your PATH manually
@@ -173,8 +124,6 @@ export PATH="$HOME/.local/bin:$PATH"
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
-
-Alternatively, you can use the wrapper script method described in [Installation Method 4](#method-4-using-the-wrapper-script).
 
 ### Missing Dependencies
 
@@ -189,6 +138,61 @@ sudo dnf install terminator
 
 # Install Terminator (RHEL/CentOS)
 sudo yum install terminator
+```
+
+## Development
+
+### Project Structure
+
+```
+lazyssh/
+├── src/             # Source code
+│   └── lazyssh/     # Main package
+├── tests/           # Test suite
+├── docs/            # Documentation
+├── pyproject.toml   # Project configuration
+├── setup.py         # Package installation
+├── Makefile         # Development tasks
+└── .pre-commit-config.yaml  # Code quality hooks
+```
+
+### Setup Development Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/Bochner/lazyssh.git
+cd lazyssh
+
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Install pre-commit hooks
+pip install pre-commit
+pre-commit install
+```
+
+### Common Development Tasks
+
+We provide a Makefile for common tasks:
+
+```bash
+# Install in development mode
+make install
+
+# Run tests
+make test
+
+# Format code (black and isort)
+make fmt
+
+# Lint code
+make lint
+
+# Build package
+make build
+
+# Create distribution
+make dist
 ```
 
 ## License
