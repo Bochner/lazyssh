@@ -16,10 +16,6 @@ classifiers = [
     "Intended Audience :: System Administrators",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
@@ -28,7 +24,7 @@ classifiers = [
     "Topic :: System :: Systems Administration",
 ]
 keywords = ["ssh", "tunnel", "proxy", "socks", "terminal", "connection", "management"]
-requires-python = ">=3.7"
+requires-python = ">=3.11"
 dependencies = [
     "colorama>=0.4.6",
     "rich>=13.0.0",
@@ -38,6 +34,7 @@ dependencies = [
     "prompt_toolkit>=3.0.39,<3.1.0",
     "wcwidth>=0.2.5",
     "art>=5.9",
+    "paramiko>=3.0.0",
 ]
 
 [project.urls]
@@ -50,6 +47,7 @@ dependencies = [
 dev = [
     "black",
     "isort",
+    "flake8",
     "pylint",
     "pytest",
     "pytest-cov",
@@ -65,7 +63,7 @@ lazyssh = "lazyssh.__main__:main"
 
 [tool.black]
 line-length = 100
-target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
+target-version = ['py311']
 include = '\.pyi?$'
 
 [tool.isort]
@@ -79,7 +77,7 @@ python_functions = "test_*"
 python_classes = "Test*"
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

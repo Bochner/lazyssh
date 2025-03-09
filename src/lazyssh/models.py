@@ -1,8 +1,7 @@
 """Models and shared types for LazySSH"""
 
-import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from pathlib import Path
 
 
 @dataclass
@@ -22,17 +21,43 @@ class SSHConnection:
     port: int
     username: str
     socket_path: str
-    dynamic_port: Optional[int] = None
-    identity_file: Optional[str] = None
-    tunnels: List[Tunnel] = field(default_factory=list)
+    dynamic_port: int | None = None
+    identity_file: str | None = None
+    tunnels: list[Tunnel] = field(default_factory=list)
     _next_tunnel_id: int = 1
 
-    def __post_init__(self):
-        # Ensure socket path is in /tmp/lazyssh/
-        if not self.socket_path.startswith("/tmp/lazyssh/"):
-            name = os.path.basename(self.socket_path)
-            self.socket_path = f"/tmp/lazyssh/{name}"
-        self.socket_path = os.path.expanduser(self.socket_path)
+    def __post_init__(self) -> None:
+        # Ensure socket path is in /tmp/
+        socket_path = Path(self.socket_path)
+        if not str(socket_path).startswith("/tmp/"):
+            name = socket_path.name
+            self.socket_path = f"/tmp/{name}"
+
+        # Expand user paths (like ~)
+        self.socket_path = str(Path(self.socket_path).expanduser())
+
+        # Create the downloads directory structure
+        self._create_connection_dirs()
+
+    def _create_connection_dirs(self) -> None:
+        """Create the directory structure for this connection"""
+        # Get the connection name from the socket path
+        conn_name = Path(self.socket_path).name
+
+        # Create connection download directory
+        self.connection_dir = f"/tmp/lazyssh/{conn_name}.d"
+        Path(self.connection_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.connection_dir).chmod(0o700)
+
+        # Create downloads directory
+        self.downloads_dir = f"{self.connection_dir}/downloads"
+        Path(self.downloads_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.downloads_dir).chmod(0o700)
+
+    @property
+    def conn_name(self) -> str:
+        """Get the connection name"""
+        return Path(self.socket_path).name
 
     def add_tunnel(
         self, local_port: int, remote_host: str, remote_port: int, is_reverse: bool = False
@@ -44,7 +69,7 @@ class SSHConnection:
             local_port=local_port,
             remote_host=remote_host,
             remote_port=remote_port,
-            connection_name=os.path.basename(self.socket_path),
+            connection_name=Path(self.socket_path).name,
         )
         self.tunnels.append(tunnel)
         self._next_tunnel_id += 1
@@ -58,7 +83,7 @@ class SSHConnection:
                 return True
         return False
 
-    def get_tunnel(self, tunnel_id: str) -> Optional[Tunnel]:
+    def get_tunnel(self, tunnel_id: str) -> Tunnel | None:
         """Get a tunnel by its unique identifier"""
         for tunnel in self.tunnels:
             if tunnel.id == tunnel_id:

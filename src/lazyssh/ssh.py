@@ -1,25 +1,40 @@
-import os
 import subprocess
 import time
-from typing import Dict
+from pathlib import Path
 
 from rich.console import Console
 
 from .models import SSHConnection
-from .ui import display_error, display_info, display_success
+from .ui import display_error, display_info, display_success, display_warning
 
 console = Console()
 
 
 class SSHManager:
-    def __init__(self):
-        self.connections: Dict[str, SSHConnection] = {}
-        self.control_path_base = "/tmp/lazyssh/"
-        os.makedirs(self.control_path_base, exist_ok=True)
-        os.chmod(self.control_path_base, 0o700)
+    def __init__(self) -> None:
+        """Initialize the SSH manager"""
+        self.connections: dict[str, SSHConnection] = {}
+
+        # Set the base path for control sockets
+        self.control_path_base = "/tmp/"
+
+        # We don't need to create or chmod the /tmp directory as it already exists
+        # with the appropriate permissions
 
     def create_connection(self, conn: SSHConnection) -> bool:
         try:
+            # Ensure directories exist using pathlib
+            connection_dir = Path(conn.connection_dir)
+            downloads_dir = Path(conn.downloads_dir)
+
+            if not connection_dir.exists():
+                connection_dir.mkdir(parents=True, exist_ok=True)
+                connection_dir.chmod(0o700)
+
+            if not downloads_dir.exists():
+                downloads_dir.mkdir(parents=True, exist_ok=True)
+                downloads_dir.chmod(0o700)
+
             cmd = [
                 "ssh",
                 "-M",  # Master mode
@@ -38,7 +53,7 @@ class SSHManager:
             if conn.dynamic_port:
                 cmd.extend(["-D", str(conn.dynamic_port)])
             if conn.identity_file:
-                cmd.extend(["-i", os.path.expanduser(conn.identity_file)])
+                cmd.extend(["-i", str(Path(conn.identity_file).expanduser())])
 
             cmd.append(f"{conn.username}@{conn.host}")
 
@@ -63,6 +78,9 @@ class SSHManager:
             self.connections[conn.socket_path] = conn
             display_success(f"SSH connection established to {conn.host}")
 
+            # Wait a moment for the connection to be fully established
+            time.sleep(0.5)
+
             # Automatically open a terminal
             self.open_terminal(conn.socket_path)
 
@@ -72,16 +90,19 @@ class SSHManager:
             return False
 
     def check_connection(self, socket_path: str) -> bool:
-        """Check if the SSH connection is active"""
+        """Check if an SSH connection is active via control socket"""
         try:
-            if socket_path not in self.connections:
+            # Use pathlib to check if socket file exists
+            socket_file = Path(socket_path)
+            if not socket_file.exists():
                 return False
 
+            # Check the connection
             cmd = ["ssh", "-S", socket_path, "-O", "check", "dummy"]
             result = subprocess.run(cmd, capture_output=True, text=True)
-
             return result.returncode == 0
-        except Exception:
+        except Exception as e:
+            display_error(f"Error checking connection: {str(e)}")
             return False
 
     def create_tunnel(
@@ -168,6 +189,7 @@ class SSHManager:
     def open_terminal(self, socket_path: str) -> None:
         """Open a terminal for an SSH connection using terminator"""
         if socket_path not in self.connections:
+            display_error(f"SSH connection not found for socket: {socket_path}")
             return
 
         conn = self.connections[socket_path]
@@ -224,13 +246,22 @@ class SSHManager:
             for tunnel in list(conn.tunnels):  # Use list to avoid modification during iteration
                 self.close_tunnel(socket_path, tunnel.id)
 
+            # Check if the socket file exists before trying to close it
+            socket_file = Path(socket_path)
+            if not socket_file.exists():
+                display_info(f"Socket file {socket_path} no longer exists, cleaning up reference")
+                del self.connections[socket_path]
+                return True
+
             # Then close the master connection
             cmd = ["ssh", "-S", socket_path, "-O", "exit", "dummy"]
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
-                display_error(f"Failed to close connection: {result.stderr}")
-                return False
+                display_warning(f"Issue closing connection: {result.stderr}")
+                # Even if there was an error, remove it from our tracking to avoid repeated errors
+                del self.connections[socket_path]
+                return True  # Return success anyway so we continue closing other connections
 
             # Remove the connection from our dict
             del self.connections[socket_path]
@@ -238,9 +269,12 @@ class SSHManager:
             display_success("SSH connection closed")
             return True
         except Exception as e:
-            display_error(f"Error closing connection: {str(e)}")
-            return False
+            display_warning(f"Error during connection cleanup: {str(e)}")
+            # Still try to clean up the reference even if there was an error
+            if socket_path in self.connections:
+                del self.connections[socket_path]
+            return True  # Return success so we continue closing other connections
 
-    def list_connections(self) -> Dict[str, SSHConnection]:
+    def list_connections(self) -> dict[str, SSHConnection]:
         """Return a copy of the connections dictionary"""
         return self.connections.copy()

@@ -6,7 +6,45 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build wheel twine
+        pip install -e ".[dev]"
+        pip install pyupgrade typing_extensions
+    
+    - name: Check Python 3.11+ code optimizations
+      run: |
+        pyupgrade --py311-plus $(find src -name "*.py")
+    
+    - name: Check code quality
+      run: |
+        black --check --line-length 100 --target-version py311 src tests
+        isort --check-only --profile black src tests
+        flake8 src tests
+        mypy --python-version 3.11 --disallow-untyped-defs --disallow-incomplete-defs --ignore-missing-imports src
+    
+    - name: Run tests
+      run: |
+        pytest -xvs tests
+    
+    - name: Test basic import
+      run: |
+        python -c "import lazyssh; print(f'Successfully imported lazyssh version {lazyssh.__version__}')"
+  
   build-and-publish:
+    needs: test
     runs-on: ubuntu-latest
     
     steps:
@@ -22,19 +60,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install build wheel twine
     
-    - name: Check code quality
-      run: |
-        pip install black isort flake8 mypy
-        black --check src tests
-        isort --check-only --profile black src tests
-        flake8 src tests
-        mypy --ignore-missing-imports src
-    
     - name: Build package
       run: |
         python -m build
     
-    - name: Verify package
+    - name: Verify package with twine
       run: |
         twine check dist/*
     

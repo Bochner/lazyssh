@@ -12,10 +12,10 @@ __license__ = "MIT"
 
 import os
 import subprocess
-from typing import List, Optional
+from pathlib import Path
 
 
-def check_dependencies() -> List[str]:
+def check_dependencies() -> list[str]:
     """
     Check for required external dependencies.
 
@@ -37,7 +37,7 @@ def check_dependencies() -> List[str]:
     return missing_deps
 
 
-def _check_executable(name: str) -> Optional[str]:
+def _check_executable(name: str) -> str | None:
     """
     Check if an executable is available in the PATH.
 
@@ -48,8 +48,9 @@ def _check_executable(name: str) -> Optional[str]:
         The path to the executable if found, None otherwise
     """
     try:
-        path = subprocess.check_output(["which", name], universal_newlines=True).strip()
-        if os.path.isfile(path) and os.access(path, os.X_OK):
+        path = subprocess.check_output(["which", name], text=True).strip()
+        path_obj = Path(path)
+        if path_obj.is_file() and os.access(path, os.X_OK):
             return path
         return None
     except subprocess.CalledProcessError:

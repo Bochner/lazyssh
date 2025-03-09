@@ -5,7 +5,7 @@ LazySSH - Main module providing the entry point and interactive menus.
 from __future__ import annotations
 
 import sys
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import click
 from rich.prompt import Confirm
@@ -44,7 +44,7 @@ def show_status() -> None:
                 display_tunnels(socket_path, conn)
 
 
-def handle_menu_action(choice: str) -> Union[bool, Literal["mode"]]:
+def handle_menu_action(choice: str) -> bool | Literal["mode"]:
     """
     Process the menu choice and execute the corresponding action.
 
@@ -141,7 +141,7 @@ def create_connection_menu() -> bool:
         host=host,
         port=int(port),
         username=username,
-        socket_path=f"/tmp/lazyssh/{socket_name}",
+        socket_path=f"/tmp/{socket_name}",
         dynamic_port=dynamic_port,
     )
 
@@ -358,8 +358,25 @@ def manage_tunnels_menu() -> None:
 
 def close_all_connections() -> None:
     """Close all active SSH connections before exiting."""
+    display_info("\nClosing all connections...")
+    successful_closures = 0
+    total_connections = len(ssh_manager.connections)
+
+    # Create a copy of the connections to avoid modification during iteration
     for socket_path in list(ssh_manager.connections.keys()):
-        ssh_manager.close_connection(socket_path)
+        try:
+            if ssh_manager.close_connection(socket_path):
+                successful_closures += 1
+        except Exception as e:
+            display_warning(f"Failed to close connection for {socket_path}: {str(e)}")
+
+    # Report closure results
+    if successful_closures == total_connections:
+        if total_connections > 0:
+            display_success(f"Successfully closed all {total_connections} connections")
+    else:
+        display_warning(f"Closed {successful_closures} out of {total_connections} connections")
+        display_info("Some connections may require manual cleanup")
 
 
 def check_active_connections() -> bool:
@@ -378,12 +395,11 @@ def check_active_connections() -> bool:
 
 def safe_exit() -> None:
     """Safely exit the program, closing all connections."""
-    display_info("\nClosing all connections...")
     close_all_connections()
     sys.exit(0)
 
 
-def prompt_mode_main() -> Optional[Literal["mode"]]:
+def prompt_mode_main() -> Literal["mode"] | None:
     """
     Main function for prompt (menu-based) mode.
 

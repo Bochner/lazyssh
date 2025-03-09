@@ -13,20 +13,28 @@ jobs:
     
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python
+    
+    - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.11'
     
     - name: Install dependencies
       run: |
+        set -e
         python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-        pip install flake8 black isort mypy
+        pip install -e ".[dev]" || { echo "Failed to install package dependencies"; exit 1; }
+        pip install pyupgrade typing_extensions || { echo "Failed to install additional tools"; exit 1; }
+        # Verify flake8 is installed and available
+        which flake8 || { echo "flake8 not found in PATH after installation"; exit 1; }
+    
+    - name: Check Python 3.11+ code optimizations
+      run: |
+        pyupgrade --py311-plus $(find src -name "*.py")
     
     - name: Check formatting with Black
       run: |
-        black --check src tests
+        black --check --line-length 100 --target-version py311 src tests
     
     - name: Check imports with isort
       run: |
@@ -37,6 +45,19 @@ jobs:
         flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 src tests --count --max-complexity=10 --max-line-length=100 --statistics
     
-    - name: Type check with mypy
+    - name: Type check with mypy (stricter settings)
       run: |
-        mypy --ignore-missing-imports src 
+        mypy --python-version 3.11 --disallow-untyped-defs --disallow-incomplete-defs --ignore-missing-imports src
+    
+    - name: Check for non-pathlib path operations
+      run: |
+        echo "Checking for os.path usage that should use pathlib instead..."
+        OSPATH_COUNT=$(grep -r "os\.path\." --include="*.py" src | wc -l)
+        if [ "$OSPATH_COUNT" -gt 0 ]; then
+          echo "::warning::Found $OSPATH_COUNT instances of os.path usage that could be replaced with pathlib"
+          grep -r "os\.path\." --include="*.py" src | head -10
+        fi
+    
+    - name: Test basic import
+      run: |
+        python -c "import lazyssh; print(f'Successfully imported lazyssh version {lazyssh.__version__}')" 

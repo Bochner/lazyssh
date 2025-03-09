@@ -6,6 +6,8 @@ python-dotenv>=1.0.0
 prompt_toolkit>=3.0.39,<3.1.0
 wcwidth>=0.2.5
 art>=5.9
+paramiko>=3.0.0  # Requires Python 3.8+
 # System dependencies:
 # openssh-client - Required for SSH functionality 
 # terminator - Optional, for terminal emulation (alternatives will be used if not available)
+# Requires Python 3.11 or higher
