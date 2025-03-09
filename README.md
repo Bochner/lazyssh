@@ -65,8 +65,8 @@ lazyssh
 
 In command mode, you can use the following commands:
 - `lazyssh` - Create a new SSH connection
-  - Basic usage: `lazyssh -ip <ip> -port <port> -socket <n> -user <username>`
-  - With dynamic proxy: `lazyssh -ip <ip> -port <port> -socket <n> -user <username> -proxy [port]`
+  - Basic usage: `lazyssh -ip <ip> -port <port> -user <username> -socket <n>`
+  - With dynamic proxy: `lazyssh -ip <ip> -port <port> -user <username> -socket <n> -proxy [port]`
 - `tunc` - Create a new tunnel (forward or reverse)
   - Example (forward): `tunc ubuntu l 8080 localhost 80`
   - Example (reverse): `tunc ubuntu r 3000 127.0.0.1 3000`
@@ -86,10 +86,10 @@ To create a dynamic SOCKS proxy when establishing an SSH connection:
 
 ```bash
 # Create connection with dynamic proxy on default port (1080)
-lazyssh -ip 192.168.1.100 -port 22 -socket myserver -user admin -proxy
+lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy
 
 # Create connection with dynamic proxy on custom port
-lazyssh -ip 192.168.1.100 -port 22 -socket myserver -user admin -proxy 8080
+lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy 8080
 ```
 
 You can then configure your applications to use the SOCKS proxy at `localhost:1080` (or your custom port).

@@ -1,8 +1,10 @@
-# Python
+# Python byte-compiled / optimized files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -22,24 +24,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Distribution / packaging
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -56,11 +40,6 @@ coverage.xml
 cover/
 
 # Environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
 .env
 .venv
 env/
@@ -68,12 +47,20 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+test_env/
+*_env/
+.python-version
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+.spyderproject
+.spyproject
+.ropeproject
+.project
+.pydevproject
 
 # mypy
 .mypy_cache/
@@ -89,3 +76,13 @@ known_hosts
 
 # Logs
 *.log
+log/
+logs/
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project specific
+lazyssh.cfg

@@ -61,10 +61,17 @@ class LazySSHCompleter(Completer):
                         # Other arguments expect a value
                         expecting_value = True
                         last_arg = word
+                else:
+                    i += 1
             
             # Available arguments for lazyssh
-            all_args = {'-ip', '-port', '-socket', '-user', '-proxy'}
+            all_args = {'-ip', '-port', '-user', '-socket', '-proxy'}
             remaining_args = all_args - set(used_args.keys())
+            
+            # Define the specific order for arguments
+            ordered_args = ['-ip', '-port', '-user', '-socket', '-proxy']
+            # Filter ordered_args to only include remaining args
+            ordered_remaining_args = [arg for arg in ordered_args if arg in remaining_args]
             
             # If we're expecting a value for an argument, don't suggest new arguments
             if expecting_value:
@@ -72,13 +79,17 @@ class LazySSHCompleter(Completer):
                 
             # If the last word is a partial argument, complete it
             if words[-1].startswith('-') and not text.endswith(' '):
-                for arg in remaining_args:
-                    if arg.startswith(words[-1]):
-                        yield Completion(arg, start_position=-len(words[-1]))
+                # Complete partial argument based on what the user has typed so far
+                partial_arg = words[-1]
+                for arg in ordered_remaining_args:
+                    if arg.startswith(partial_arg):
+                        yield Completion(arg, start_position=-len(partial_arg))
             # Otherwise suggest next argument if we're not in the middle of entering a value
             elif text.endswith(' ') and not expecting_value:
-                for arg in remaining_args:
-                    yield Completion(arg, start_position=-len(word_before_cursor))
+                # Suggest the first remaining argument in the ordered list
+                if ordered_remaining_args:
+                    # Always suggest the next argument in the ordered_remaining_args list
+                    yield Completion(ordered_remaining_args[0], start_position=-len(word_before_cursor))
         
         elif command == 'tunc':
             # For tunc command, we expect a specific sequence of arguments:
@@ -253,10 +264,11 @@ class CommandMode:
                     continue
 
             except KeyboardInterrupt:
+                display_warning("Use 'exit' command to exit LazySSH safely.")
                 continue
             except EOFError:
-                from lazyssh.__main__ import safe_exit
-                safe_exit()
+                display_warning("Use 'exit' command to exit LazySSH safely.")
+                continue
             except Exception as e:
                 display_error(f"Error: {str(e)}")
                 display_info("Type 'help' for command usage")
@@ -297,11 +309,11 @@ class CommandMode:
                     i += 1
 
             # Check required parameters
-            required = ['ip', 'port', 'socket', 'user']
+            required = ['ip', 'port', 'user', 'socket']
             missing = [f"-{param}" for param in required if param not in params]
             if missing:
                 display_error(f"Missing required parameters: {', '.join(missing)}")
-                display_info("Usage: lazyssh -ip <ip> -port <port> -socket <n> -user <username> [-proxy [port]]")
+                display_info("Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> [-proxy [port]]")
                 return False
 
             # Create the connection object
@@ -421,10 +433,10 @@ class CommandMode:
         if not args:
             display_info("\nLazySSH Command Mode - Available Commands:\n")
             display_info("SSH Connection:")
-            display_info("  lazyssh -ip <ip> -port <port> -socket <n> -user <username> [-proxy [port]]")
+            display_info("  lazyssh -ip <ip> -port <port> -user <username> -socket <n> [-proxy [port]]")
             display_info("  close <ssh_id>")
-            display_info("  Example: lazyssh -ip 192.168.10.50 -port 22 -socket ubuntu -user ubuntu")
-            display_info("  Example: lazyssh -ip 192.168.10.50 -port 22 -socket ubuntu -user ubuntu -proxy 8080")
+            display_info("  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu")
+            display_info("  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080")
             display_info("  Example: close ubuntu\n")
             
             display_info("Tunnel Management:")
@@ -449,18 +461,18 @@ class CommandMode:
         cmd = args[0]
         if cmd == 'lazyssh':
             display_info("\nCreate new SSH connection:")
-            display_info("Usage: lazyssh -ip <ip_address> -port <port> -socket <n> -user <username> [-proxy [port]]")
+            display_info("Usage: lazyssh -ip <ip_address> -port <port> -user <username> -socket <n> [-proxy [port]]")
             display_info("Required parameters:")
             display_info("  -ip     : IP address or hostname of the SSH server")
             display_info("  -port   : SSH port number")
-            display_info("  -socket : Name for the connection (used as identifier)")
             display_info("  -user   : SSH username")
+            display_info("  -socket : Name for the connection (used as identifier)")
             display_info("Optional parameters:")
             display_info("  -proxy  : Create a dynamic SOCKS proxy (default port: 1080)")
             display_info("\nExamples:")
-            display_info("  lazyssh -ip 192.168.10.50 -port 22 -socket ubuntu -user ubuntu")
-            display_info("  lazyssh -ip 192.168.10.50 -port 22 -socket ubuntu -user ubuntu -proxy")
-            display_info("  lazyssh -ip 192.168.10.50 -port 22 -socket ubuntu -user ubuntu -proxy 8080")
+            display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu")
+            display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy")
+            display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080")
         elif cmd == 'tunc':
             display_info("\nCreate a new tunnel:")
             display_info("Usage: tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>")
@@ -492,8 +504,12 @@ class CommandMode:
         
     def cmd_exit(self, args: List[str]) -> bool:
         """Handle exit command"""
-        from lazyssh.__main__ import safe_exit
-        safe_exit()
+        from lazyssh.__main__ import safe_exit, check_active_connections
+        
+        # Check for active connections and prompt for confirmation
+        if check_active_connections():
+            safe_exit()
+        
         return True
         
     def cmd_mode(self, args: List[str]) -> bool:

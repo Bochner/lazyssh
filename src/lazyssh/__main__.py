@@ -384,7 +384,7 @@ def prompt_mode_main() -> Optional[Literal["mode"]]:
             if result == "mode":
                 return "mode"  # Return to trigger mode switch
         except KeyboardInterrupt:
-            display_info("\nUse option 7 to exit.")
+            display_warning("\nUse option 7 to safely exit LazySSH.")
         except Exception as e:
             display_error(f"Error: {str(e)}")
 
@@ -425,8 +425,14 @@ def main(prompt: bool) -> None:
                 cmd_mode.run()
                 current_mode = "prompt"
     except KeyboardInterrupt:
-        display_info("\nExiting...")
-        safe_exit()
+        display_warning("\nUse the exit command to safely exit LazySSH.")
+        try:
+            input("\nPress Enter to continue...")
+            return main(prompt)  # Restart the main function
+        except KeyboardInterrupt:
+            display_info("\nExiting...")
+            if check_active_connections():
+                safe_exit()
 
 
 if __name__ == "__main__":
