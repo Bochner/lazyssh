@@ -72,14 +72,20 @@ class LazySSHCompleter(Completer):
                     i += 1
 
             # Available arguments for lazyssh
-            all_args = {"-ip", "-port", "-user", "-socket", "-proxy"}
+            all_args = {"-ip", "-port", "-user", "-socket", "-proxy", "-ssh-key"}
             remaining_args = all_args - set(used_args.keys())
 
             # Define the specific order for arguments
             ordered_args = ["-ip", "-port", "-user", "-socket", "-proxy"]
+            
+            # Only add -ssh-key to the ordered arguments if -proxy is already used
+            # This ensures -ssh-key is only suggested after -proxy
+            if "-proxy" not in remaining_args and "-ssh-key" in remaining_args:
+                ordered_args.append("-ssh-key")
+                
             # Filter ordered_args to only include remaining args
             ordered_remaining_args = [arg for arg in ordered_args if arg in remaining_args]
-
+            
             # If we're expecting a value for an argument, don't suggest new arguments
             if expecting_value:
                 return
@@ -329,7 +335,7 @@ class CommandMode:
                 display_error(f"Missing required parameters: {', '.join(missing)}")
                 display_info(
                     "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                    "[-proxy [port]]"
+                    "[-proxy [port]] [-ssh-key <identity_file>]"
                 )
                 return False
 
@@ -340,6 +346,10 @@ class CommandMode:
                 username=params["user"],
                 socket_path=f"/tmp/lazyssh/{params['socket']}",
             )
+
+            # Set identity file if provided
+            if "ssh-key" in params:
+                conn.identity_file = params["ssh-key"]
 
             # Handle dynamic proxy port if specified
             if "proxy" in params:
@@ -498,7 +508,7 @@ class CommandMode:
             display_info("\nCreate new SSH connection:")
             display_info(
                 "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                "[-proxy [port]]"
+                "[-proxy [port]] [-ssh-key <identity_file>]"
             )
             display_info("Required parameters:")
             display_info("  -ip     : IP address or hostname of the SSH server")
@@ -507,11 +517,15 @@ class CommandMode:
             display_info("  -socket : Name for the connection (used as identifier)")
             display_info("Optional parameters:")
             display_info("  -proxy  : Create a dynamic SOCKS proxy (default port: 1080)")
+            display_info("  -ssh-key: Path to an SSH identity file")
             display_info("\nExamples:")
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu")
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy")
             display_info(
                 "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy " "8080"
+            )
+            display_info(
+                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -ssh-key ~/.ssh/id_rsa"
             )
         elif cmd == "tunc":
             display_info("\nCreate a new tunnel:")
