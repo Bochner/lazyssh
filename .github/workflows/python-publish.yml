@@ -6,11 +6,12 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
-  test:
+  build-test-publish:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
     
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
@@ -19,17 +20,45 @@ jobs:
     
     - name: Install dependencies
       run: |
+        set -e
         python -m pip install --upgrade pip
         pip install build wheel twine
         pip install -e ".[dev]"
         pip install pyupgrade typing_extensions
     
-    - name: Check Python 3.11+ code optimizations
+    - name: Display current version
+      run: |
+        echo "Current version in pyproject.toml:"
+        grep -n "version" pyproject.toml
+        echo "Current version in __init__.py:"
+        grep -n "__version__" src/lazyssh/__init__.py
+        python -c "import lazyssh; print(f'Imported lazyssh version: {lazyssh.__version__}')"
+    
+    - name: Force update version in __init__.py
+      run: |
+        # Extract version from pyproject.toml
+        PYPROJECT_VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+        echo "pyproject.toml version: $PYPROJECT_VERSION"
+        
+        # Force update __init__.py version
+        echo "Forcing update of __init__.py version..."
+        sed -i "s/__version__ = \".*\"/__version__ = \"$PYPROJECT_VERSION\"/" src/lazyssh/__init__.py
+        grep -n "__version__" src/lazyssh/__init__.py
+        
+        # Verify the update worked
+        python -c "import lazyssh; print(f'Updated lazyssh version: {lazyssh.__version__}')"
+        
+        # Ensure the version is what we expect
+        IMPORTED_VERSION=$(python -c "import lazyssh; print(lazyssh.__version__)")
+        if [ "$IMPORTED_VERSION" != "$PYPROJECT_VERSION" ]; then
+          echo "ERROR: Version mismatch after update!"
+          echo "Expected: $PYPROJECT_VERSION, Got: $IMPORTED_VERSION"
+          exit 1
+        fi
+    
+    - name: Run code quality checks
       run: |
         pyupgrade --py311-plus $(find src -name "*.py")
-    
-    - name: Check code quality
-      run: |
         black --check --line-length 100 --target-version py311 src tests
         isort --check-only --profile black src tests
         flake8 src tests
@@ -39,34 +68,19 @@ jobs:
       run: |
         pytest -xvs tests
     
-    - name: Test basic import
-      run: |
-        python -c "import lazyssh; print(f'Successfully imported lazyssh version {lazyssh.__version__}')"
-  
-  build-and-publish:
-    needs: test
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install build wheel twine
-    
     - name: Clean build directories
       run: |
         rm -rf dist/ build/ *.egg-info/
+        # Reinstall to ensure clean state
+        pip uninstall -y lazyssh
+        pip install -e .
+        python -c "import lazyssh; print(f'Reinstalled lazyssh version: {lazyssh.__version__}')"
     
     - name: Build package
       run: |
         python -m build
+        echo "Built packages:"
+        ls -la dist/
     
     - name: Verify package with twine
       run: |
