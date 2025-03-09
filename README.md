@@ -2,7 +2,7 @@
 
 A comprehensive SSH toolkit for managing connections, tunnels, and remote sessions with a modern CLI interface.
 
-![LazySSH](./lazyssh.png)
+![LazySSH](https://raw.githubusercontent.com/Bochner/lazyssh/main/lazyssh.png)
 
 ## Features
 

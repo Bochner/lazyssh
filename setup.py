@@ -16,7 +16,7 @@ setup(
     name="lazyssh",
     version="1.0.0",
     author="Bochner",
-    author_email="",
+    author_email="lazyssh@example.com",
     description="A comprehensive SSH toolkit for managing connections and tunnels",
     long_description=long_description,
     long_description_content_type="text/markdown",
