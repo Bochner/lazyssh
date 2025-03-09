@@ -4,27 +4,26 @@ LazySSH - Main module providing the entry point and interactive menus.
 """
 from __future__ import annotations
 
-import os
 import sys
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Optional, Union, Literal
 
 import click
 from rich.prompt import Confirm
 
 from lazyssh import check_dependencies
-from lazyssh.command_mode import CommandMode
-from lazyssh.models import SSHConnection
 from lazyssh.ssh import SSHManager
+from lazyssh.models import SSHConnection
+from lazyssh.command_mode import CommandMode
 from lazyssh.ui import (
     display_banner,
-    display_error,
-    display_info,
     display_menu,
-    display_ssh_status,
-    display_success,
-    display_tunnels,
-    display_warning,
     get_user_input,
+    display_error,
+    display_success,
+    display_info,
+    display_warning,
+    display_ssh_status,
+    display_tunnels,
 )
 
 # Initialize the SSH manager for the application
@@ -203,7 +202,8 @@ def tunnel_menu() -> bool:
                 socket_path, local_port, remote_host, remote_port, is_reverse
             ):
                 display_success(
-                    f"{tunnel_type_str.capitalize()} tunnel created: {local_port} -> {remote_host}:{remote_port}"
+                    f"{tunnel_type_str.capitalize()} tunnel created: "
+                    f"{local_port} -> {remote_host}:{remote_port}"
                 )
                 return True
             else:
@@ -294,60 +294,65 @@ def close_connection_menu() -> bool:
 
 def manage_tunnels_menu() -> None:
     """
-    Interactive menu for managing (deleting) tunnels.
+    Interactive menu for managing tunnels.
 
-    Allows the user to select an active SSH connection and then
-    delete a specific tunnel associated with that connection.
+    Allows the user to view and delete tunnels for active SSH connections.
     """
     if not ssh_manager.connections:
         display_error("No active connections")
         return
 
-    display_info("Select connection to destroy tunnel:")
-    for i, (socket_path, conn) in enumerate(ssh_manager.connections.items(), 1):
-        display_info(f"{i}. {conn.host} ({conn.username})")
+    # Check if there are any tunnels
+    has_tunnels = False
+    for socket_path, conn in ssh_manager.connections.items():
+        if conn.tunnels:
+            has_tunnels = True
+            break
 
-    try:
-        choice = int(get_user_input("Enter connection number")) - 1
-        if 0 <= choice < len(ssh_manager.connections):
-            socket_path = list(ssh_manager.connections.keys())[choice]
-            conn = ssh_manager.connections[socket_path]
-
-            if not conn.tunnels:
-                display_info("No tunnels for this connection")
-                return
-
-            display_tunnels(socket_path, conn)
-            tunnel_id = get_user_input("Enter tunnel ID to destroy (or press Enter to cancel)")
-
-            if tunnel_id:
-                # Find the tunnel
-                tunnel = conn.get_tunnel(tunnel_id)
-                if tunnel:
-                    # Build the command for display
-                    if tunnel.type == "reverse":
-                        tunnel_args = f"-O cancel -R {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
-                    else:
-                        tunnel_args = f"-O cancel -L {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
-
-                    cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
-
-                    # Display the command that will be executed
-                    display_info("The following SSH command will be executed:")
-                    display_info(cmd)
-
-                    if ssh_manager.close_tunnel(socket_path, tunnel_id):
-                        display_success(f"Tunnel {tunnel_id} closed")
-                        return
-                    return
-
-        display_error(f"Tunnel with ID {tunnel_id} not found")
+    if not has_tunnels:
+        display_info("No active tunnels")
         return
 
-    except ValueError:
-        display_error("Invalid input")
+    # Display tunnels
+    for socket_path, conn in ssh_manager.connections.items():
+        if conn.tunnels:
+            display_tunnels(socket_path, conn)
 
-    return
+    # Prompt for tunnel to delete
+    tunnel_id = get_user_input("Enter tunnel ID to delete (or 'q' to cancel)")
+    if tunnel_id.lower() == "q":
+        return
+
+    # Find the tunnel
+    for socket_path, conn in ssh_manager.connections.items():
+        for tunnel in conn.tunnels:
+            if tunnel.id == tunnel_id:
+                # Build the command for display
+                if tunnel.type == "reverse":
+                    tunnel_args = (
+                        f"-O cancel -R {tunnel.local_port}:"
+                        f"{tunnel.remote_host}:{tunnel.remote_port}"
+                    )
+                else:
+                    tunnel_args = (
+                        f"-O cancel -L {tunnel.local_port}:"
+                        f"{tunnel.remote_host}:{tunnel.remote_port}"
+                    )
+
+                cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
+
+                # Display the command that will be executed
+                display_info("The following SSH command will be executed:")
+                display_info(cmd)
+
+                if ssh_manager.close_tunnel(socket_path, tunnel_id):
+                    display_success(f"Tunnel {tunnel_id} closed")
+                    return
+                else:
+                    display_error(f"Failed to close tunnel {tunnel_id}")
+                    return
+
+    display_error(f"Tunnel with ID {tunnel_id} not found")
 
 
 def close_all_connections() -> None:

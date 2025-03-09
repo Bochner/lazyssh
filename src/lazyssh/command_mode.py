@@ -127,7 +127,7 @@ class LazySSHCompleter(Completer):
                 for type_option in ["l", "r"]:
                     if not word_before_cursor or type_option.startswith(word_before_cursor):
                         yield Completion(type_option, start_position=-len(word_before_cursor))
-            # For other positions (local port, remote host, remote port), we don't provide completions
+            # For other positions (local port, remote host, remote port), no completions provided
 
         elif command == "tund":
             # For tund command, we only expect one argument: the tunnel ID
@@ -328,7 +328,8 @@ class CommandMode:
             if missing:
                 display_error(f"Missing required parameters: {', '.join(missing)}")
                 display_info(
-                    "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> [-proxy [port]]"
+                    "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
+                    "[-proxy [port]]"
                 )
                 return False
 
@@ -398,7 +399,8 @@ class CommandMode:
                 socket_path, local_port, remote_host, remote_port, is_reverse
             ):
                 display_success(
-                    f"{tunnel_type_str.capitalize()} tunnel created: {local_port} -> {remote_host}:{remote_port}"
+                    f"{tunnel_type_str.capitalize()} tunnel created: "
+                    f"{local_port} -> {remote_host}:{remote_port}"
                 )
                 return True
             return False
@@ -421,9 +423,15 @@ class CommandMode:
                 if tunnel.id == tunnel_id:
                     # Build the command for display
                     if tunnel.type == "reverse":
-                        tunnel_args = f"-O cancel -R {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
+                        tunnel_args = (
+                            f"-O cancel -R {tunnel.local_port}:"
+                            f"{tunnel.remote_host}:{tunnel.remote_port}"
+                        )
                     else:
-                        tunnel_args = f"-O cancel -L {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
+                        tunnel_args = (
+                            f"-O cancel -L {tunnel.local_port}:"
+                            f"{tunnel.remote_host}:{tunnel.remote_port}"
+                        )
 
                     cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
 
@@ -454,19 +462,23 @@ class CommandMode:
             display_info("\nLazySSH Command Mode - Available Commands:\n")
             display_info("SSH Connection:")
             display_info(
-                "  lazyssh -ip <ip> -port <port> -user <username> -socket <n> [-proxy [port]]"
+                "  lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
+                "[-proxy [port]]"
             )
             display_info("  close <ssh_id>")
             display_info(
                 "  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu"
             )
             display_info(
-                "  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080"
+                "  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy "
+                "8080"
             )
             display_info("  Example: close ubuntu\n")
 
             display_info("Tunnel Management:")
-            display_info("  tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>")
+            display_info(
+                "  tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>"
+            )
             display_info("  Example (forward): tunc ubuntu l 8080 localhost 80")
             display_info("  Example (reverse): tunc ubuntu r 3000 127.0.0.1 3000\n")
 
@@ -488,7 +500,8 @@ class CommandMode:
         if cmd == "lazyssh":
             display_info("\nCreate new SSH connection:")
             display_info(
-                "Usage: lazyssh -ip <ip_address> -port <port> -user <username> -socket <n> [-proxy [port]]"
+                "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
+                "[-proxy [port]]"
             )
             display_info("Required parameters:")
             display_info("  -ip     : IP address or hostname of the SSH server")
@@ -501,7 +514,8 @@ class CommandMode:
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu")
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy")
             display_info(
-                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080"
+                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy "
+                "8080"
             )
         elif cmd == "tunc":
             display_info("\nCreate a new tunnel:")
@@ -516,10 +530,12 @@ class CommandMode:
             display_info("  remote_port : The remote port to connect to")
             display_info("\nExamples:")
             display_info(
-                "  tunc ubuntu l 8080 localhost 80    # Forward local port 8080 to localhost:80 on the remote server"
+                "  tunc ubuntu l 8080 localhost 80    # Forward local port 8080 to "
+                "localhost:80 on the remote server"
             )
             display_info(
-                "  tunc ubuntu r 3000 127.0.0.1 3000  # Reverse tunnel from remote port 3000 to local 127.0.0.1:3000"
+                "  tunc ubuntu r 3000 127.0.0.1 3000  # Reverse tunnel from remote port 3000 "
+                "to local 127.0.0.1:3000"
             )
         elif cmd == "tund":
             display_info("\nDelete a tunnel:")

@@ -1,15 +1,11 @@
 import os
 import subprocess
 import time
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
 
-import pexpect
 from rich.console import Console
-
-from .models import SSHConnection
 from .ui import display_error, display_info, display_success
+from .models import SSHConnection
 
 console = Console()
 
