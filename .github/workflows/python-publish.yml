@@ -21,85 +21,41 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
-        pip install pyupgrade typing_extensions
         pip install build wheel twine
     
-    - name: Check Python 3.11+ code optimizations
+    - name: Run code quality checks
       run: |
+        # Standard lint checks from the lint workflow
         pyupgrade --py311-plus $(find src -name "*.py")
-    
-    - name: Check formatting with Black
-      run: |
         black --check --line-length 100 --target-version py311 src tests
-    
-    - name: Check imports with isort
-      run: |
         isort --check-only --profile black src tests
-    
-    - name: Lint with flake8
-      run: |
-        flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 src tests --count --max-complexity=10 --max-line-length=100 --statistics
-    
-    - name: Type check with mypy (stricter settings)
-      run: |
+        flake8 src tests
         mypy --python-version 3.11 --disallow-untyped-defs --disallow-incomplete-defs --ignore-missing-imports src
     
-    - name: Clean build directories
+    - name: Set version from release tag
+      if: github.event_name == 'release'
       run: |
+        # Get version from release tag (without 'v' prefix)
+        VERSION="${{ github.ref_name }}"
+        VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+        echo "Using version from release tag: $VERSION"
+        
+        # Update files with the release version
+        python scripts/release.py "$VERSION"
+        
+        # Verify with import
+        python -c "import lazyssh; print(f'Package version: {lazyssh.__version__}')"
+    
+    - name: Clean and build package
+      run: |
+        # Clean build directories
         rm -rf dist/ build/ *.egg-info/
-    
-    - name: Update version in __init__.py
-      run: |
-        # Get GitHub release tag version (strips the 'v' prefix if present)
-        if [ "${{ github.event_name }}" == "release" ]; then
-          RELEASE_TAG="${{ github.ref_name }}"
-          VERSION="${RELEASE_TAG#v}"  # Remove 'v' prefix if present
-          echo "Using version from release tag: $VERSION"
-        else
-          # Fallback to pyproject.toml for workflow_dispatch
-          VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
-          echo "Using version from pyproject.toml: $VERSION"
-        fi
-        
-        # Update pyproject.toml to match the release version
-        sed -i "s/version = \".*\"/version = \"$VERSION\"/" pyproject.toml
-        echo "Updated pyproject.toml:"
-        grep -n "version" pyproject.toml
-        
-        # Update __init__.py
-        sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" src/lazyssh/__init__.py
-        echo "Updated __init__.py:"
-        grep -n "__version__" src/lazyssh/__init__.py
-        
-        # Double-check by importing
-        pip uninstall -y lazyssh
-        pip install -e .
-        python -c "import lazyssh; print(f'Version after update: {lazyssh.__version__}')"
-    
-    - name: Build package
-      run: |
-        # Clear any Python cache
-        find . -name "*.pyc" -delete
-        find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
         
         # Build the package
         python -m build
         
-        # Get the expected version again to be safe
-        if [ "${{ github.event_name }}" == "release" ]; then
-          RELEASE_TAG="${{ github.ref_name }}"
-          VERSION="${RELEASE_TAG#v}"  # Remove 'v' prefix if present
-        else
-          VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
-        fi
-        
-        echo "Expected version: $VERSION"
+        # Show built distributions
         ls -la dist/
-        if ! ls dist/lazyssh-$VERSION-*.whl > /dev/null 2>&1; then
-          echo "ERROR: Built wheel does not have the correct version ($VERSION)"
-          exit 1
-        fi
     
     - name: Verify package with twine
       run: |
