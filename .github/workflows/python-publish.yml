@@ -49,9 +49,39 @@ jobs:
       run: |
         rm -rf dist/ build/ *.egg-info/
     
+    - name: Update version in __init__.py
+      run: |
+        # Get version from pyproject.toml
+        VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+        echo "Version in pyproject.toml: $VERSION"
+        
+        # Update __init__.py
+        sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" src/lazyssh/__init__.py
+        
+        # Verify the update worked
+        cat src/lazyssh/__init__.py | grep "__version__"
+        
+        # Double-check by importing
+        pip uninstall -y lazyssh
+        pip install -e .
+        python -c "import lazyssh; print(f'Version after update: {lazyssh.__version__}')"
+    
     - name: Build package
       run: |
+        # Clear any Python cache
+        find . -name "*.pyc" -delete
+        find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+        
+        # Build the package
         python -m build
+        
+        # Verify the built package has the correct version in the filename
+        VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
+        ls -la dist/
+        if ! ls dist/lazyssh-$VERSION-*.whl > /dev/null 2>&1; then
+          echo "ERROR: Built wheel does not have the correct version ($VERSION)"
+          exit 1
+        fi
     
     - name: Verify package with twine
       run: |
