@@ -81,6 +81,15 @@ def update_version(new_version):
             path.write_text(content)
             updated_files.append(file_path)
             print(f"Updated version in {file_path}")
+            
+            # Verify the update for critical files
+            if file_path == "src/lazyssh/__init__.py":
+                # Read the file again to verify
+                updated_content = path.read_text()
+                if f'__version__ = "{new_version}"' not in updated_content:
+                    print(f"⚠️ WARNING: Failed to update version in {file_path}")
+                    print(f"Expected: __version__ = \"{new_version}\"")
+                    print(f"Content: {updated_content[:200]}...")
     
     # Search for version patterns in Python files
     for file_path in python_files:
@@ -127,6 +136,21 @@ def update_version(new_version):
             path.write_text(content)
             updated_files.append(file_path)
             print(f"Updated version in {file_path}")
+    
+    # Final verification of critical files
+    init_path = Path("src/lazyssh/__init__.py")
+    if init_path.exists():
+        init_content = init_path.read_text()
+        if f'__version__ = "{new_version}"' not in init_content:
+            print(f"⚠️ CRITICAL ERROR: Version in __init__.py was not updated correctly!")
+            print(f"Manually setting version in __init__.py...")
+            init_content = re.sub(
+                r'__version__ = "[^"]+"',
+                f'__version__ = "{new_version}"',
+                init_content
+            )
+            init_path.write_text(init_content)
+            print(f"✅ Version in __init__.py manually set to {new_version}")
     
     return updated_files
 
