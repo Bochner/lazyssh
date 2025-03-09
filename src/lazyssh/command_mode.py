@@ -2,7 +2,7 @@
 
 import os
 import shlex
-from typing import Iterable, List, Dict, Optional
+from typing import Dict, Iterable, List, Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion

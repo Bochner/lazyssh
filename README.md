@@ -153,6 +153,7 @@ lazyssh/
 ├── pyproject.toml   # Project configuration
 ├── setup.py         # Package installation
 ├── Makefile         # Development tasks
+├── pre-commit-check.sh  # Script to run all CI checks locally
 └── .pre-commit-config.yaml  # Code quality hooks
 ```
 
@@ -170,6 +171,37 @@ pip install -e ".[dev]"
 pip install pre-commit
 pre-commit install
 ```
+
+### Running CI Checks Locally
+
+Before committing your code, you can run all the CI checks locally using the provided script:
+
+```bash
+# Make the script executable (first time only)
+chmod +x pre-commit-check.sh
+
+# Run all checks in a virtual environment
+./pre-commit-check.sh
+```
+
+This script:
+- Creates a temporary virtual environment (`.pre-commit-venv`)
+- Installs all development dependencies
+- Runs the following checks:
+  - Black formatting
+  - isort import sorting
+  - flake8 linting
+  - mypy type checking
+  - pytest (if test files exist)
+- Cleans up the repository by removing:
+  - The temporary virtual environment
+  - Python cache files
+  - Build artifacts
+  - Test artifacts
+
+The script is designed to be robust and will clean up after itself even if errors occur. It requires Python 3 to be installed on your system.
+
+This ensures your code passes all CI checks and your repository is clean before committing.
 
 ### Common Development Tasks
 
