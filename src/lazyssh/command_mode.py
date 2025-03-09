@@ -77,15 +77,15 @@ class LazySSHCompleter(Completer):
 
             # Define the specific order for arguments
             ordered_args = ["-ip", "-port", "-user", "-socket", "-proxy"]
-            
+
             # Only add -ssh-key to the ordered arguments if -proxy is already used
             # This ensures -ssh-key is only suggested after -proxy
             if "-proxy" not in remaining_args and "-ssh-key" in remaining_args:
                 ordered_args.append("-ssh-key")
-                
+
             # Filter ordered_args to only include remaining args
             ordered_remaining_args = [arg for arg in ordered_args if arg in remaining_args]
-            
+
             # If we're expecting a value for an argument, don't suggest new arguments
             if expecting_value:
                 return
@@ -525,7 +525,8 @@ class CommandMode:
                 "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy " "8080"
             )
             display_info(
-                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -ssh-key ~/.ssh/id_rsa"
+                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu "
+                "-ssh-key ~/.ssh/id_rsa"
             )
         elif cmd == "tunc":
             display_info("\nCreate a new tunnel:")
