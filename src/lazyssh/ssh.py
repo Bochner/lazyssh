@@ -4,8 +4,9 @@ import time
 from typing import Dict
 
 from rich.console import Console
-from .ui import display_error, display_info, display_success
+
 from .models import SSHConnection
+from .ui import display_error, display_info, display_success
 
 console = Console()
 

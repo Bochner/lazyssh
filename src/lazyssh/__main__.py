@@ -5,25 +5,25 @@ LazySSH - Main module providing the entry point and interactive menus.
 from __future__ import annotations
 
 import sys
-from typing import Optional, Union, Literal
+from typing import Literal, Optional, Union
 
 import click
 from rich.prompt import Confirm
 
 from lazyssh import check_dependencies
-from lazyssh.ssh import SSHManager
-from lazyssh.models import SSHConnection
 from lazyssh.command_mode import CommandMode
+from lazyssh.models import SSHConnection
+from lazyssh.ssh import SSHManager
 from lazyssh.ui import (
     display_banner,
-    display_menu,
-    get_user_input,
     display_error,
-    display_success,
     display_info,
-    display_warning,
+    display_menu,
     display_ssh_status,
+    display_success,
     display_tunnels,
+    display_warning,
+    get_user_input,
 )
 
 # Initialize the SSH manager for the application

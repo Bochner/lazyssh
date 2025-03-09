@@ -37,6 +37,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "prompt_toolkit>=3.0.39,<3.1.0",
     "wcwidth>=0.2.5",
+    "art>=5.9",
 ]
 
 [project.urls]
@@ -78,7 +79,7 @@ python_functions = "test_*"
 python_classes = "Test*"
 
 [tool.mypy]
-python_version = "3.7"
+python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

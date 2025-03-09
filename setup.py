@@ -12,6 +12,10 @@ with open("README.md", encoding="utf-8") as f:
 with open("requirements.txt", encoding="utf-8") as f:
     requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
+# Make sure art package is included
+if "art>=5.9" not in requirements:
+    requirements.append("art>=5.9")
+
 setup(
     name="lazyssh",
     version="1.0.0",

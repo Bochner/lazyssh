@@ -5,6 +5,10 @@ import os
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
+from rich.panel import Panel
+from rich.align import Align
+from rich.text import Text
+from rich.box import ROUNDED
 
 from .models import SSHConnection
 
@@ -12,19 +16,50 @@ console = Console()
 
 
 def display_banner():
-    """Display the LazySSH banner"""
-    console.print(
-        """
-╭───────────────────────────── Welcome to LazySSH ─────────────────────────────╮
-│                                                                               │
-│     ╦  ┌─┐┌─┐┬ ┬╔═╗╔═╗╦ ╦                                                     │
-│     ║  ├─┤┌─┘└┬┘╚═╗╚═╗╠═╣                                                     │
-│     ╩═╝┴ ┴└─┘ ┴ ╚═╝╚═╝╩ ╩                                                     │
-│                                                                               │
-╰───────────────────────────────────────────────────────────────────────────────╯
-""",
-        style="bold blue",
+    """Display the LazySSH banner with sophisticated styling"""
+    # Create title with nice formatting
+    title = Text("L A Z Y S S H", style="bold cyan")
+
+    # Create the subtitle
+    subtitle = Text("A comprehensive SSH toolkit", style="italic blue")
+
+    # Create feature bullets in a compact format
+    features = [
+        "• Multiple SSH connections",
+        "• Easy tunnel creation",
+        "• Command & prompt modes",
+        "• Dynamic port forwarding",
+    ]
+
+    # Build the complete content
+    content = Text()
+
+    # Add title centered
+    content.append("\n ")
+    content.append(title)
+    content.append("\n\n ")
+
+    # Add subtitle
+    content.append(subtitle)
+    content.append("\n\n")
+
+    # Add features
+    for feature in features:
+        content.append(" " + feature + "\n", style="cyan")
+
+    # Create the main panel with all content
+    panel = Panel(
+        content,
+        title="[bold blue]Welcome to LazySSH[/bold blue]",
+        subtitle="[dim blue]v1.0.0[/dim blue]",
+        border_style="blue",
+        box=ROUNDED,
+        width=60,
+        expand=False,
     )
+
+    # Print the panel centered in the terminal
+    console.print(Align.center(panel))
 
 
 def display_menu(options):

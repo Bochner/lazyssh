@@ -462,8 +462,7 @@ class CommandMode:
             display_info("\nLazySSH Command Mode - Available Commands:\n")
             display_info("SSH Connection:")
             display_info(
-                "  lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                "[-proxy [port]]"
+                "  lazyssh -ip <ip> -port <port> -user <username> -socket <n> " "[-proxy [port]]"
             )
             display_info("  close <ssh_id>")
             display_info(
@@ -476,9 +475,7 @@ class CommandMode:
             display_info("  Example: close ubuntu\n")
 
             display_info("Tunnel Management:")
-            display_info(
-                "  tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>"
-            )
+            display_info("  tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>")
             display_info("  Example (forward): tunc ubuntu l 8080 localhost 80")
             display_info("  Example (reverse): tunc ubuntu r 3000 127.0.0.1 3000\n")
 
@@ -514,8 +511,7 @@ class CommandMode:
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu")
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy")
             display_info(
-                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy "
-                "8080"
+                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy " "8080"
             )
         elif cmd == "tunc":
             display_info("\nCreate a new tunnel:")
