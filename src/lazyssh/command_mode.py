@@ -3,7 +3,9 @@
 import os
 import shlex
 import sys
-from typing import Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
@@ -27,10 +29,10 @@ from .ui import (
 class LazySSHCompleter(Completer):
     """Completer for prompt_toolkit with LazySSH commands"""
 
-    def __init__(self, command_mode):
+    def __init__(self, command_mode: "CommandMode") -> None:
         self.command_mode = command_mode
 
-    def get_completions(self, document: Document, complete_event) -> Iterable[Completion]:
+    def get_completions(self, document: Document, complete_event: Any) -> Iterable[Completion]:
         text = document.text
         word_before_cursor = document.get_word_before_cursor()
 
@@ -51,9 +53,9 @@ class LazySSHCompleter(Completer):
 
         if command == "lazyssh":
             # Get used arguments and their positions
-            used_args: Dict[str, int] = {}
+            used_args: dict[str, int] = {}
             expecting_value = False
-            last_arg: Optional[str] = None
+            last_arg: str | None = None
 
             for i, word in enumerate(words[1:], 1):  # Start from 1 to skip the command
                 if expecting_value and last_arg is not None:
@@ -176,18 +178,18 @@ class LazySSHCompleter(Completer):
         # Handle completion for close command
         elif command == "close" and len(words) == 2:
             connections = self.command_mode._get_connection_completions()
-            for conn in connections:
-                if conn.startswith(word_before_cursor):
-                    yield Completion(conn, start_position=-len(word_before_cursor))
+            for conn_name in connections:
+                if conn_name.startswith(word_before_cursor):
+                    yield Completion(conn_name, start_position=-len(word_before_cursor))
 
         # Handle completion for scp command
         elif command == "scp" and (len(words) == 1 or len(words) == 2):
             # Check if we have a space after "scp" to show completions immediately
             if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
                 connections = self.command_mode._get_connection_completions()
-                for conn in connections:
-                    if not word_before_cursor or conn.startswith(word_before_cursor):
-                        yield Completion(conn, start_position=-len(word_before_cursor))
+                for conn_name in connections:
+                    if not word_before_cursor or conn_name.startswith(word_before_cursor):
+                        yield Completion(conn_name, start_position=-len(word_before_cursor))
 
 
 class CommandMode:
@@ -218,19 +220,19 @@ class CommandMode:
             }
         )
 
-    def _get_connection_completions(self):
+    def _get_connection_completions(self) -> list[str]:
         """Get list of connection names for completion"""
         conn_completions = []
         for socket_path in self.ssh_manager.connections:
-            conn_name = os.path.basename(socket_path)
+            conn_name = Path(socket_path).name
             conn_completions.append(conn_name)
         return conn_completions
 
-    def get_prompt_text(self):
+    def get_prompt_text(self) -> HTML:
         """Get the prompt text with HTML formatting"""
         return HTML("<prompt>lazyssh></prompt> ")
 
-    def show_status(self):
+    def show_status(self) -> None:
         """Display current connections and tunnels"""
         if self.ssh_manager.connections:
             display_ssh_status(self.ssh_manager.connections)
@@ -291,7 +293,7 @@ class CommandMode:
                 display_error(f"Error: {str(e)}")
                 display_info("Type 'help' for command usage")
 
-    def show_available_commands(self):
+    def show_available_commands(self) -> None:
         """Show available commands when user enters an unknown command"""
         display_info("Available commands:")
         for cmd in sorted(self.commands.keys()):
@@ -302,7 +304,7 @@ class CommandMode:
         display_info("  scp     : Enter SCP mode for file transfers")
 
     # Command implementations
-    def cmd_lazyssh(self, args: List[str]) -> bool:
+    def cmd_lazyssh(self, args: list[str]) -> bool:
         """Handle lazyssh command for creating new connections"""
         try:
             # Parse arguments into dictionary
@@ -378,7 +380,7 @@ class CommandMode:
             display_error(str(e))
             return False
 
-    def cmd_tunc(self, args: List[str]) -> bool:
+    def cmd_tunc(self, args: list[str]) -> bool:
         """Handle tunnel command for creating tunnels"""
         if len(args) != 5:
             display_error("Usage: tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>")
@@ -420,7 +422,7 @@ class CommandMode:
             display_error("Port numbers must be integers")
             return False
 
-    def cmd_tund(self, args: List[str]) -> bool:
+    def cmd_tund(self, args: list[str]) -> bool:
         """Handle tunnel delete command for removing tunnels"""
         if len(args) != 1:
             display_error("Usage: tund <tunnel_id>")
@@ -459,7 +461,7 @@ class CommandMode:
         display_error(f"Tunnel with ID {tunnel_id} not found")
         return False
 
-    def cmd_list(self, args: List[str]) -> bool:
+    def cmd_list(self, args: list[str]) -> bool:
         """Handle list command for showing connections"""
         if not self.ssh_manager.connections:
             display_info("No active connections")
@@ -468,7 +470,7 @@ class CommandMode:
         # Connections are already shown by show_status() before each prompt
         return True
 
-    def cmd_help(self, args: List[str]) -> bool:
+    def cmd_help(self, args: list[str]) -> bool:
         """Handle help command"""
         if not args:
             display_info("\nLazySSH Command Mode - Available Commands:\n")
@@ -610,7 +612,7 @@ class CommandMode:
             self.cmd_help([])
         return True
 
-    def cmd_exit(self, args: List[str]) -> bool:
+    def cmd_exit(self, args: list[str]) -> bool:
         """Exit lazyssh and close all connections"""
         display_info("Exiting lazyssh...")
 
@@ -648,16 +650,16 @@ class CommandMode:
         display_success("Goodbye!")
         sys.exit(0)
 
-    def cmd_mode(self, args: List[str]) -> str:
+    def cmd_mode(self, args: list[str]) -> str:
         """Switch mode (command/prompt)"""
         return "mode"
 
-    def cmd_clear(self, args: List[str]) -> bool:
+    def cmd_clear(self, args: list[str]) -> bool:
         """Clear the screen"""
         os.system("clear")
         return True
 
-    def cmd_terminal(self, args: List[str]) -> bool:
+    def cmd_terminal(self, args: list[str]) -> bool:
         """Handle terminal command for opening a terminal"""
         if len(args) != 1:
             display_error("Usage: term <ssh_id>")
@@ -688,7 +690,7 @@ class CommandMode:
             display_error("Invalid SSH ID")
             return False
 
-    def cmd_close(self, args: List[str]) -> bool:
+    def cmd_close(self, args: list[str]) -> bool:
         """Handle close command for closing an SSH connection"""
         if len(args) != 1:
             display_error("Usage: close <ssh_id>")
@@ -711,7 +713,7 @@ class CommandMode:
             display_error("Invalid SSH ID")
             return False
 
-    def cmd_scp(self, args: List[str]) -> bool:
+    def cmd_scp(self, args: list[str]) -> bool:
         """Enter SCP mode for file transfers"""
         selected_connection = None
 

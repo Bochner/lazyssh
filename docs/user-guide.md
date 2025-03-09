@@ -21,7 +21,7 @@ LazySSH is designed to make managing SSH connections easier and more efficient. 
 
 Before installing LazySSH, ensure you have:
 
-- Python 3.7 or higher
+- Python 3.11 or higher
 - OpenSSH client installed
 - Terminator terminal emulator
 

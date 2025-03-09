@@ -1,6 +1,6 @@
 """UI utilities for LazySSH"""
 
-import os
+from pathlib import Path
 
 from rich.align import Align
 from rich.box import ROUNDED
@@ -15,7 +15,7 @@ from .models import SSHConnection
 console = Console()
 
 
-def display_banner():
+def display_banner() -> None:
     """Display the LazySSH banner with sophisticated styling"""
     # Create title with nice formatting
     title = Text("L A Z Y S S H", style="bold cyan")
@@ -62,7 +62,7 @@ def display_banner():
     console.print(Align.center(panel))
 
 
-def display_menu(options):
+def display_menu(options: dict[str, str]) -> None:
     table = Table(show_header=False, border_style="blue")
     table.add_column(justify="center")
     table.add_column(justify="center")
@@ -71,27 +71,28 @@ def display_menu(options):
     console.print(table)
 
 
-def get_user_input(prompt_text):
-    return Prompt.ask(f"[cyan]{prompt_text}[/cyan]")
+def get_user_input(prompt_text: str) -> str:
+    result: str = Prompt.ask(f"[cyan]{prompt_text}[/cyan]")
+    return result
 
 
-def display_error(message):
+def display_error(message: str) -> None:
     console.print(f"[red]Error:[/red] {message}")
 
 
-def display_success(message):
+def display_success(message: str) -> None:
     console.print(f"[green]Success:[/green] {message}")
 
 
-def display_info(message):
+def display_info(message: str) -> None:
     console.print(f"[blue]Info:[/blue] {message}")
 
 
-def display_warning(message):
+def display_warning(message: str) -> None:
     console.print(f"[yellow]Warning:[/yellow] {message}")
 
 
-def display_ssh_status(connections):
+def display_ssh_status(connections: dict[str, SSHConnection]) -> None:
     table = Table(title="Active SSH Connections", border_style="blue")
     table.add_column("Name", style="cyan", justify="center")
     table.add_column("Host", style="magenta", justify="center")
@@ -103,7 +104,7 @@ def display_ssh_status(connections):
 
     for socket_path, conn in connections.items():
         if isinstance(conn, SSHConnection):
-            name = os.path.basename(socket_path)
+            name = Path(socket_path).name
             table.add_row(
                 name,
                 conn.host,
@@ -117,7 +118,7 @@ def display_ssh_status(connections):
     console.print(table)
 
 
-def display_tunnels(socket_path: str, conn: SSHConnection):
+def display_tunnels(socket_path: str, conn: SSHConnection) -> None:
     if not conn.tunnels:
         display_info("No tunnels for this connection")
         return

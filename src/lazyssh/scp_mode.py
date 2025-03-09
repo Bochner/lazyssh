@@ -3,7 +3,9 @@
 import os
 import shlex
 import subprocess
-from typing import Any, Iterable, List, Optional
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
@@ -19,10 +21,10 @@ from .ui import display_error, display_info, display_success
 class SCPModeCompleter(Completer):
     """Completer for prompt_toolkit with SCP mode commands"""
 
-    def __init__(self, scp_mode):
+    def __init__(self, scp_mode: "SCPMode") -> None:
         self.scp_mode = scp_mode
 
-    def get_completions(self, document: Document, complete_event) -> Iterable[Completion]:
+    def get_completions(self, document: Document, complete_event: Any) -> Iterable[Completion]:
         text = document.text
         word_before_cursor = document.get_word_before_cursor()
 
@@ -50,11 +52,11 @@ class SCPModeCompleter(Completer):
                     try:
                         # Get partial path from what user typed so far
                         partial_path = words[1] if len(words) > 1 else ""
-                        base_dir = (
-                            os.path.dirname(partial_path)
-                            if partial_path
-                            else self.scp_mode.current_remote_dir
-                        )
+                        if partial_path:
+                            base_dir = str(Path(partial_path).parent)
+                        else:
+                            base_dir = self.scp_mode.current_remote_dir
+
                         if not base_dir:
                             base_dir = self.scp_mode.current_remote_dir
 
@@ -78,21 +80,21 @@ class SCPModeCompleter(Completer):
                 try:
                     # Get partial path from what user typed so far
                     partial_path = words[1] if len(words) > 1 else ""
-                    base_dir = (
-                        os.path.dirname(partial_path)
-                        if partial_path
-                        else self.scp_mode.local_download_dir
-                    )
+                    if partial_path:
+                        base_dir = str(Path(partial_path).parent)
+                    else:
+                        base_dir = self.scp_mode.local_download_dir
+
                     if not base_dir:
                         base_dir = self.scp_mode.local_download_dir
 
                     # Get filename part for matching
-                    filename_part = os.path.basename(partial_path) if partial_path else ""
+                    filename_part = Path(partial_path).name if partial_path else ""
 
                     # List files in the local directory
                     for f in os.listdir(base_dir or "."):
                         if not filename_part or f.startswith(filename_part):
-                            full_path = os.path.join(base_dir, f) if base_dir else f
+                            full_path = str(Path(base_dir) / f) if base_dir else f
                             yield Completion(full_path, start_position=-len(partial_path))
                 except Exception:
                     # Silently fail for completions
@@ -106,11 +108,11 @@ class SCPModeCompleter(Completer):
                     try:
                         # Get partial path from what user typed so far
                         partial_path = words[1] if len(words) > 1 else ""
-                        base_dir = (
-                            os.path.dirname(partial_path)
-                            if partial_path
-                            else self.scp_mode.current_remote_dir
-                        )
+                        if partial_path:
+                            base_dir = str(Path(partial_path).parent)
+                        else:
+                            base_dir = self.scp_mode.current_remote_dir
+
                         if not base_dir:
                             base_dir = self.scp_mode.current_remote_dir
 
@@ -136,18 +138,21 @@ class SCPModeCompleter(Completer):
                 try:
                     # Get partial path from what user typed so far
                     partial_path = words[1] if len(words) > 1 else ""
-                    base_dir = os.path.dirname(partial_path) if partial_path else "."
 
-                    # Get filename part for matching
-                    dirname_part = os.path.basename(partial_path) if partial_path else ""
+                    if partial_path:
+                        path_obj = Path(partial_path)
+                        base_dir = str(path_obj.parent) if path_obj.name else str(path_obj)
+                        dirname_part = path_obj.name
+                    else:
+                        base_dir = "."
+                        dirname_part = ""
 
                     # List directories in the local directory
                     for d in os.listdir(base_dir or "."):
-                        if (not dirname_part or d.startswith(dirname_part)) and os.path.isdir(
-                            os.path.join(base_dir, d)
-                        ):
-                            full_path = os.path.join(base_dir, d) if base_dir else d
-                            yield Completion(full_path, start_position=-len(partial_path))
+                        full_path = Path(base_dir) / d
+                        if (not dirname_part or d.startswith(dirname_part)) and full_path.is_dir():
+                            result_path = str(full_path) if base_dir else d
+                            yield Completion(result_path, start_position=-len(partial_path))
                 except Exception:
                     # Silently fail for completions
                     pass
@@ -155,45 +160,56 @@ class SCPModeCompleter(Completer):
             # Always offer completions after typing the command and a space
             if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
                 # Complete local directories
+                partial_path = words[1] if len(words) > 1 else ""
+
+                if partial_path:
+                    path_obj = Path(partial_path)
+                    base_dir = str(path_obj.parent) if path_obj.name else str(path_obj)
+                    filename_part = path_obj.name
+                else:
+                    base_dir = "."
+                    filename_part = ""
+
+                if not base_dir:
+                    base_dir = "."
+
+                try:
+                    # List files in the directory
+                    files = os.listdir(base_dir)
+
+                    for f in files:
+                        if not filename_part or f.startswith(filename_part):
+                            # Check if it's a directory and append / if it is
+                            full_path = Path(base_dir) / f
+                            if full_path.is_dir():
+                                f = f + "/"
+                            yield Completion(f, start_position=-len(filename_part))
+                except (FileNotFoundError, PermissionError):
+                    # Silently fail for completions
+                    pass
+
+        elif command == "lcd" and (len(words) == 1 or len(words) == 2):
+            # Always offer completions after typing the command and a space
+            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
+                # Complete local directories
                 try:
                     # Get partial path from what user typed so far
                     partial_path = words[1] if len(words) > 1 else ""
 
-                    # Determine the base directory
-                    if os.path.isabs(partial_path):
-                        base_dir = os.path.dirname(partial_path) or "/"
+                    if partial_path:
+                        path_obj = Path(partial_path)
+                        base_dir = str(path_obj.parent)
+                        dirname_part = path_obj.name
                     else:
-                        base_dir = (
-                            os.path.dirname(
-                                os.path.join(self.scp_mode.local_download_dir, partial_path)
-                            )
-                            or self.scp_mode.local_download_dir
-                        )
+                        base_dir = "."
+                        dirname_part = ""
 
-                    # Get filename part for matching
-                    filename_part = os.path.basename(partial_path) if partial_path else ""
-
-                    # List files and directories in the local directory
-                    for item in os.listdir(base_dir):
-                        full_path = os.path.join(base_dir, item)
-
-                        # Only suggest if it matches the partial path
-                        if not filename_part or item.startswith(filename_part):
-                            # If it's a directory, add a trailing slash
-                            if os.path.isdir(full_path):
-                                completion = os.path.join(base_dir, item) + "/"
-                            else:
-                                completion = os.path.join(base_dir, item)
-
-                            # If the base directory is the download directory, make path relative
-                            if base_dir == self.scp_mode.local_download_dir and not os.path.isabs(
-                                partial_path
-                            ):
-                                completion = os.path.relpath(
-                                    completion, self.scp_mode.local_download_dir
-                                )
-
-                            yield Completion(completion, start_position=-len(partial_path))
+                    # List directories in the local directory
+                    for d in os.listdir(base_dir or "."):
+                        full_path = Path(base_dir) / d
+                        if (not dirname_part or d.startswith(dirname_part)) and full_path.is_dir():
+                            result_path = str(full_path) if base_dir else d
+                            yield Completion(result_path, start_position=-len(partial_path))
                 except Exception:
                     # Silently fail for completions
                     pass
@@ -202,15 +218,15 @@ class SCPModeCompleter(Completer):
 class SCPMode:
     """SCP mode for file transfers through established SSH connections"""
 
-    def __init__(self, ssh_manager: SSHManager, selected_connection: Optional[str] = None):
+    def __init__(self, ssh_manager: SSHManager, selected_connection: str | None = None):
         self.ssh_manager = ssh_manager
-        self.selected_connection: Optional[str] = selected_connection
+        self.selected_connection: str | None = selected_connection
         self.current_remote_dir = "~"  # Default to home directory
         self.local_download_dir = (
             os.getcwd()
         )  # Default to current working directory (will be updated after connection)
-        self.socket_path: Optional[str] = None
-        self.conn: Optional[SSHConnection] = None  # Initialize as None until connect() is called
+        self.socket_path: str | None = None
+        self.conn: SSHConnection | None = None  # Initialize as None until connect() is called
 
         # Initialize commands
         self.commands = {
@@ -287,7 +303,7 @@ class SCPMode:
             display_error(f"Connection error: {str(e)}")
             return False
 
-    def _execute_ssh_command(self, remote_command) -> Optional[Any]:
+    def _execute_ssh_command(self, remote_command: str) -> Any | None:
         """Execute a command on the SSH server and return the result"""
         if not self.socket_path:
             display_error("Not connected to an SSH server")
@@ -367,7 +383,7 @@ class SCPMode:
 
         # Build a map of connection names to actual connections
         for socket_path, conn in self.ssh_manager.connections.items():
-            conn_name = os.path.basename(socket_path)
+            conn_name = Path(socket_path).name
             connections.append(conn_name)
             connection_map[conn_name] = conn
 
@@ -410,23 +426,23 @@ class SCPMode:
             return path
 
         # Join with current directory
-        return os.path.normpath(os.path.join(self.current_remote_dir, path))
+        return str(Path(self.current_remote_dir) / path)
 
     def _resolve_local_path(self, path: str) -> str:
         """Resolve a local path relative to the local download directory"""
         if not path:
             return self.local_download_dir
-        if os.path.isabs(path):
+        if Path(path).is_absolute():
             return path
 
         # Join with local download directory
-        return os.path.normpath(os.path.join(self.local_download_dir, path))
+        return str(Path(self.local_download_dir) / path)
 
-    def _get_scp_command(self, source: str, destination: str) -> List[str]:
+    def _get_scp_command(self, source: str, destination: str) -> list[str]:
         """Get the SCP command using the control socket"""
         return ["scp", "-o", f"ControlPath={self.socket_path}", source, destination]
 
-    def cmd_put(self, args: List[str]) -> bool:
+    def cmd_put(self, args: list[str]) -> bool:
         """Upload files to the remote server"""
         if not args:
             display_error("Usage: put <local_file> [remote_path]")
@@ -442,11 +458,11 @@ class SCPMode:
             remote_file = self._resolve_remote_path(args[1])
         else:
             # Use the same filename in the current remote directory
-            filename = os.path.basename(local_file)
-            remote_file = os.path.join(self.current_remote_dir, filename)
+            filename = Path(local_file).name
+            remote_file = str(Path(self.current_remote_dir) / filename)
 
         try:
-            if not os.path.exists(local_file):
+            if not Path(local_file).exists():
                 display_error(f"Local file not found: {local_file}")
                 return False
 
@@ -468,7 +484,7 @@ class SCPMode:
             display_error(f"Upload failed: {str(e)}")
             return False
 
-    def cmd_get(self, args: List[str]) -> bool:
+    def cmd_get(self, args: list[str]) -> bool:
         """Download files from the remote server"""
         if not args:
             display_error("Usage: get <remote_file> [local_path]")
@@ -484,8 +500,8 @@ class SCPMode:
             local_file = self._resolve_local_path(args[1])
         else:
             # Use the same filename in the local download directory
-            filename = os.path.basename(remote_file)
-            local_file = os.path.join(self.local_download_dir, filename)
+            filename = Path(remote_file).name
+            local_file = str(Path(self.local_download_dir) / filename)
 
         try:
             # First check if the remote file exists
@@ -495,11 +511,11 @@ class SCPMode:
                 return False
 
             # Create local directory if it doesn't exist
-            local_dir = os.path.dirname(local_file)
-            if local_dir and not os.path.exists(local_dir):
-                os.makedirs(local_dir, exist_ok=True)
+            local_dir_path = Path(local_file).parent
+            if local_dir_path.name and not local_dir_path.exists():
+                local_dir_path.mkdir(parents=True, exist_ok=True)
                 # Ensure proper permissions
-                os.chmod(local_dir, 0o755)
+                local_dir_path.chmod(0o755)
 
             display_info(f"Downloading {remote_file} to {local_file}...")
 
@@ -519,7 +535,7 @@ class SCPMode:
             display_error(f"Download failed: {str(e)}")
             return False
 
-    def cmd_ls(self, args: List[str]) -> bool:
+    def cmd_ls(self, args: list[str]) -> bool:
         """List contents of a remote directory"""
         path = self.current_remote_dir
         if args:
@@ -555,7 +571,7 @@ class SCPMode:
             display_error(f"Error listing directory: {str(e)}")
             return False
 
-    def cmd_cd(self, args: List[str]) -> bool:
+    def cmd_cd(self, args: list[str]) -> bool:
         """Change remote directory"""
         if not args:
             display_error("Usage: cd <remote_path>")
@@ -581,12 +597,12 @@ class SCPMode:
             display_error(f"Failed to change directory: {str(e)}")
             return False
 
-    def cmd_pwd(self, args: List[str]) -> bool:
+    def cmd_pwd(self, args: list[str]) -> bool:
         """Print current remote directory"""
         display_info(f"Current remote directory: {self.current_remote_dir}")
         return True
 
-    def cmd_mget(self, args: List[str]) -> bool:
+    def cmd_mget(self, args: list[str]) -> bool:
         """Download multiple files from the remote server using wildcards"""
         if not args:
             display_error("Usage: mget <pattern>")
@@ -653,15 +669,16 @@ class SCPMode:
                 return False
 
             # Ensure download directory exists with proper permissions
-            if not os.path.exists(self.local_download_dir):
-                os.makedirs(self.local_download_dir, exist_ok=True)
-                os.chmod(self.local_download_dir, 0o755)
+            download_dir_path = Path(self.local_download_dir)
+            if not download_dir_path.exists():
+                download_dir_path.mkdir(parents=True, exist_ok=True)
+                download_dir_path.chmod(0o755)
 
             # Download files
             success_count = 0
             for filename in matched_files:
-                remote_file = os.path.join(self.current_remote_dir, filename)
-                local_file = os.path.join(self.local_download_dir, filename)
+                remote_file = str(Path(self.current_remote_dir) / filename)
+                local_file = str(Path(self.local_download_dir) / filename)
 
                 try:
                     display_info(f"Downloading {filename}...")
@@ -689,7 +706,7 @@ class SCPMode:
             display_error(f"Error during mget: {str(e)}")
             return False
 
-    def cmd_local(self, args: List[str]) -> bool:
+    def cmd_local(self, args: list[str]) -> bool:
         """Set or display local download directory"""
         if not args:
             display_info(f"Current local download directory: {self.local_download_dir}")
@@ -699,16 +716,19 @@ class SCPMode:
 
         try:
             # Resolve path (make absolute if needed)
-            if not os.path.isabs(new_path):
-                new_path = os.path.abspath(new_path)
+            path_obj = Path(new_path)
+            if not path_obj.is_absolute():
+                path_obj = path_obj.absolute()
+
+            new_path = str(path_obj)
 
             # Create directory if it doesn't exist
-            if not os.path.exists(new_path):
+            if not path_obj.exists():
                 display_info(f"Local directory does not exist, creating: {new_path}")
-                os.makedirs(new_path, exist_ok=True)
+                path_obj.mkdir(parents=True, exist_ok=True)
                 # Ensure proper permissions
-                os.chmod(new_path, 0o755)
-            elif not os.path.isdir(new_path):
+                path_obj.chmod(0o755)
+            elif not path_obj.is_dir():
                 display_error(f"Path exists but is not a directory: {new_path}")
                 return False
 
@@ -719,7 +739,7 @@ class SCPMode:
             display_error(f"Failed to set local directory: {str(e)}")
             return False
 
-    def cmd_help(self, args: List[str]) -> bool:
+    def cmd_help(self, args: list[str]) -> bool:
         """Display help information"""
         if args:
             cmd = args[0].lower()
@@ -786,7 +806,7 @@ class SCPMode:
         display_info("\nUse 'help <command>' for detailed help on a specific command")
         return True
 
-    def cmd_exit(self, args: List[str]) -> bool:
+    def cmd_exit(self, args: list[str]) -> bool:
         """Exit SCP mode"""
         return True
 
@@ -801,22 +821,23 @@ class SCPMode:
         else:
             return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
-    def cmd_lls(self, args: List[str]) -> bool:
+    def cmd_lls(self, args: list[str]) -> bool:
         """List contents of the local download directory with total size and file count"""
         try:
             # Determine which directory to list
-            target_dir = self.local_download_dir
+            target_dir_path = Path(self.local_download_dir)
             if args:
                 # Allow listing other directories relative to the download dir
                 path = args[0]
-                if os.path.isabs(path):
-                    target_dir = path
+                path_obj = Path(path)
+                if path_obj.is_absolute():
+                    target_dir_path = path_obj
                 else:
-                    target_dir = os.path.join(self.local_download_dir, path)
+                    target_dir_path = Path(self.local_download_dir) / path
 
             # Check if directory exists
-            if not os.path.exists(target_dir) or not os.path.isdir(target_dir):
-                display_error(f"Directory not found: {target_dir}")
+            if not target_dir_path.exists() or not target_dir_path.is_dir():
+                display_error(f"Directory not found: {target_dir_path}")
                 return False
 
             # Get directory contents
@@ -824,27 +845,23 @@ class SCPMode:
             file_count = 0
             dir_count = 0
 
-            display_info(f"Contents of {target_dir}:")
+            display_info(f"Contents of {target_dir_path}:")
 
             # List directory contents in a simple format
-            for item in sorted(os.listdir(target_dir)):
-                full_path = os.path.join(target_dir, item)
-
+            for item in sorted(target_dir_path.iterdir()):
                 # Get file info
-                is_dir = os.path.isdir(full_path)
-
-                if is_dir:
+                if item.is_dir():
                     dir_count += 1
-                    display_info(f"  {item}/")
+                    display_info(f"  {item.name}/")
                 else:
                     # Get file size
-                    size = os.path.getsize(full_path)
+                    size = item.stat().st_size
                     file_count += 1
                     total_size += size
 
                     # Format size for display
                     human_size = self._format_file_size(size)
-                    display_info(f"  {item} ({human_size})")
+                    display_info(f"  {item.name} ({human_size})")
 
             # Show summary
             human_total = self._format_file_size(total_size)

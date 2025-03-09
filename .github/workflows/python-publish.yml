@@ -8,31 +8,36 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
     
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.11'
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build wheel twine
         pip install -e ".[dev]"
+        pip install pyupgrade typing_extensions
+    
+    - name: Check Python 3.11+ code optimizations
+      run: |
+        pyupgrade --py311-plus $(find src -name "*.py")
     
     - name: Check code quality
       run: |
-        black --check src tests
+        black --check --line-length 100 --target-version py311 src tests
         isort --check-only --profile black src tests
         flake8 src tests
-        mypy --ignore-missing-imports src
+        mypy --python-version 3.11 --disallow-untyped-defs --disallow-incomplete-defs --ignore-missing-imports src
+    
+    - name: Run tests
+      run: |
+        pytest -xvs tests
     
     - name: Test basic import
       run: |
@@ -59,7 +64,7 @@ jobs:
       run: |
         python -m build
     
-    - name: Verify package
+    - name: Verify package with twine
       run: |
         twine check dist/*
     

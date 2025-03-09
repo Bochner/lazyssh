@@ -5,7 +5,7 @@ LazySSH - Main module providing the entry point and interactive menus.
 from __future__ import annotations
 
 import sys
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import click
 from rich.prompt import Confirm

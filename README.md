@@ -66,7 +66,7 @@ For detailed documentation, please see the [docs directory](docs/):
 
 ## Requirements
 
-- Python 3.7+
+- Python 3.11+
 - OpenSSH client
 - Terminator terminal emulator
 
