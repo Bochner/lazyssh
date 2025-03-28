@@ -9,5 +9,5 @@ art>=5.9
 paramiko>=3.0.0  # Requires Python 3.8+
 # System dependencies:
 # openssh-client - Required for SSH functionality 
-# terminator - Optional, for terminal emulation (alternatives will be used if not available)
+# terminator - for terminal emulation
 # Requires Python 3.11 or higher

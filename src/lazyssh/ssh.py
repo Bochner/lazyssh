@@ -81,8 +81,9 @@ class SSHManager:
             # Wait a moment for the connection to be fully established
             time.sleep(0.5)
 
-            # Automatically open a terminal
-            self.open_terminal(conn.socket_path)
+            # Automatically open a terminal unless no_term is True
+            if not conn.no_term:
+                self.open_terminal(conn.socket_path)
 
             return True
         except Exception as e:
@@ -209,6 +210,10 @@ class SSHManager:
 
             # Build SSH command with explicit TTY allocation
             ssh_cmd = f"ssh -tt -S {socket_path} {conn.username}@{conn.host}"
+
+            # Add specified shell if provided
+            if conn.shell:
+                ssh_cmd += f" {conn.shell}"
 
             # Display the commands that will be executed
             display_info("Opening terminal with command:")

@@ -23,6 +23,8 @@ class SSHConnection:
     socket_path: str
     dynamic_port: int | None = None
     identity_file: str | None = None
+    shell: str | None = None
+    no_term: bool = False
     tunnels: list[Tunnel] = field(default_factory=list)
     _next_tunnel_id: int = 1
 
