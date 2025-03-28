@@ -85,7 +85,7 @@ def display_success(message: str) -> None:
 
 
 def display_info(message: str) -> None:
-    console.print(f"[blue]Info:[/blue] {message}")
+    console.print(f"{message}")
 
 
 def display_warning(message: str) -> None:

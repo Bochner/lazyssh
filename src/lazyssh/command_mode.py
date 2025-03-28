@@ -528,143 +528,143 @@ class CommandMode:
     def cmd_help(self, args: list[str]) -> bool:
         """Handle help command"""
         if not args:
-            display_info("\nLazySSH Command Mode - Available Commands:\n")
-            display_info("SSH Connection:")
+            display_info("[bold cyan]\nLazySSH Command Mode - Available Commands:[/bold cyan]\n")
+            display_info("[magenta bold]SSH Connection:[/magenta bold]")
             display_info(
-                "  lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                "[-proxy [port]] [-ssh-key <path>] [-shell <shell>] [-no-term]"
+                "  [cyan]lazyssh[/cyan] -ip [yellow]<ip>[/yellow] -port [yellow]<port>[/yellow] -user [yellow]<username>[/yellow] -socket [yellow]<name>[/yellow] "
+                "[-proxy [yellow]<port>[/yellow]] [-ssh-key [yellow]<path>[/yellow]] [-shell [yellow]<shell>[/yellow]] [-no-term]"
             )
-            display_info("  close <ssh_id>")
+            display_info("  [cyan]close[/cyan] [yellow]<ssh_id>[/yellow]")
             display_info(
-                "  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu"
+                "  [dim]Example:[/dim] [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/green]"
             )
             display_info(
-                "  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh"
+                "  [dim]Example:[/dim] [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh[/green]"
             )
-            display_info("  Example: close ubuntu\n")
+            display_info("  [dim]Example:[/dim] [green]close ubuntu[/green]\n")
 
-            display_info("Tunnel Management:")
-            display_info("  tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>")
-            display_info("  Example (forward): tunc ubuntu l 8080 localhost 80")
-            display_info("  Example (reverse): tunc ubuntu r 3000 127.0.0.1 3000\n")
+            display_info("[magenta bold]Tunnel Management:[/magenta bold]")
+            display_info("  [cyan]tunc[/cyan] [yellow]<ssh_id>[/yellow] [yellow]<l|r>[/yellow] [yellow]<local_port>[/yellow] [yellow]<remote_host>[/yellow] [yellow]<remote_port>[/yellow]")
+            display_info("  [dim]Example (forward):[/dim] [green]tunc ubuntu l 8080 localhost 80[/green]")
+            display_info("  [dim]Example (reverse):[/dim] [green]tunc ubuntu r 3000 127.0.0.1 3000[/green]\n")
 
-            display_info("  tund <tunnel_id>")
-            display_info("  Example: tund 1\n")
+            display_info("  [cyan]tund[/cyan] [yellow]<tunnel_id>[/yellow]")
+            display_info("  [dim]Example:[/dim] [green]tund 1[/green]\n")
 
-            display_info("Terminal:")
-            display_info("  term <ssh_id>")
-            display_info("  Example: term ubuntu\n")
+            display_info("[magenta bold]Terminal:[/magenta bold]")
+            display_info("  [cyan]term[/cyan] [yellow]<ssh_id>[/yellow]")
+            display_info("  [dim]Example:[/dim] [green]term ubuntu[/green]\n")
 
-            display_info("File Transfer:")
-            display_info("  scp [<ssh_id>]")
-            display_info("  Example: scp ubuntu\n")
+            display_info("[magenta bold]File Transfer:[/magenta bold]")
+            display_info("  [cyan]scp[/cyan] [[yellow]<ssh_id>[/yellow]]")
+            display_info("  [dim]Example:[/dim] [green]scp ubuntu[/green]\n")
 
-            display_info("System Commands:")
-            display_info("  list    - Show all connections and tunnels")
-            display_info("  mode    - Switch mode (command/prompt)")
-            display_info("  help    - Show this help")
-            display_info("  exit    - Exit the program")
+            display_info("[magenta bold]System Commands:[/magenta bold]")
+            display_info("  [cyan]list[/cyan]    - Show all connections and tunnels")
+            display_info("  [cyan]mode[/cyan]    - Switch mode (command/prompt)")
+            display_info("  [cyan]help[/cyan]    - Show this help")
+            display_info("  [cyan]exit[/cyan]    - Exit the program")
             return True
 
         cmd = args[0]
         if cmd == "lazyssh":
-            display_info("\nCreate new SSH connection:")
+            display_info("[bold cyan]\nCreate new SSH connection:[/bold cyan]")
             display_info(
-                "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                "[-proxy [port]] [-ssh-key <identity_file>] [-shell <shell>] [-no-term]"
+                "[yellow]Usage:[/yellow] [cyan]lazyssh[/cyan] -ip [yellow]<ip>[/yellow] -port [yellow]<port>[/yellow] -user [yellow]<username>[/yellow] -socket [yellow]<n>[/yellow] "
+                "[-proxy [port]] [-ssh-key [yellow]<identity_file>[/yellow]] [-shell [yellow]<shell>[/yellow]] [-no-term]"
             )
-            display_info("Required parameters:")
-            display_info("  -ip     : IP address or hostname of the SSH server")
-            display_info("  -port   : SSH port number")
-            display_info("  -user   : SSH username")
-            display_info("  -socket : Name for the connection (used as identifier)")
-            display_info("Optional parameters:")
-            display_info("  -proxy  : Create a dynamic SOCKS proxy (default port: 9050)")
-            display_info("  -ssh-key: Path to an SSH identity file")
-            display_info("  -shell  : Specify the shell to use (e.g., /bin/sh)")
-            display_info("  -no-term: Do not automatically open a terminal")
-            display_info("\nExamples:")
-            display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu")
-            display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy")
+            display_info("[magenta bold]Required parameters:[/magenta bold]")
+            display_info("  [cyan]-ip[/cyan]     : IP address or hostname of the SSH server")
+            display_info("  [cyan]-port[/cyan]   : SSH port number")
+            display_info("  [cyan]-user[/cyan]   : SSH username")
+            display_info("  [cyan]-socket[/cyan] : Name for the connection (used as identifier)")
+            display_info("[magenta bold]Optional parameters:[/magenta bold]")
+            display_info("  [cyan]-proxy[/cyan]  : Create a dynamic SOCKS proxy (default port: 9050)")
+            display_info("  [cyan]-ssh-key[/cyan]: Path to an SSH identity file")
+            display_info("  [cyan]-shell[/cyan]  : Specify the shell to use (e.g., /bin/sh)")
+            display_info("  [cyan]-no-term[/cyan]: Do not automatically open a terminal")
+            display_info("\n[magenta bold]Examples:[/magenta bold]")
+            display_info("  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/green]")
+            display_info("  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy[/green]")
             display_info(
-                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080"
-            )
-            display_info(
-                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh"
+                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080[/green]"
             )
             display_info(
-                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh -no-term"
+                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh[/green]"
+            )
+            display_info(
+                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh -no-term[/green]"
             )
         elif cmd == "tunc":
-            display_info("\nCreate a new tunnel:")
-            display_info("Usage: tunc <ssh_id> <l|r> <local_port> <remote_host> <remote_port>")
-            display_info("Parameters:")
-            display_info("  ssh_id      : The identifier of the SSH connection")
+            display_info("[bold cyan]\nCreate a new tunnel:[/bold cyan]")
+            display_info("[yellow]Usage:[/yellow] [cyan]tunc[/cyan] [yellow]<ssh_id>[/yellow] [yellow]<l|r>[/yellow] [yellow]<local_port>[/yellow] [yellow]<remote_host>[/yellow] [yellow]<remote_port>[/yellow]")
+            display_info("[magenta bold]Parameters:[/magenta bold]")
+            display_info("  [cyan]ssh_id[/cyan]      : The identifier of the SSH connection")
             display_info(
-                "  l|r         : 'l' for local (forward) tunnel, 'r' for remote (reverse) tunnel"
+                "  [cyan]l|r[/cyan]         : 'l' for local (forward) tunnel, 'r' for remote (reverse) tunnel"
             )
-            display_info("  local_port  : The local port to use for the tunnel")
-            display_info("  remote_host : The remote host to connect to")
-            display_info("  remote_port : The remote port to connect to")
-            display_info("\nExamples:")
+            display_info("  [cyan]local_port[/cyan]  : The local port to use for the tunnel")
+            display_info("  [cyan]remote_host[/cyan] : The remote host to connect to")
+            display_info("  [cyan]remote_port[/cyan] : The remote port to connect to")
+            display_info("\n[magenta bold]Examples:[/magenta bold]")
             display_info(
-                "  tunc ubuntu l 8080 localhost 80    # Forward local port 8080 to "
-                "localhost:80 on the remote server"
+                "  [green]tunc ubuntu l 8080 localhost 80[/green]    [dim]# Forward local port 8080 to "
+                "localhost:80 on the remote server[/dim]"
             )
             display_info(
-                "  tunc ubuntu r 3000 127.0.0.1 3000  # Reverse tunnel from remote port 3000 "
-                "to local 127.0.0.1:3000"
+                "  [green]tunc ubuntu r 3000 127.0.0.1 3000[/green]  [dim]# Reverse tunnel from remote port 3000 "
+                "to local 127.0.0.1:3000[/dim]"
             )
         elif cmd == "tund":
-            display_info("\nDelete a tunnel:")
-            display_info("Usage: tund <tunnel_id>")
-            display_info("Parameters:")
-            display_info("  tunnel_id : The ID of the tunnel to delete (shown in the list command)")
-            display_info("\nExample:")
-            display_info("  tund 1")
+            display_info("[bold cyan]\nDelete a tunnel:[/bold cyan]")
+            display_info("[yellow]Usage:[/yellow] [cyan]tund[/cyan] [yellow]<tunnel_id>[/yellow]")
+            display_info("[magenta bold]Parameters:[/magenta bold]")
+            display_info("  [cyan]tunnel_id[/cyan] : The ID of the tunnel to delete (shown in the list command)")
+            display_info("\n[magenta bold]Example:[/magenta bold]")
+            display_info("  [green]tund 1[/green]")
         elif cmd == "term":
-            display_info("\nOpen a terminal for an SSH connection:")
-            display_info("Usage: term <ssh_id>")
-            display_info("Parameters:")
-            display_info("  ssh_id : The identifier of the SSH connection")
-            display_info("\nExample:")
-            display_info("  term ubuntu")
+            display_info("[bold cyan]\nOpen a terminal for an SSH connection:[/bold cyan]")
+            display_info("[yellow]Usage:[/yellow] [cyan]term[/cyan] [yellow]<ssh_id>[/yellow]")
+            display_info("[magenta bold]Parameters:[/magenta bold]")
+            display_info("  [cyan]ssh_id[/cyan] : The identifier of the SSH connection")
+            display_info("\n[magenta bold]Example:[/magenta bold]")
+            display_info("  [green]term ubuntu[/green]")
         elif cmd == "mode":
-            display_info("\nSwitch between command and interactive modes:")
-            display_info("Usage: mode")
+            display_info("[bold cyan]\nSwitch between command and interactive modes:[/bold cyan]")
+            display_info("[yellow]Usage:[/yellow] [cyan]mode[/cyan]")
         elif cmd == "clear":
-            display_info("\nClear the terminal screen:")
-            display_info("Usage: clear")
+            display_info("[bold cyan]\nClear the terminal screen:[/bold cyan]")
+            display_info("[yellow]Usage:[/yellow] [cyan]clear[/cyan]")
         elif cmd == "scp":
-            display_info("\nEnter SCP mode for file transfers:")
-            display_info("Usage: scp [<connection_name>]")
-            display_info("Parameters:")
+            display_info("[bold cyan]\nEnter SCP mode for file transfers:[/bold cyan]")
+            display_info("[yellow]Usage:[/yellow] [cyan]scp[/cyan] [[yellow]<connection_name>[/yellow]]")
+            display_info("[magenta bold]Parameters:[/magenta bold]")
             display_info(
-                "  connection_name : The identifier of the SSH connection to use (optional)"
+                "  [cyan]connection_name[/cyan] : The identifier of the SSH connection to use (optional)"
             )
             display_info("\nSCP mode leverages your existing SSH connection's master socket")
             display_info(
                 "to perform secure file transfers without requiring additional authentication."
             )
-            display_info("\nSCP mode commands:")
-            display_info("  put <local_file> [<remote_file>]  - Upload file to remote server")
-            display_info("  get <remote_file> [<local_file>]  - Download file from remote server")
-            display_info("  ls [<remote_path>]                - List files in remote directory")
-            display_info("  cd <remote_path>                  - Change remote working directory")
-            display_info("  pwd                               - Show current remote directory")
+            display_info("\n[magenta bold]SCP mode commands:[/magenta bold]")
+            display_info("  [cyan]put[/cyan] [yellow]<local_file>[/yellow] [[yellow]<remote_file>[/yellow]]  - Upload file to remote server")
+            display_info("  [cyan]get[/cyan] [yellow]<remote_file>[/yellow] [[yellow]<local_file>[/yellow]]  - Download file from remote server")
+            display_info("  [cyan]ls[/cyan] [[yellow]<remote_path>[/yellow]]                - List files in remote directory")
+            display_info("  [cyan]cd[/cyan] [yellow]<remote_path>[/yellow]                  - Change remote working directory")
+            display_info("  [cyan]pwd[/cyan]                               - Show current remote directory")
             display_info(
-                "  mget <pattern>                    - Download multiple files matching pattern"
+                "  [cyan]mget[/cyan] [yellow]<pattern>[/yellow]                    - Download multiple files matching pattern"
             )
             display_info(
-                "  local [<path>]                    - Set or show local download directory"
+                "  [cyan]local[/cyan] [[yellow]<path>[/yellow]]                    - Set or show local download directory"
             )
-            display_info("  exit                              - Exit SCP mode")
-            display_info("\nExamples:")
+            display_info("  [cyan]exit[/cyan]                              - Exit SCP mode")
+            display_info("\n[magenta bold]Examples:[/magenta bold]")
             display_info(
-                "  scp ubuntu                        # Enter SCP mode with the 'ubuntu' connection"
+                "  [green]scp ubuntu[/green]                        [dim]# Enter SCP mode with the 'ubuntu' connection[/dim]"
             )
             display_info(
-                "  scp                               # Enter SCP mode and select a connection interactively"
+                "  [green]scp[/green]                               [dim]# Enter SCP mode and select a connection interactively[/dim]"
             )
         else:
             display_error(f"Unknown command: {cmd}")
