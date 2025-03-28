@@ -65,8 +65,8 @@ class LazySSHCompleter(Completer):
                     last_arg = None
                 elif word.startswith("-"):
                     # This is an argument
-                    if word == "-proxy":
-                        # -proxy doesn't need a value
+                    if word in ["-proxy", "-no-term"]:
+                        # -proxy and -no-term don't need a value
                         used_args[word] = i
                     else:
                         # Other arguments expect a value
@@ -76,19 +76,25 @@ class LazySSHCompleter(Completer):
                     i += 1
 
             # Available arguments for lazyssh
-            all_args = {"-ip", "-port", "-user", "-socket", "-proxy", "-ssh-key"}
+            all_args = {
+                "-ip",
+                "-port",
+                "-user",
+                "-socket",
+                "-proxy",
+                "-ssh-key",
+                "-shell",
+                "-no-term",
+            }
             remaining_args = all_args - set(used_args.keys())
 
-            # Define the specific order for arguments
-            ordered_args = ["-ip", "-port", "-user", "-socket", "-proxy"]
+            # Separate required and optional parameters
+            required_args = ["-ip", "-port", "-user", "-socket"]
+            optional_args = ["-proxy", "-ssh-key", "-shell", "-no-term"]
 
-            # Only add -ssh-key to the ordered arguments if -proxy is already used
-            # This ensures -ssh-key is only suggested after -proxy
-            if "-proxy" not in remaining_args and "-ssh-key" in remaining_args:
-                ordered_args.append("-ssh-key")
-
-            # Filter ordered_args to only include remaining args
-            ordered_remaining_args = [arg for arg in ordered_args if arg in remaining_args]
+            # Check which required args are still needed
+            required_remaining = [arg for arg in required_args if arg in remaining_args]
+            optional_remaining = [arg for arg in optional_args if arg in remaining_args]
 
             # If we're expecting a value for an argument, don't suggest new arguments
             if expecting_value:
@@ -98,17 +104,29 @@ class LazySSHCompleter(Completer):
             if words[-1].startswith("-") and not text.endswith(" "):
                 # Complete partial argument based on what the user has typed so far
                 partial_arg = words[-1]
-                for arg in ordered_remaining_args:
+
+                # First prioritize required arguments
+                for arg in required_remaining:
                     if arg.startswith(partial_arg):
                         yield Completion(arg, start_position=-len(partial_arg))
+
+                # Then suggest optional arguments if all required ones are used
+                if not required_remaining:
+                    for arg in optional_remaining:
+                        if arg.startswith(partial_arg):
+                            yield Completion(arg, start_position=-len(partial_arg))
+
             # Otherwise suggest next argument if we're not in the middle of entering a value
             elif text.endswith(" ") and not expecting_value:
-                # Suggest the first remaining argument in the ordered list
-                if ordered_remaining_args:
-                    # Always suggest the next argument in the ordered_remaining_args list
-                    yield Completion(
-                        ordered_remaining_args[0], start_position=-len(word_before_cursor)
-                    )
+                # If we still have required arguments, suggest them first
+                if required_remaining:
+                    # Suggest the first remaining required argument
+                    yield Completion(required_remaining[0], start_position=-len(word_before_cursor))
+                # If all required arguments are provided, suggest all remaining optional arguments
+                elif optional_remaining:
+                    # Suggest all remaining optional arguments
+                    for arg in optional_remaining:
+                        yield Completion(arg, start_position=-len(word_before_cursor))
 
         elif command == "tunc":
             # For tunc command, we expect a specific sequence of arguments:
@@ -155,9 +173,11 @@ class LazySSHCompleter(Completer):
             # For terminal, term and close commands, we only expect one argument: the SSH connection name
             arg_position = len(words) - 1
 
-            # If we're at the end of a word, we're expecting the next argument
-            # Or if we've just typed the command and a space, show completions
-            if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
+            # Only show completions if we're at the exact position to enter the connection name
+            # and not if we've already typed something after the command
+            if (len(words) == 1 and text.endswith(" ")) or (
+                len(words) == 2 and not text.endswith(" ")
+            ):
                 # Show available connections
                 for conn_name in self.command_mode._get_connection_completions():
                     if not word_before_cursor or conn_name.startswith(word_before_cursor):
@@ -314,10 +334,10 @@ class CommandMode:
                 if args[i].startswith("-"):
                     param_name = args[i][1:]  # Remove the dash
 
-                    # Handle -proxy which doesn't need a value
-                    if param_name == "proxy":
+                    # Handle flag parameters that don't need a value
+                    if param_name == "proxy" or param_name == "no-term":
                         if i + 1 < len(args) and not args[i + 1].startswith("-"):
-                            # If there's a value after -proxy, use it
+                            # If there's a value after the flag, use it
                             params[param_name] = args[i + 1]
                             i += 2
                         else:
@@ -339,7 +359,7 @@ class CommandMode:
                 display_error(f"Missing required parameters: {', '.join(missing)}")
                 display_info(
                     "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                    "[-proxy [port]] [-ssh-key <identity_file>]"
+                    "[-proxy [port]] [-ssh-key <identity_file>] [-shell <shell>] [-no-term]"
                 )
                 return False
 
@@ -369,6 +389,14 @@ class CommandMode:
             # Set identity file if provided
             if "ssh-key" in params:
                 conn.identity_file = params["ssh-key"]
+
+            # Set shell if provided
+            if "shell" in params:
+                conn.shell = params["shell"]
+
+            # Set no-term flag if provided
+            if "no-term" in params:
+                conn.no_term = True
 
             # Handle dynamic proxy port if specified
             if "proxy" in params:
@@ -491,15 +519,15 @@ class CommandMode:
             display_info("\nLazySSH Command Mode - Available Commands:\n")
             display_info("SSH Connection:")
             display_info(
-                "  lazyssh -ip <ip> -port <port> -user <username> -socket <n> " "[-proxy [port]]"
+                "  lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
+                "[-proxy [port]] [-ssh-key <path>] [-shell <shell>] [-no-term]"
             )
             display_info("  close <ssh_id>")
             display_info(
                 "  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu"
             )
             display_info(
-                "  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy "
-                "8080"
+                "  Example: lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh"
             )
             display_info("  Example: close ubuntu\n")
 
@@ -531,7 +559,7 @@ class CommandMode:
             display_info("\nCreate new SSH connection:")
             display_info(
                 "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
-                "[-proxy [port]] [-ssh-key <identity_file>]"
+                "[-proxy [port]] [-ssh-key <identity_file>] [-shell <shell>] [-no-term]"
             )
             display_info("Required parameters:")
             display_info("  -ip     : IP address or hostname of the SSH server")
@@ -541,15 +569,19 @@ class CommandMode:
             display_info("Optional parameters:")
             display_info("  -proxy  : Create a dynamic SOCKS proxy (default port: 1080)")
             display_info("  -ssh-key: Path to an SSH identity file")
+            display_info("  -shell  : Specify the shell to use (e.g., /bin/sh)")
+            display_info("  -no-term: Do not automatically open a terminal")
             display_info("\nExamples:")
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu")
             display_info("  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy")
             display_info(
-                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy " "8080"
+                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080"
             )
             display_info(
-                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu "
-                "-ssh-key ~/.ssh/id_rsa"
+                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh"
+            )
+            display_info(
+                "  lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh -no-term"
             )
         elif cmd == "tunc":
             display_info("\nCreate a new tunnel:")
@@ -693,6 +725,8 @@ class CommandMode:
 
             # Build the SSH command for display
             ssh_cmd = f"ssh -tt -S {socket_path} {conn.username}@{conn.host}"
+            if conn.shell:
+                ssh_cmd += f" {conn.shell}"
 
             # Display the command that will be executed
             display_info("Opening terminal with command:")

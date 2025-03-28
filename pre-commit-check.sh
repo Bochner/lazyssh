@@ -68,7 +68,11 @@ pyupgrade --py311-plus $(find src -name "*.py")
 echo "✅ Python 3.11 code optimization check passed"
 
 # Check 2: Black formatting
-echo "🔍 Running Black formatting check..."
+echo "🔍 Running Black code formatter to fix formatting issues..."
+black --line-length 100 --target-version py311 src tests
+echo "✅ Black formatting fixed"
+
+echo "🔍 Verifying Black formatting..."
 black --check --line-length 100 --target-version py311 src tests
 echo "✅ Black formatting check passed"
 
