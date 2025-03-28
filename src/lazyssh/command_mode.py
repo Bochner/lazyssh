@@ -342,7 +342,7 @@ class CommandMode:
                     "[-proxy [port]] [-ssh-key <identity_file>]"
                 )
                 return False
-                
+
             # Check if the socket name already exists
             socket_path = f"/tmp/{params['socket']}"
             if socket_path in self.ssh_manager.connections:
@@ -355,7 +355,7 @@ class CommandMode:
                     if not new_socket:
                         display_error("Socket name cannot be empty.")
                         return False
-                    params['socket'] = new_socket
+                    params["socket"] = new_socket
                     socket_path = f"/tmp/{params['socket']}"
 
             # Create the connection object
