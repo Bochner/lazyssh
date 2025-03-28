@@ -343,12 +343,27 @@ class CommandMode:
                 )
                 return False
 
+            # Check if the socket name already exists
+            socket_path = f"/tmp/{params['socket']}"
+            if socket_path in self.ssh_manager.connections:
+                display_warning(f"Socket name '{params['socket']}' is already in use.")
+                confirmation = input("Do you want to use a different name? (Y/n): ").lower()
+                if confirmation == "n":
+                    display_info("Proceeding with the existing socket name.")
+                else:
+                    new_socket = input("Enter a new socket name: ")
+                    if not new_socket:
+                        display_error("Socket name cannot be empty.")
+                        return False
+                    params["socket"] = new_socket
+                    socket_path = f"/tmp/{params['socket']}"
+
             # Create the connection object
             conn = SSHConnection(
                 host=params["ip"],
                 port=int(params["port"]),
                 username=params["user"],
-                socket_path=f"/tmp/{params['socket']}",
+                socket_path=socket_path,
             )
 
             # Set identity file if provided
