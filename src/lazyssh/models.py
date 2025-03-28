@@ -56,6 +56,11 @@ class SSHConnection:
         Path(self.downloads_dir).mkdir(parents=True, exist_ok=True)
         Path(self.downloads_dir).chmod(0o700)
 
+        # Create uploads directory
+        self.uploads_dir = f"{self.connection_dir}/uploads"
+        Path(self.uploads_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.uploads_dir).chmod(0o700)
+
     @property
     def conn_name(self) -> str:
         """Get the connection name"""

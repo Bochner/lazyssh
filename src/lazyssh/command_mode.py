@@ -204,9 +204,14 @@ class LazySSHCompleter(Completer):
                     yield Completion(conn_name, start_position=-len(word_before_cursor))
 
         # Handle completion for scp command
-        elif command == "scp" and (len(words) == 1 or len(words) == 2):
-            # Check if we have a space after "scp" to show completions immediately
-            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
+        elif command == "scp":
+            # Only suggest connection names if we either:
+            # 1. Just typed "scp " and need the first connection name
+            # 2. Are in the middle of typing the first connection name
+            # Don't suggest anything if we already have a complete connection name
+            if (len(words) == 1 and text.endswith(" ")) or (
+                len(words) == 2 and not text.endswith(" ")
+            ):
                 connections = self.command_mode._get_connection_completions()
                 for conn_name in connections:
                     if not word_before_cursor or conn_name.startswith(word_before_cursor):
@@ -409,7 +414,7 @@ class CommandMode:
             if "proxy" in params:
                 if params["proxy"] == "true":
                     # If -proxy was specified without a value, use a default port
-                    conn.dynamic_port = 1080
+                    conn.dynamic_port = 9050
                     display_info(f"Using default dynamic proxy port: {conn.dynamic_port}")
                 else:
                     # Otherwise use the specified port
@@ -574,7 +579,7 @@ class CommandMode:
             display_info("  -user   : SSH username")
             display_info("  -socket : Name for the connection (used as identifier)")
             display_info("Optional parameters:")
-            display_info("  -proxy  : Create a dynamic SOCKS proxy (default port: 1080)")
+            display_info("  -proxy  : Create a dynamic SOCKS proxy (default port: 9050)")
             display_info("  -ssh-key: Path to an SSH identity file")
             display_info("  -shell  : Specify the shell to use (e.g., /bin/sh)")
             display_info("  -no-term: Do not automatically open a terminal")

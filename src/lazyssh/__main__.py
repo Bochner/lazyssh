@@ -126,9 +126,9 @@ def create_connection_menu() -> bool:
     dynamic_port = None
 
     if use_proxy:
-        proxy_port = get_user_input("Enter proxy port (default: 1080)")
+        proxy_port = get_user_input("Enter proxy port (default: 9050)")
         if not proxy_port:
-            dynamic_port = 1080
+            dynamic_port = 9050
         else:
             try:
                 dynamic_port = int(proxy_port)
