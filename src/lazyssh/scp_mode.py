@@ -11,6 +11,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
 from .models import SSHConnection
@@ -242,9 +243,15 @@ class SCPMode:
             "local": self.cmd_local,
         }
 
+        # Create the history directory if it doesn't exist
+        history_dir = os.path.expanduser("~/.lazyssh")
+        os.makedirs(history_dir, exist_ok=True)
+
         # Initialize prompt_toolkit components
         self.completer = SCPModeCompleter(self)
-        self.session: PromptSession = PromptSession()
+        self.session: PromptSession = PromptSession(
+            history=FileHistory(os.path.expanduser("~/.lazyssh/scp_history"))
+        )
         self.style = Style.from_dict(
             {
                 "prompt": "ansigreen bold",
