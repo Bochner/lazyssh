@@ -77,22 +77,22 @@ class SCPModeCompleter(Completer):
         elif command == "put" and (len(words) == 1 or len(words) == 2):
             # Always offer completions after typing the command and a space
             if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
-                # Complete local files
+                # Complete local files from the upload directory
                 try:
                     # Get partial path from what user typed so far
                     partial_path = words[1] if len(words) > 1 else ""
                     if partial_path:
                         base_dir = str(Path(partial_path).parent)
                     else:
-                        base_dir = self.scp_mode.local_download_dir
+                        base_dir = self.scp_mode.local_upload_dir
 
                     if not base_dir:
-                        base_dir = self.scp_mode.local_download_dir
+                        base_dir = self.scp_mode.local_upload_dir
 
                     # Get filename part for matching
                     filename_part = Path(partial_path).name if partial_path else ""
 
-                    # List files in the local directory
+                    # List files in the local upload directory
                     for f in os.listdir(base_dir or "."):
                         if not filename_part or f.startswith(filename_part):
                             full_path = str(Path(base_dir) / f) if base_dir else f
@@ -132,13 +132,56 @@ class SCPModeCompleter(Completer):
                         # Silently fail for completions
                         pass
 
-        elif command == "local" and (len(words) == 1 or len(words) == 2):
-            # Always offer completions after typing the command and a space
-            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
-                # Complete local directories
+        elif command == "local" and (len(words) == 1 or len(words) == 2 or len(words) == 3):
+            # Handle different stages of local command completion
+            if len(words) == 1 and text.endswith(" "):
+                # After "local " - suggest ONLY download/upload options
+                yield Completion("download", start_position=-len(word_before_cursor))
+                yield Completion("upload", start_position=-len(word_before_cursor))
+                # Don't show directory completions here
+            elif len(words) == 2:
+                if words[1] in ["download", "upload"] and text.endswith(" "):
+                    # After "local download " or "local upload " - complete directories
+                    try:
+                        # List directories in the current directory
+                        for d in os.listdir("."):
+                            full_path = Path(".") / d
+                            if full_path.is_dir():
+                                result_path = str(full_path)
+                                yield Completion(result_path, start_position=0)
+                    except Exception:
+                        # Silently fail for completions
+                        pass
+                else:
+                    # Complete local directories for backward compatibility
+                    try:
+                        # Get partial path from what user typed so far
+                        partial_path = words[1]
+
+                        if partial_path:
+                            path_obj = Path(partial_path)
+                            base_dir = str(path_obj.parent) if path_obj.name else str(path_obj)
+                            dirname_part = path_obj.name
+                        else:
+                            base_dir = "."
+                            dirname_part = ""
+
+                        # List directories in the local directory
+                        for d in os.listdir(base_dir or "."):
+                            full_path = Path(base_dir) / d
+                            if (
+                                not dirname_part or d.startswith(dirname_part)
+                            ) and full_path.is_dir():
+                                result_path = str(full_path) if base_dir else d
+                                yield Completion(result_path, start_position=-len(partial_path))
+                    except Exception:
+                        # Silently fail for completions
+                        pass
+            elif len(words) == 3 and words[1] in ["download", "upload"] and not text.endswith(" "):
+                # Complete directory path for "local download <path>" or "local upload <path>"
                 try:
                     # Get partial path from what user typed so far
-                    partial_path = words[1] if len(words) > 1 else ""
+                    partial_path = words[2]
 
                     if partial_path:
                         path_obj = Path(partial_path)
@@ -226,6 +269,9 @@ class SCPMode:
         self.local_download_dir = (
             os.getcwd()
         )  # Default to current working directory (will be updated after connection)
+        self.local_upload_dir = (
+            os.getcwd()
+        )  # Default to current working directory (will be updated after connection)
         self.socket_path: str | None = None
         self.conn: SSHConnection | None = None  # Initialize as None until connect() is called
 
@@ -285,8 +331,9 @@ class SCPMode:
             display_info("Try reconnecting or creating a new connection")
             return False
 
-        # Set the local download directory to the connection's downloads directory
+        # Set the local download and upload directories to the connection's directories
         self.local_download_dir = self.conn.downloads_dir
+        self.local_upload_dir = self.conn.uploads_dir
 
         # Get initial remote directory
         try:
@@ -340,7 +387,7 @@ class SCPMode:
         conn_name = self.selected_connection or "none"
         return HTML(
             f"<prompt>scp {conn_name}</prompt>:<path>{self.current_remote_dir}</path>"
-            f" [<local>{self.local_download_dir}</local>]> "
+            f" [↓<local>{self.local_download_dir}</local> | ↑<local>{self.local_upload_dir}</local>]> "
         )
 
     def run(self) -> None:
@@ -435,15 +482,16 @@ class SCPMode:
         # Join with current directory
         return str(Path(self.current_remote_dir) / path)
 
-    def _resolve_local_path(self, path: str) -> str:
-        """Resolve a local path relative to the local download directory"""
+    def _resolve_local_path(self, path: str, for_upload: bool = False) -> str:
+        """Resolve a local path relative to the local download or upload directory"""
         if not path:
-            return self.local_download_dir
+            return self.local_upload_dir if for_upload else self.local_download_dir
         if Path(path).is_absolute():
             return path
 
-        # Join with local download directory
-        return str(Path(self.local_download_dir) / path)
+        # Join with local download or upload directory
+        base_dir = self.local_upload_dir if for_upload else self.local_download_dir
+        return str(Path(base_dir) / path)
 
     def _get_scp_command(self, source: str, destination: str) -> list[str]:
         """Get the SCP command using the control socket"""
@@ -459,7 +507,7 @@ class SCPMode:
             display_error("Not connected to an SSH server")
             return False
 
-        local_file = self._resolve_local_path(args[0])
+        local_file = self._resolve_local_path(args[0], for_upload=True)
 
         if len(args) == 2:
             remote_file = self._resolve_remote_path(args[1])
@@ -714,37 +762,78 @@ class SCPMode:
             return False
 
     def cmd_local(self, args: list[str]) -> bool:
-        """Set or display local download directory"""
+        """Set or display local download and upload directories"""
         if not args:
             display_info(f"Current local download directory: {self.local_download_dir}")
+            display_info(f"Current local upload directory: {self.local_upload_dir}")
             return True
 
-        new_path = args[0]
+        if len(args) >= 2 and args[0] in ["download", "upload"]:
+            # Handle specific directory type
+            dir_type = args[0]
+            new_path = args[1]
 
-        try:
-            # Resolve path (make absolute if needed)
-            path_obj = Path(new_path)
-            if not path_obj.is_absolute():
-                path_obj = path_obj.absolute()
+            try:
+                # Resolve path (make absolute if needed)
+                path_obj = Path(new_path)
+                if not path_obj.is_absolute():
+                    path_obj = path_obj.absolute()
 
-            new_path = str(path_obj)
+                new_path = str(path_obj)
 
-            # Create directory if it doesn't exist
-            if not path_obj.exists():
-                display_info(f"Local directory does not exist, creating: {new_path}")
-                path_obj.mkdir(parents=True, exist_ok=True)
-                # Ensure proper permissions
-                path_obj.chmod(0o755)
-            elif not path_obj.is_dir():
-                display_error(f"Path exists but is not a directory: {new_path}")
+                # Create directory if it doesn't exist
+                if not path_obj.exists():
+                    display_info(f"Local directory does not exist, creating: {new_path}")
+                    path_obj.mkdir(parents=True, exist_ok=True)
+                    # Ensure proper permissions
+                    path_obj.chmod(0o755)
+                elif not path_obj.is_dir():
+                    display_error(f"Path exists but is not a directory: {new_path}")
+                    return False
+
+                # Set the appropriate directory
+                if dir_type == "download":
+                    self.local_download_dir = new_path
+                    display_success(f"Local download directory set to: {new_path}")
+                else:  # upload
+                    self.local_upload_dir = new_path
+                    display_success(f"Local upload directory set to: {new_path}")
+
+                return True
+            except Exception as e:
+                display_error(f"Failed to set local directory: {str(e)}")
                 return False
+        else:
+            # Legacy behavior - set download directory for backward compatibility
+            new_path = args[0]
 
-            self.local_download_dir = new_path
-            display_success(f"Local download directory set to: {new_path}")
-            return True
-        except Exception as e:
-            display_error(f"Failed to set local directory: {str(e)}")
-            return False
+            try:
+                # Resolve path (make absolute if needed)
+                path_obj = Path(new_path)
+                if not path_obj.is_absolute():
+                    path_obj = path_obj.absolute()
+
+                new_path = str(path_obj)
+
+                # Create directory if it doesn't exist
+                if not path_obj.exists():
+                    display_info(f"Local directory does not exist, creating: {new_path}")
+                    path_obj.mkdir(parents=True, exist_ok=True)
+                    # Ensure proper permissions
+                    path_obj.chmod(0o755)
+                elif not path_obj.is_dir():
+                    display_error(f"Path exists but is not a directory: {new_path}")
+                    return False
+
+                self.local_download_dir = new_path
+                display_success(f"Local download directory set to: {new_path}")
+                display_info(
+                    "Note: Use 'local download <path>' or 'local upload <path>' to set specific directories"
+                )
+                return True
+            except Exception as e:
+                display_error(f"Failed to set local directory: {str(e)}")
+                return False
 
     def cmd_help(self, args: list[str]) -> bool:
         """Display help information"""
@@ -756,6 +845,8 @@ class SCPMode:
                 display_info(
                     "If <remote_file> is not specified, the file will be uploaded with the same name"
                 )
+                display_info("Local files are read from the upload directory shown in the prompt")
+                display_info("Use tab completion to see available files in the upload directory")
             elif cmd == "get":
                 display_info("\nDownload a file from the remote server:")
                 display_info("Usage: get <remote_file> [<local_file>]")
@@ -786,11 +877,14 @@ class SCPMode:
                 display_info("Usage: mget <remote_file_pattern>")
                 display_info("Supports wildcard patterns (e.g., *.txt)")
             elif cmd == "local":
-                display_info("\nSet or display local download directory:")
+                display_info("\nSet or display local download and upload directories:")
                 display_info("Usage: local [<local_path>]")
                 display_info(
-                    "If <local_path> is not specified, displays the current local download directory"
+                    "If <local_path> is not specified, displays both the download and upload directories"
                 )
+                display_info("To set a specific directory type:")
+                display_info("  local download <path> - Set the download directory")
+                display_info("  local upload <path>   - Set the upload directory")
             elif cmd == "exit":
                 display_info("\nExit SCP mode and return to lazyssh prompt:")
                 display_info("Usage: exit")

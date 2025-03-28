@@ -99,7 +99,7 @@ A dynamic SOCKS proxy provides a flexible way to route traffic through your SSH 
 You create a dynamic SOCKS proxy when establishing an SSH connection:
 
 ```bash
-# With default port (1080)
+# With default port (9050)
 lazyssh> lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy
 
 # With custom port
@@ -114,16 +114,16 @@ Once created, you can configure applications to use your SOCKS proxy:
 1. Go to Settings/Preferences
 2. Search for "proxy"
 3. Configure manual proxy settings
-4. Set SOCKS Host to "localhost" and Port to "1080" (or your custom port)
+4. Set SOCKS Host to "localhost" and Port to "9050" (or your custom port)
 5. Select "SOCKS v5"
 
 **Command Line Tools:**
 ```bash
 # curl example
-curl --socks5 localhost:1080 https://example.com
+curl --socks5 localhost:9050 https://example.com
 
 # wget example
-wget --socks-proxy=localhost:1080 https://example.com
+wget --socks-proxy=localhost:9050 https://example.com
 ```
 
 ### Common SOCKS Proxy Use Cases
@@ -196,7 +196,7 @@ lazyssh> tunc myvps r 8080 localhost 3000
 # Create a connection with a SOCKS proxy
 lazyssh> lazyssh -ip home.example.com -port 22 -user user -socket home -proxy
 
-# Configure your browser to use the SOCKS proxy at localhost:1080
+# Configure your browser to use the SOCKS proxy at localhost:9050
 # Now your browsing traffic is encrypted through your home server
 ```
 

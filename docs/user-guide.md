@@ -204,14 +204,14 @@ exit
 Create a SOCKS proxy for secure browsing through your SSH connection:
 
 ```bash
-# With default port (1080)
+# With default port (9050)
 lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy
 
 # With custom port
 lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy 8080
 ```
 
-Then configure your browser or applications to use the SOCKS proxy at `localhost:1080` (or your custom port).
+Then configure your browser or applications to use the SOCKS proxy at `localhost:9050` (or your custom port).
 
 ### SCP Mode Advanced Features
 

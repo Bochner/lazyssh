@@ -25,7 +25,7 @@ lazyssh -ip <host_ip> -port <port> -user <username> -socket <name> [-proxy [port
 - `-port <port>`: The SSH port of the remote server (required, typically 22)
 - `-user <username>`: The username for the SSH connection (required)
 - `-socket <name>`: A unique name for the connection (required)
-- `-proxy [port]`: Create a dynamic SOCKS proxy (optional, default port is 1080)
+- `-proxy [port]`: Create a dynamic SOCKS proxy (optional, default port is 9050)
 - `-ssh-key <path>`: Path to the SSH private key file (optional)
 
 **Examples:**
@@ -33,7 +33,7 @@ lazyssh -ip <host_ip> -port <port> -user <username> -socket <name> [-proxy [port
 # Basic connection
 lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver
 
-# Connection with SOCKS proxy on default port (1080)
+# Connection with SOCKS proxy on default port (9050)
 lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy
 
 # Connection with SOCKS proxy on custom port
