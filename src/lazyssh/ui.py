@@ -11,54 +11,50 @@ from rich.table import Table
 from rich.text import Text
 
 from .models import SSHConnection
+from . import __version__
 
 console = Console()
 
 
 def display_banner() -> None:
     """Display the LazySSH banner with sophisticated styling"""
-    # Create title with nice formatting
-    title = Text("L A Z Y S S H", style="bold cyan")
-
-    # Create the subtitle
-    subtitle = Text("A comprehensive SSH toolkit", style="italic blue")
-
-    # Create feature bullets in a compact format
-    features = [
-        "• Multiple SSH connections",
-        "• Easy tunnel creation",
-        "• Command & prompt modes",
-        "• Dynamic port forwarding",
+    # Create ASCII art for the logo
+    ascii_art = [
+        "██╗      █████╗ ███████╗██╗   ██╗███████╗███████╗██╗  ██╗",
+        "██║     ██╔══██╗╚══███╔╝╚██╗ ██╔╝██╔════╝██╔════╝██║  ██║",
+        "██║     ███████║  ███╔╝  ╚████╔╝ ███████╗███████╗███████║",
+        "██║     ██╔══██║ ███╔╝    ╚██╔╝  ╚════██║╚════██║██╔══██║",
+        "███████╗██║  ██║███████╗   ██║   ███████║███████║██║  ██║",
+        "╚══════╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚══════╝╚═╝  ╚═╝"
     ]
 
-    # Build the complete content
-    content = Text()
-
-    # Add title centered
-    content.append("\n ")
-    content.append(title)
-    content.append("\n\n ")
-
-    # Add subtitle
-    content.append(subtitle)
-    content.append("\n\n")
-
-    # Add features
-    for feature in features:
-        content.append(" " + feature + "\n", style="cyan")
-
-    # Create the main panel with all content
+    # Build the content using a table for better alignment
+    content = Table.grid(padding=0)
+    content.add_column(justify="center")
+    
+    # Add the ASCII art logo as centered rows
+    for line in ascii_art:
+        content.add_row(Text(line, style="bright_cyan"))
+    
+    # Add tagline
+    content.add_row("")
+    content.add_row(Text("⚡ Modern SSH Connection Manager ⚡", style="bold magenta"))
+    content.add_row("")
+    
+    # Add version using the dynamic version from __init__.py
+    content.add_row(Text(f"v{__version__}", style="dim blue"))
+    
+    # Create panel
     panel = Panel(
         content,
         title="[bold blue]Welcome to LazySSH[/bold blue]",
-        subtitle="[dim blue]v1.0.0[/dim blue]",
-        border_style="blue",
+        subtitle="[dim blue]SSH Made Easy[/dim blue]",
+        border_style="cyan",
         box=ROUNDED,
-        width=60,
-        expand=False,
+        padding=(1, 2)
     )
-
-    # Print the panel centered in the terminal
+    
+    # Print the panel centered
     console.print(Align.center(panel))
 
 
