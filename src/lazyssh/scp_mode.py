@@ -841,50 +841,74 @@ class SCPMode:
             cmd = args[0].lower()
             if cmd == "put":
                 display_info("[bold cyan]\nUpload a file to the remote server:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]put[/cyan] [yellow]<local_file>[/yellow] [[yellow]<remote_file>[/yellow]]")
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]put[/cyan] [yellow]<local_file>[/yellow] [[yellow]<remote_file>[/yellow]]"
+                )
                 display_info(
                     "If [yellow]<remote_file>[/yellow] is not specified, the file will be uploaded with the same name"
                 )
-                display_info("[dim]Local files are read from the upload directory shown in the prompt[/dim]")
-                display_info("[dim]Use tab completion to see available files in the upload directory[/dim]")
+                display_info(
+                    "[dim]Local files are read from the upload directory shown in the prompt[/dim]"
+                )
+                display_info(
+                    "[dim]Use tab completion to see available files in the upload directory[/dim]"
+                )
             elif cmd == "get":
                 display_info("[bold cyan]\nDownload a file from the remote server:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]get[/cyan] [yellow]<remote_file>[/yellow] [[yellow]<local_file>[/yellow]]")
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]get[/cyan] [yellow]<remote_file>[/yellow] [[yellow]<local_file>[/yellow]]"
+                )
                 display_info(
                     "If [yellow]<local_file>[/yellow] is not specified, the file will be downloaded to the current local directory"
                 )
             elif cmd == "ls":
                 display_info("[bold cyan]\nList files in a remote directory:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]ls[/cyan] [[yellow]<remote_path>[/yellow]]")
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]ls[/cyan] [[yellow]<remote_path>[/yellow]]"
+                )
                 display_info(
                     "If [yellow]<remote_path>[/yellow] is not specified, lists the current remote directory"
                 )
             elif cmd == "lls":
                 display_info("[bold cyan]\nList files in the local download directory:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]lls[/cyan] [[yellow]<local_path>[/yellow]]")
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]lls[/cyan] [[yellow]<local_path>[/yellow]]"
+                )
                 display_info(
                     "If [yellow]<local_path>[/yellow] is not specified, lists the current local download directory"
                 )
                 display_info("[dim]Shows file details, total size, and file count[/dim]")
             elif cmd == "cd":
                 display_info("[bold cyan]\nChange remote working directory:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]cd[/cyan] [yellow]<remote_path>[/yellow]")
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]cd[/cyan] [yellow]<remote_path>[/yellow]"
+                )
             elif cmd == "pwd":
                 display_info("[bold cyan]\nShow current remote working directory:[/bold cyan]")
                 display_info("[yellow]Usage:[/yellow] [cyan]pwd[/cyan]")
             elif cmd == "mget":
                 display_info("[bold cyan]\nDownload multiple files matching a pattern:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]mget[/cyan] [yellow]<remote_file_pattern>[/yellow]")
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]mget[/cyan] [yellow]<remote_file_pattern>[/yellow]"
+                )
                 display_info("[dim]Supports wildcard patterns (e.g., *.txt)[/dim]")
             elif cmd == "local":
-                display_info("[bold cyan]\nSet or display local download and upload directories:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]local[/cyan] [[yellow]<local_path>[/yellow]]")
+                display_info(
+                    "[bold cyan]\nSet or display local download and upload directories:[/bold cyan]"
+                )
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]local[/cyan] [[yellow]<local_path>[/yellow]]"
+                )
                 display_info(
                     "If [yellow]<local_path>[/yellow] is not specified, displays both the download and upload directories"
                 )
                 display_info("[magenta bold]To set a specific directory type:[/magenta bold]")
-                display_info("  [cyan]local download[/cyan] [yellow]<path>[/yellow] - Set the download directory")
-                display_info("  [cyan]local upload[/cyan] [yellow]<path>[/yellow]   - Set the upload directory")
+                display_info(
+                    "  [cyan]local download[/cyan] [yellow]<path>[/yellow] - Set the download directory"
+                )
+                display_info(
+                    "  [cyan]local upload[/cyan] [yellow]<path>[/yellow]   - Set the upload directory"
+                )
             elif cmd == "exit":
                 display_info("[bold cyan]\nExit SCP mode and return to lazyssh prompt:[/bold cyan]")
                 display_info("[yellow]Usage:[/yellow] [cyan]exit[/cyan]")
@@ -903,8 +927,12 @@ class SCPMode:
         display_info("  [cyan]mget[/cyan]    - Download multiple files matching a pattern")
         display_info("  [cyan]local[/cyan]   - Set or display local download directory")
         display_info("  [cyan]exit[/cyan]    - Exit SCP mode")
-        display_info("  [cyan]help[/cyan]    - Show this help message or help for a specific command")
-        display_info("\n[dim]Use 'help [yellow]<command>[/yellow]' for detailed help on a specific command[/dim]")
+        display_info(
+            "  [cyan]help[/cyan]    - Show this help message or help for a specific command"
+        )
+        display_info(
+            "\n[dim]Use 'help [yellow]<command>[/yellow]' for detailed help on a specific command[/dim]"
+        )
         return True
 
     def cmd_exit(self, args: list[str]) -> bool:

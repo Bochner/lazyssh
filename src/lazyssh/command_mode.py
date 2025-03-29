@@ -544,9 +544,15 @@ class CommandMode:
             display_info("  [dim]Example:[/dim] [green]close ubuntu[/green]\n")
 
             display_info("[magenta bold]Tunnel Management:[/magenta bold]")
-            display_info("  [cyan]tunc[/cyan] [yellow]<ssh_id>[/yellow] [yellow]<l|r>[/yellow] [yellow]<local_port>[/yellow] [yellow]<remote_host>[/yellow] [yellow]<remote_port>[/yellow]")
-            display_info("  [dim]Example (forward):[/dim] [green]tunc ubuntu l 8080 localhost 80[/green]")
-            display_info("  [dim]Example (reverse):[/dim] [green]tunc ubuntu r 3000 127.0.0.1 3000[/green]\n")
+            display_info(
+                "  [cyan]tunc[/cyan] [yellow]<ssh_id>[/yellow] [yellow]<l|r>[/yellow] [yellow]<local_port>[/yellow] [yellow]<remote_host>[/yellow] [yellow]<remote_port>[/yellow]"
+            )
+            display_info(
+                "  [dim]Example (forward):[/dim] [green]tunc ubuntu l 8080 localhost 80[/green]"
+            )
+            display_info(
+                "  [dim]Example (reverse):[/dim] [green]tunc ubuntu r 3000 127.0.0.1 3000[/green]\n"
+            )
 
             display_info("  [cyan]tund[/cyan] [yellow]<tunnel_id>[/yellow]")
             display_info("  [dim]Example:[/dim] [green]tund 1[/green]\n")
@@ -579,13 +585,19 @@ class CommandMode:
             display_info("  [cyan]-user[/cyan]   : SSH username")
             display_info("  [cyan]-socket[/cyan] : Name for the connection (used as identifier)")
             display_info("[magenta bold]Optional parameters:[/magenta bold]")
-            display_info("  [cyan]-proxy[/cyan]  : Create a dynamic SOCKS proxy (default port: 9050)")
+            display_info(
+                "  [cyan]-proxy[/cyan]  : Create a dynamic SOCKS proxy (default port: 9050)"
+            )
             display_info("  [cyan]-ssh-key[/cyan]: Path to an SSH identity file")
             display_info("  [cyan]-shell[/cyan]  : Specify the shell to use (e.g., /bin/sh)")
             display_info("  [cyan]-no-term[/cyan]: Do not automatically open a terminal")
             display_info("\n[magenta bold]Examples:[/magenta bold]")
-            display_info("  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/green]")
-            display_info("  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy[/green]")
+            display_info(
+                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/green]"
+            )
+            display_info(
+                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy[/green]"
+            )
             display_info(
                 "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080[/green]"
             )
@@ -597,7 +609,9 @@ class CommandMode:
             )
         elif cmd == "tunc":
             display_info("[bold cyan]\nCreate a new tunnel:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]tunc[/cyan] [yellow]<ssh_id>[/yellow] [yellow]<l|r>[/yellow] [yellow]<local_port>[/yellow] [yellow]<remote_host>[/yellow] [yellow]<remote_port>[/yellow]")
+            display_info(
+                "[yellow]Usage:[/yellow] [cyan]tunc[/cyan] [yellow]<ssh_id>[/yellow] [yellow]<l|r>[/yellow] [yellow]<local_port>[/yellow] [yellow]<remote_host>[/yellow] [yellow]<remote_port>[/yellow]"
+            )
             display_info("[magenta bold]Parameters:[/magenta bold]")
             display_info("  [cyan]ssh_id[/cyan]      : The identifier of the SSH connection")
             display_info(
@@ -619,7 +633,9 @@ class CommandMode:
             display_info("[bold cyan]\nDelete a tunnel:[/bold cyan]")
             display_info("[yellow]Usage:[/yellow] [cyan]tund[/cyan] [yellow]<tunnel_id>[/yellow]")
             display_info("[magenta bold]Parameters:[/magenta bold]")
-            display_info("  [cyan]tunnel_id[/cyan] : The ID of the tunnel to delete (shown in the list command)")
+            display_info(
+                "  [cyan]tunnel_id[/cyan] : The ID of the tunnel to delete (shown in the list command)"
+            )
             display_info("\n[magenta bold]Example:[/magenta bold]")
             display_info("  [green]tund 1[/green]")
         elif cmd == "term":
@@ -637,7 +653,9 @@ class CommandMode:
             display_info("[yellow]Usage:[/yellow] [cyan]clear[/cyan]")
         elif cmd == "scp":
             display_info("[bold cyan]\nEnter SCP mode for file transfers:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]scp[/cyan] [[yellow]<connection_name>[/yellow]]")
+            display_info(
+                "[yellow]Usage:[/yellow] [cyan]scp[/cyan] [[yellow]<connection_name>[/yellow]]"
+            )
             display_info("[magenta bold]Parameters:[/magenta bold]")
             display_info(
                 "  [cyan]connection_name[/cyan] : The identifier of the SSH connection to use (optional)"
@@ -647,11 +665,21 @@ class CommandMode:
                 "to perform secure file transfers without requiring additional authentication."
             )
             display_info("\n[magenta bold]SCP mode commands:[/magenta bold]")
-            display_info("  [cyan]put[/cyan] [yellow]<local_file>[/yellow] [[yellow]<remote_file>[/yellow]]  - Upload file to remote server")
-            display_info("  [cyan]get[/cyan] [yellow]<remote_file>[/yellow] [[yellow]<local_file>[/yellow]]  - Download file from remote server")
-            display_info("  [cyan]ls[/cyan] [[yellow]<remote_path>[/yellow]]                - List files in remote directory")
-            display_info("  [cyan]cd[/cyan] [yellow]<remote_path>[/yellow]                  - Change remote working directory")
-            display_info("  [cyan]pwd[/cyan]                               - Show current remote directory")
+            display_info(
+                "  [cyan]put[/cyan] [yellow]<local_file>[/yellow] [[yellow]<remote_file>[/yellow]]  - Upload file to remote server"
+            )
+            display_info(
+                "  [cyan]get[/cyan] [yellow]<remote_file>[/yellow] [[yellow]<local_file>[/yellow]]  - Download file from remote server"
+            )
+            display_info(
+                "  [cyan]ls[/cyan] [[yellow]<remote_path>[/yellow]]                - List files in remote directory"
+            )
+            display_info(
+                "  [cyan]cd[/cyan] [yellow]<remote_path>[/yellow]                  - Change remote working directory"
+            )
+            display_info(
+                "  [cyan]pwd[/cyan]                               - Show current remote directory"
+            )
             display_info(
                 "  [cyan]mget[/cyan] [yellow]<pattern>[/yellow]                    - Download multiple files matching pattern"
             )
