@@ -5,7 +5,20 @@ All notable changes to LazySSH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.9] - 2025-03-31
+## [1.2.0] - 2025-03-29
+
+### Added
+- Added Rich progress bars for file transfers in SCP mode with real-time progress, transfer rate and time estimates
+- Restored the `lls` command for listing local directories with size and file count information
+- Enhanced file listings using Rich tables with proper formatting and color-coded file types
+- Added colorized output for better visual organization of important information
+
+### Changed
+- Improved progress tracking in SCP mode showing total bytes and elapsed time for all transfers
+- Enhanced date format consistency across file listings
+- Updated command help documentation to include all available commands
+
+## [1.1.9] - 2025-03-29
 
 ### Added
 - Added SCP mode support to prompt mode
