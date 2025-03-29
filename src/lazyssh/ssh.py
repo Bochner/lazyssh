@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 from rich.console import Console
+from rich.prompt import Confirm
 
 from .models import SSHConnection
 from .ui import display_error, display_info, display_success, display_warning
@@ -61,9 +62,8 @@ class SSHManager:
             display_info("The following SSH command will be executed:")
             display_info(" ".join(cmd))
 
-            # Ask for confirmation
-            confirmation = input("Do you want to proceed? (y/N): ").lower()
-            if confirmation != "y":
+            # Ask for confirmation using Rich's Confirm.ask for a color-coded prompt
+            if not Confirm.ask("Do you want to proceed?"):
                 display_info("Connection cancelled by user")
                 return False
 

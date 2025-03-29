@@ -5,6 +5,7 @@ LazySSH - Main module providing the entry point and interactive menus.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Literal
 
 import click
@@ -70,6 +71,8 @@ def handle_menu_action(choice: str) -> bool | Literal["mode"]:
         success = close_connection_menu()
     elif choice == "6":
         return "mode"  # Special return value to trigger mode switch
+    elif choice == "7":
+        success = scp_mode_menu()
     return success
 
 
@@ -88,7 +91,8 @@ def main_menu() -> str:
         "4": "Open terminal",
         "5": "Close connection",
         "6": "Switch to command mode",
-        "7": "Exit",
+        "7": "Enter SCP mode",
+        "8": "Exit",
     }
     display_menu(options)
     choice = get_user_input("Choose an option")
@@ -100,7 +104,7 @@ def create_connection_menu() -> bool:
     Interactive menu for creating a new SSH connection.
 
     Prompts the user for connection details including host, port, username,
-    and optional dynamic proxy settings.
+    and optional advanced settings like dynamic proxy, SSH key, shell, and terminal preference.
 
     Returns:
         True if the connection was successfully created, False otherwise.
@@ -120,6 +124,25 @@ def create_connection_menu() -> bool:
     if not username:
         display_error("Username is required")
         return False
+
+    # Ask about SSH key
+    use_ssh_key = get_user_input("Use specific SSH key? (y/N)").lower() == "y"
+    identity_file = None
+    if use_ssh_key:
+        identity_file = get_user_input("Enter path to SSH key (e.g. ~/.ssh/id_rsa)")
+        if not identity_file:
+            display_warning("No SSH key specified, using default SSH key")
+
+    # Ask about shell
+    use_custom_shell = get_user_input("Use custom shell? (y/N)").lower() == "y"
+    shell = None
+    if use_custom_shell:
+        shell = get_user_input("Enter shell to use (default: bash)")
+        if not shell:
+            display_warning("No shell specified, using default shell")
+
+    # Ask about terminal preference
+    no_term = get_user_input("Disable terminal? (y/N)").lower() == "y"
 
     # Ask about dynamic proxy
     use_proxy = get_user_input("Create dynamic SOCKS proxy? (y/N)").lower() == "y"
@@ -143,6 +166,9 @@ def create_connection_menu() -> bool:
         username=username,
         socket_path=f"/tmp/{socket_name}",
         dynamic_port=dynamic_port,
+        identity_file=identity_file,
+        shell=shell,
+        no_term=no_term,
     )
 
     # The SSH command will be displayed by the create_connection method
@@ -409,7 +435,7 @@ def prompt_mode_main() -> Literal["mode"] | None:
     while True:
         try:
             choice = main_menu()
-            if choice == "7":
+            if choice == "8":
                 if check_active_connections():
                     safe_exit()
                 return None
@@ -418,9 +444,74 @@ def prompt_mode_main() -> Literal["mode"] | None:
             if result == "mode":
                 return "mode"  # Return to trigger mode switch
         except KeyboardInterrupt:
-            display_warning("\nUse option 7 to safely exit LazySSH.")
+            display_warning("\nUse option 8 to safely exit LazySSH.")
         except Exception as e:
             display_error(f"Error: {str(e)}")
+
+
+def scp_mode_menu() -> bool:
+    """
+    Interactive menu for entering SCP mode.
+
+    Allows the user to select an active SSH connection and enter SCP mode
+    for file transfers.
+
+    Returns:
+        True if SCP mode was successfully entered, False otherwise.
+    """
+    if not ssh_manager.connections:
+        display_error("No active connections")
+        return False
+
+    display_info("Select connection for SCP mode:")
+    for i, (socket_path, conn) in enumerate(ssh_manager.connections.items(), 1):
+        display_info(f"{i}. {conn.host} ({conn.username})")
+
+    display_info(
+        f"{len(ssh_manager.connections) + 1}. Enter SCP mode without selecting a connection"
+    )
+
+    try:
+        input_value = get_user_input("Enter connection number (or cancel with 'q')")
+
+        # Check if user wants to cancel
+        if input_value.lower() == "q":
+            display_info("SCP mode canceled")
+            return True
+
+        choice = int(input_value)
+
+        if choice == len(ssh_manager.connections) + 1:
+            # Start SCP mode without a specific connection
+            display_info("Entering SCP mode...")
+            from .scp_mode import SCPMode
+
+            scp_mode = SCPMode(ssh_manager)
+            scp_mode.run()
+            display_info("Exited SCP mode")
+            return True
+        elif 1 <= choice <= len(ssh_manager.connections):
+            # Get selected connection
+            socket_path = list(ssh_manager.connections.keys())[choice - 1]
+            conn = ssh_manager.connections[socket_path]
+
+            # Extract connection name from socket path
+            connection_name = Path(socket_path).name
+
+            # Start SCP mode with the selected connection
+            display_info(f"Entering SCP mode with connection {connection_name}...")
+            from .scp_mode import SCPMode
+
+            scp_mode = SCPMode(ssh_manager, connection_name)
+            scp_mode.run()
+            display_info("Exited SCP mode")
+            return True
+        else:
+            display_error("Invalid connection number")
+    except ValueError:
+        display_error("Invalid input")
+
+    return False
 
 
 @click.command()
