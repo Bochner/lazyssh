@@ -210,6 +210,23 @@ This guide provides solutions to common issues you might encounter when using La
 3. Verify file existence before transfer
 4. Be careful with special characters in filenames
 
+### SCP Mode Issues
+
+**Problem**: File transfer fails or times out.  
+**Solution**: Check if the file exists and you have permission to access it. Also, ensure the SSH connection is still active using the `list` command.
+
+**Problem**: Cannot change directory with `cd` command.  
+**Solution**: Verify that the directory exists and you have permission to access it. Use absolute paths if relative paths are not working.
+
+**Problem**: Tree command runs slowly or appears to freeze with large directories.  
+**Solution**: The tree command may take longer to complete with very large directories as it needs to scan the entire directory structure. Try running it on a more specific subdirectory instead of the root directory. 
+
+**Problem**: Tree command shows incomplete directory structure.  
+**Solution**: Verify you have sufficient permissions to access all directories in the path. Some files or directories might be excluded if they require elevated permissions.
+
+**Problem**: File listing with `ls` shows no results or fails.  
+**Solution**: Check if you have permission to list the directory or if the directory is empty. Use `pwd` to confirm your current location.
+
 ## Graceful Shutdown Problems
 
 ### Connections Not Closing

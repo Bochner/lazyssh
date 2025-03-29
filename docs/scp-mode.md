@@ -30,13 +30,14 @@ If you don't specify a connection, LazySSH will display a list of active connect
 Once in SCP mode, you'll see a prompt that shows:
 
 ```
-scp myserver:/current/remote/path [/local/download/directory]>
+scp myserver:/current/remote/path [↓/local/download/directory | ↑/local/upload/directory]>
 ```
 
 This prompt displays:
 - The connection name (`myserver`)
 - Your current remote directory (`/current/remote/path`)
-- Your current local download directory (`/local/download/directory`)
+- Your current local download directory (`/local/download/directory`) marked with ↓
+- Your current local upload directory (`/local/upload/directory`) marked with ↑
 
 ## Basic File Operations
 
@@ -84,6 +85,10 @@ pwd
 # List remote directory contents
 ls
 ls /home/user/documents
+
+# Display remote directory structure in a tree view
+tree
+tree /home/user/projects
 ```
 
 #### Local Navigation
@@ -91,6 +96,13 @@ ls /home/user/documents
 ```bash
 # Set local download directory
 local ~/Downloads/server-files
+
+# Change local download directory
+lcd ~/Downloads/server-logs
+
+# Set specific download or upload directory
+local download ~/Downloads/server-files
+local upload ~/Uploads/server-files
 
 # Check current local directory
 local
@@ -136,6 +148,23 @@ The `lls` command also displays a summary at the end, showing:
 - Total number of files and directories
 - Total size of all files in human-readable format
 
+### Visualizing Directory Structure
+
+The `tree` command provides a hierarchical view of the remote directory structure:
+
+```bash
+# Display the current remote directory in tree format
+tree
+
+# Display a specific remote directory in tree format
+tree /var/www/html
+```
+
+This command:
+- Shows a visual tree representation of directories and files
+- Color-codes files by type (executables, images, archives, etc.)
+- Provides a count of total files and directories
+
 ## Command Reference
 
 | Command | Description | Syntax |
@@ -145,9 +174,11 @@ The `lls` command also displays a summary at the end, showing:
 | `mget` | Download multiple files | `mget <pattern>` |
 | `ls` | List remote files | `ls [<remote_path>]` |
 | `lls` | List local files | `lls [<local_path>]` |
+| `tree` | Display remote directory structure | `tree [<remote_path>]` |
 | `cd` | Change remote directory | `cd <remote_path>` |
+| `lcd` | Change local download directory | `lcd <local_path>` |
 | `pwd` | Show current remote directory | `pwd` |
-| `local` | Set/show local download directory | `local [<path>]` |
+| `local` | Set/show local download/upload directories | `local [<path>]` or `local [download|upload] <path>` |
 | `help` | Show help | `help [<command>]` |
 | `exit` | Exit SCP mode | `exit` |
 
@@ -159,10 +190,11 @@ The `lls` command also displays a summary at the end, showing:
 - Press Tab after typing a partial filename to auto-complete
 - Use `pwd` and `local` frequently to verify your current locations
 - Use `ls` with specific directories to explore without changing your current location
+- Use `tree` to get a visual overview of complex directory structures
 
 ### Download Organization
 
-- Use the `local` command to create separate download directories for different purposes
+- Use the `lcd` or `local` command to create separate download directories for different purposes
 - Set up a logical directory structure to keep downloaded files organized
 - Consider using date-based directories for log files or other time-based downloads
 
@@ -190,6 +222,7 @@ The `lls` command also displays a summary at the end, showing:
 **Log Analysis:**
 ```bash
 cd /var/log
+tree  # Get a quick overview of log file organization
 ls
 mget apache2/*.log
 exit
@@ -199,6 +232,7 @@ exit
 **Configuration Backup:**
 ```bash
 cd /etc
+tree nginx  # See the structure of the nginx config directory
 mget *.conf
 exit
 # Now you have backups of all config files

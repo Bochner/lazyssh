@@ -114,4 +114,27 @@ If you get authentication errors:
 
 If your package is missing files:
 - Check your `MANIFEST.in` file
-- Run `python -m build` locally and inspect the resulting wheel and tarball 
+- Run `python -m build` locally and inspect the resulting wheel and tarball
+
+## Versioning
+
+LazySSH uses [Semantic Versioning](https://semver.org/), which follows the pattern MAJOR.MINOR.PATCH:
+
+- MAJOR version for incompatible API changes
+- MINOR version for added functionality in a backward compatible manner
+- PATCH version for backward compatible bug fixes
+
+The version is maintained in the `pyproject.toml` file under the `[project]` section.
+
+To update the version:
+
+1. Edit the `pyproject.toml` file:
+
+```toml
+[project]
+name = "lazyssh"
+version = "1.2.1"  # <- Update this version number
+# ...
+```
+
+2. Update the `CHANGELOG.md` file to reflect the changes in the new version 

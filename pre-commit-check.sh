@@ -112,23 +112,14 @@ echo "🔍 Verifying package with twine..."
 twine check dist/*
 echo "✅ Package verification passed"
 
-# Check 9: Verify Python requirement in pyproject.toml and setup.py
-echo "🔍 Checking Python version requirements in package files..."
+# Check 9: Verify Python requirement in pyproject.toml
+echo "🔍 Checking Python version requirement in pyproject.toml..."
 if [ -f "pyproject.toml" ]; then
     PYPROJECT_PYTHON_REQ=$(grep -E "requires-python|python_requires" pyproject.toml)
     echo "ℹ️ pyproject.toml Python requirement: $PYPROJECT_PYTHON_REQ"
     
     if ! grep -q ">=3.11" pyproject.toml; then
         echo "⚠️ Python requirement in pyproject.toml should be >=3.11"
-    fi
-fi
-
-if [ -f "setup.py" ]; then
-    SETUP_PYTHON_REQ=$(grep -E "python_requires" setup.py)
-    echo "ℹ️ setup.py Python requirement: $SETUP_PYTHON_REQ"
-    
-    if ! grep -q ">=3.11" setup.py; then
-        echo "⚠️ Python requirement in setup.py should be >=3.11"
     fi
 fi
 

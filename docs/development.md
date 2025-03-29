@@ -60,8 +60,7 @@ lazyssh/
 ├── docs/                   # Documentation
 ├── scripts/                # Utility scripts
 ├── .github/                # GitHub workflows and templates
-├── pyproject.toml          # Project configuration
-├── setup.py                # Package installation
+├── pyproject.toml          # Project configuration and packaging
 ├── requirements.txt        # Dependencies
 ├── Makefile                # Development tasks
 ├── pre-commit-check.sh     # Script to run all CI checks locally

@@ -14,9 +14,10 @@ LazySSH simplifies SSH connection management with an elegant CLI interface. It h
 - **Connection Management**: Handle multiple SSH connections with control sockets
 - **Tunneling**: Create forward and reverse tunnels with simple commands
 - **Dynamic Proxy**: Set up SOCKS proxy for secure browsing
-- **SCP Mode**: Transfer files securely between local and remote systems
+- **SCP Mode**: Transfer files securely between local and remote systems with rich visualization
 - **Terminal Integration**: Open terminal sessions directly from LazySSH
 - **Human-Readable Output**: Sizes and formatting optimized for readability
+- **Rich Visual Elements**: Color coding, progress bars, and tree visualizations
 
 ## Quick Start
 
@@ -25,6 +26,7 @@ LazySSH simplifies SSH connection management with an elegant CLI interface. It h
 ```bash
 # Install globally
 pip install lazyssh
+pipx install lazyssh
 
 # Or install for the current user only
 pip install --user lazyssh
@@ -50,6 +52,12 @@ lazyssh> term myserver
 
 # Transfer files (SCP mode)
 lazyssh> scp myserver
+
+# In SCP mode: visualize remote directory tree
+scp myserver:/home/user> tree
+
+# Download files
+scp myserver:/home/user> get config.json
 ```
 
 ## Documentation
