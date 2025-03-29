@@ -238,13 +238,13 @@ class CommandMode:
         }
 
         # Create the history directory if it doesn't exist
-        history_dir = os.path.expanduser("~/.lazyssh")
+        history_dir = str(Path.home() / ".lazyssh")
         os.makedirs(history_dir, exist_ok=True)
 
         # Initialize prompt_toolkit components
         self.completer = LazySSHCompleter(self)
         self.session: PromptSession = PromptSession(
-            history=FileHistory(os.path.expanduser("~/.lazyssh/command_history"))
+            history=FileHistory(str(Path.home() / ".lazyssh" / "command_history"))
         )
         self.style = Style.from_dict(
             {
@@ -379,8 +379,10 @@ class CommandMode:
             socket_path = f"/tmp/{params['socket']}"
             if socket_path in self.ssh_manager.connections:
                 display_warning(f"Socket name '{params['socket']}' is already in use.")
-                confirmation = input("Do you want to use a different name? (Y/n): ").lower()
-                if confirmation == "n":
+                # Use Rich's Confirm.ask for a color-coded prompt (same as prompt mode)
+                from rich.prompt import Confirm
+
+                if not Confirm.ask("Do you want to use a different name?", default=True):
                     display_info("Proceeding with the existing socket name.")
                 else:
                     new_socket = input("Enter a new socket name: ")
@@ -705,9 +707,10 @@ class CommandMode:
 
         # Check if there are active connections and prompt for confirmation
         if self.ssh_manager.connections:
-            # Prompt user for confirmation
-            confirmation = input("You have active connections. Close them and exit? (y/N): ")
-            if confirmation.lower() != "y":
+            # Use Rich's Confirm.ask for a color-coded prompt (same as prompt mode)
+            from rich.prompt import Confirm
+
+            if not Confirm.ask("You have active connections. Close them and exit?"):
                 display_info("Exit cancelled")
                 return True
 

@@ -10,14 +10,13 @@ readme = "README.md"
 authors = [
     {name = "Bochner", email = "lazyssh@example.com"}
 ]
-license = {text = "MIT"}
+license = "MIT"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: System Administrators",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Environment :: Console",
     "Topic :: System :: Networking",

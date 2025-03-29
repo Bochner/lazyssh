@@ -5,6 +5,20 @@ All notable changes to LazySSH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2025-03-31
+
+### Added
+- Added SCP mode support to prompt mode
+- Enhanced SSH connection creation in prompt mode with support for additional options:
+  - Custom SSH key specification (-ssh-key)
+  - Custom shell selection (-shell)
+  - Terminal disabling option (-no-term)
+
+### Changed
+- Improved UI with colorized confirmation prompts throughout the application
+- Modernized code by replacing os.path with pathlib.Path
+- Updated package configuration to resolve setuptools warnings
+
 ## [1.1.8] - 2025-03-29
 
 ### Changed

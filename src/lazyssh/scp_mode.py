@@ -13,6 +13,7 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
+from rich.prompt import Confirm, IntPrompt
 
 from .models import SSHConnection
 from .ssh import SSHManager
@@ -279,24 +280,24 @@ class SCPMode:
         self.commands = {
             "help": self.cmd_help,
             "exit": self.cmd_exit,
+            "quit": self.cmd_exit,
             "put": self.cmd_put,
             "get": self.cmd_get,
             "ls": self.cmd_ls,
-            "lls": self.cmd_lls,  # New command for local directory listing
-            "cd": self.cmd_cd,
             "pwd": self.cmd_pwd,
-            "mget": self.cmd_mget,
+            "cd": self.cmd_cd,
             "local": self.cmd_local,
+            "mget": self.cmd_mget,
         }
 
         # Create the history directory if it doesn't exist
-        history_dir = os.path.expanduser("~/.lazyssh")
+        history_dir = str(Path.home() / ".lazyssh")
         os.makedirs(history_dir, exist_ok=True)
 
         # Initialize prompt_toolkit components
         self.completer = SCPModeCompleter(self)
         self.session: PromptSession = PromptSession(
-            history=FileHistory(os.path.expanduser("~/.lazyssh/scp_history"))
+            history=FileHistory(str(Path.home() / ".lazyssh" / "scp_history"))
         )
         self.style = Style.from_dict(
             {
@@ -305,6 +306,18 @@ class SCPMode:
                 "local": "ansiblue",
             }
         )
+
+        if selected_connection:
+            socket_path = f"/tmp/{selected_connection}"
+            if socket_path in ssh_manager.connections:
+                self.conn = ssh_manager.connections[socket_path]
+                self.socket_path = socket_path
+                conn_data_dir = self.conn.downloads_dir if self.conn else None
+                if conn_data_dir:
+                    self.local_download_dir = conn_data_dir
+                conn_upload_dir = self.conn.uploads_dir if self.conn else None
+                if conn_upload_dir:
+                    self.local_upload_dir = conn_upload_dir
 
     def connect(self) -> bool:
         """Verify the SSH connection is active via control socket"""
@@ -451,19 +464,17 @@ class SCPMode:
             conn = connection_map[name]
             display_info(f"{i}. {name} ({conn.username}@{conn.host})")
 
-        while True:
-            try:
-                choice = input("Enter selection (number or name): ")
-                if choice.isdigit() and 1 <= int(choice) <= len(connections):
-                    self.selected_connection = connections[int(choice) - 1]
-                    return True
-                elif choice in connections:
-                    self.selected_connection = choice
-                    return True
-                else:
-                    display_error("Invalid selection")
-            except (KeyboardInterrupt, EOFError):
+        # Use Rich's prompt for the connection selection
+        try:
+            choice = IntPrompt.ask("Enter selection (number)", default=1)
+            if 1 <= choice <= len(connections):
+                self.selected_connection = connections[choice - 1]
+                return True
+            else:
+                display_error("Invalid selection")
                 return False
+        except (KeyboardInterrupt, EOFError):
+            return False
 
     def _resolve_remote_path(self, path: str) -> str:
         """Resolve a remote path relative to the current directory"""
@@ -715,11 +726,10 @@ class SCPMode:
             human_total = self._format_file_size(total_size)
             display_info(f"Total download size: {human_total}")
 
-            # Confirm download
-            confirmation = input(
-                f"Download {len(matched_files)} files to {self.local_download_dir}? (y/N): "
-            )
-            if confirmation.lower() != "y":
+            # Confirm download using Rich's Confirm.ask for a color-coded prompt
+            if not Confirm.ask(
+                f"Download {len(matched_files)} files to {self.local_download_dir}?"
+            ):
                 display_info("Download cancelled")
                 return False
 
@@ -869,29 +879,14 @@ class SCPMode:
                 display_info(
                     "If [yellow]<remote_path>[/yellow] is not specified, lists the current remote directory"
                 )
-            elif cmd == "lls":
-                display_info("[bold cyan]\nList files in the local download directory:[/bold cyan]")
-                display_info(
-                    "[yellow]Usage:[/yellow] [cyan]lls[/cyan] [[yellow]<local_path>[/yellow]]"
-                )
-                display_info(
-                    "If [yellow]<local_path>[/yellow] is not specified, lists the current local download directory"
-                )
-                display_info("[dim]Shows file details, total size, and file count[/dim]")
+            elif cmd == "pwd":
+                display_info("[bold cyan]\nShow current remote working directory:[/bold cyan]")
+                display_info("[yellow]Usage:[/yellow] [cyan]pwd[/cyan]")
             elif cmd == "cd":
                 display_info("[bold cyan]\nChange remote working directory:[/bold cyan]")
                 display_info(
                     "[yellow]Usage:[/yellow] [cyan]cd[/cyan] [yellow]<remote_path>[/yellow]"
                 )
-            elif cmd == "pwd":
-                display_info("[bold cyan]\nShow current remote working directory:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]pwd[/cyan]")
-            elif cmd == "mget":
-                display_info("[bold cyan]\nDownload multiple files matching a pattern:[/bold cyan]")
-                display_info(
-                    "[yellow]Usage:[/yellow] [cyan]mget[/cyan] [yellow]<remote_file_pattern>[/yellow]"
-                )
-                display_info("[dim]Supports wildcard patterns (e.g., *.txt)[/dim]")
             elif cmd == "local":
                 display_info(
                     "[bold cyan]\nSet or display local download and upload directories:[/bold cyan]"
@@ -921,10 +916,8 @@ class SCPMode:
         display_info("  [cyan]put[/cyan]     - Upload a file to the remote server")
         display_info("  [cyan]get[/cyan]     - Download a file from the remote server")
         display_info("  [cyan]ls[/cyan]      - List files in a remote directory")
-        display_info("  [cyan]lls[/cyan]     - List files in the local download directory")
-        display_info("  [cyan]cd[/cyan]      - Change remote working directory")
         display_info("  [cyan]pwd[/cyan]     - Show current remote working directory")
-        display_info("  [cyan]mget[/cyan]    - Download multiple files matching a pattern")
+        display_info("  [cyan]cd[/cyan]      - Change remote working directory")
         display_info("  [cyan]local[/cyan]   - Set or display local download directory")
         display_info("  [cyan]exit[/cyan]    - Exit SCP mode")
         display_info(

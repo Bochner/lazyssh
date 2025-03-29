@@ -4,8 +4,8 @@ LazySSH - Main module providing the entry point and interactive menus.
 """
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 from typing import Literal
 
 import click
@@ -496,7 +496,7 @@ def scp_mode_menu() -> bool:
             conn = ssh_manager.connections[socket_path]
 
             # Extract connection name from socket path
-            connection_name = os.path.basename(socket_path)
+            connection_name = Path(socket_path).name
 
             # Start SCP mode with the selected connection
             display_info(f"Entering SCP mode with connection {connection_name}...")
