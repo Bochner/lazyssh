@@ -309,6 +309,24 @@ lls
 lls ./downloads
 ```
 
+### `tree`
+
+Displays a hierarchical tree view of the remote directory structure.
+
+**Syntax:**
+```
+tree [<remote_path>]
+```
+
+**Parameters:**
+- `remote_path`: (Optional) Path to display as a tree. If not specified, displays the current remote directory.
+
+**Example:**
+```bash
+tree
+tree /var/www/html
+```
+
 ### `cd`
 
 Changes the current remote directory.
@@ -327,6 +345,24 @@ cd /home/user/documents
 cd ..
 ```
 
+### `lcd`
+
+Changes the local download directory.
+
+**Syntax:**
+```
+lcd <local_path>
+```
+
+**Parameters:**
+- `local_path`: Local path to set as the download directory
+
+**Example:**
+```bash
+lcd ~/Downloads/server-files
+lcd ../backup-files
+```
+
 ### `pwd`
 
 Shows the current remote working directory.
@@ -343,20 +379,25 @@ pwd
 
 ### `local`
 
-Sets or displays the local download directory.
+Sets or displays the local download and upload directories.
 
 **Syntax:**
 ```
 local [<path>]
+local [download|upload] <path>
 ```
 
 **Parameters:**
-- `path`: (Optional) Local path to set as the download directory. If not specified, displays the current local download directory.
+- `path`: (Optional) Local path to set as the download/upload directory. If not specified, displays the current local directories.
+- `download`: Specifies to set only the download directory
+- `upload`: Specifies to set only the upload directory
 
 **Example:**
 ```bash
 local
 local ~/Downloads/server-files
+local download ~/Downloads/server-logs
+local upload ~/Uploads/server-files
 ```
 
 ### `help`

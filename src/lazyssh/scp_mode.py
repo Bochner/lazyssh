@@ -26,6 +26,7 @@ from rich.progress import (
 from rich.prompt import Confirm, IntPrompt
 from rich.table import Table
 from rich.text import Text
+from rich.tree import Tree
 
 from .models import SSHConnection
 from .ssh import SSHManager
@@ -58,7 +59,7 @@ class SCPModeCompleter(Completer):
         command = words[0].lower()
 
         # Add command-specific completions based on first word
-        if command in ["get", "ls", "mget"] and (len(words) == 1 or len(words) == 2):
+        if command in ["get", "ls", "mget", "tree"] and (len(words) == 1 or len(words) == 2):
             # Always offer completions after typing the command and a space
             if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
                 # If we have an active connection, try to complete remote files
@@ -301,6 +302,8 @@ class SCPMode:
             "local": self.cmd_local,
             "mget": self.cmd_mget,
             "lls": self.cmd_lls,
+            "tree": self.cmd_tree,
+            "lcd": self.cmd_lcd,
         }
 
         # Create the history directory if it doesn't exist
@@ -1166,6 +1169,12 @@ class SCPMode:
                 display_info(
                     "  [cyan]local upload[/cyan] [yellow]<path>[/yellow]   - Set the upload directory"
                 )
+            elif cmd == "lcd":
+                display_info("[bold cyan]\nChange local download directory:[/bold cyan]")
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]lcd[/cyan] [yellow]<local_path>[/yellow]"
+                )
+                display_info("Change the directory where files are downloaded to")
             elif cmd == "exit":
                 display_info("[bold cyan]\nExit SCP mode and return to lazyssh prompt:[/bold cyan]")
                 display_info("[yellow]Usage:[/yellow] [cyan]exit[/cyan]")
@@ -1180,6 +1189,16 @@ class SCPMode:
                     "If [yellow]<local_path>[/yellow] is not specified, lists the current local download directory"
                 )
                 display_info("Shows file sizes and directory summary information")
+            elif cmd == "tree":
+                display_info(
+                    "[bold cyan]\nDisplay a tree view of the remote directory structure:[/bold cyan]"
+                )
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]tree[/cyan] [[yellow]<remote_path>[/yellow]]"
+                )
+                display_info(
+                    "If [yellow]<remote_path>[/yellow] is not specified, displays the current remote directory"
+                )
             else:
                 display_error(f"Unknown command: {cmd}")
                 self.cmd_help([])
@@ -1190,8 +1209,12 @@ class SCPMode:
         display_info("  [cyan]get[/cyan]     - Download a file from the remote server")
         display_info("  [cyan]ls[/cyan]      - List files in a remote directory")
         display_info("  [cyan]lls[/cyan]     - List files in the local download directory")
+        display_info(
+            "  [cyan]tree[/cyan]    - Display a tree view of the remote directory structure"
+        )
         display_info("  [cyan]pwd[/cyan]     - Show current remote working directory")
         display_info("  [cyan]cd[/cyan]      - Change remote working directory")
+        display_info("  [cyan]lcd[/cyan]     - Change local download directory")
         display_info("  [cyan]local[/cyan]   - Set or display local download directory")
         display_info("  [cyan]exit[/cyan]    - Exit SCP mode")
         display_info(
@@ -1327,4 +1350,139 @@ class SCPMode:
 
         except Exception as e:
             display_error(f"Error listing directory: {str(e)}")
+            return False
+
+    def cmd_tree(self, args: list[str]) -> bool:
+        """Display a tree view of the remote directory structure"""
+        try:
+            # Determine which remote directory to show
+            if args:
+                remote_path = self._resolve_remote_path(args[0])
+            else:
+                remote_path = self.current_remote_dir
+
+            # First check if the path exists and is a directory
+            check_cmd = f"[ -d {shlex.quote(remote_path)} ] && echo 'DIR_EXISTS' || echo 'NOT_DIR'"
+            result = self._execute_ssh_command(check_cmd)
+            if not result or result.returncode != 0 or "NOT_DIR" in result.stdout:
+                display_error(f"Remote path is not a directory: {remote_path}")
+                return False
+
+            # Get listing of files recursively with find, including file type information
+            # The format string will give us: <type><path> where type is 'd' for directory, 'f' for file
+            find_cmd = f"""find {shlex.quote(remote_path)} \\( -type f -printf "f%p\\n" , -type d -printf "d%p\\n" \\) | sort"""
+            result = self._execute_ssh_command(find_cmd)
+
+            if not result or result.returncode != 0:
+                display_error(
+                    f"Failed to list directory contents: {result.stderr if result else 'Unknown error'}"
+                )
+                return False
+
+            # Create the root tree node
+            tree = Tree(f"[bold cyan]{remote_path}[/]")
+            path_to_node = {remote_path: tree}
+
+            # Track statistics
+            file_count = 0
+            dir_count = 1  # Start with 1 for the root directory
+
+            # Process each entry from the find results, which already includes type information
+            for line in result.stdout.strip().split("\n"):
+                if not line or len(line) <= 1:
+                    continue
+
+                # Extract type and path
+                entry_type = line[0]
+                path = line[1:]
+
+                # Skip the root path itself
+                if path == remote_path:
+                    continue
+
+                # Determine the parent path
+                parent_path = str(Path(path).parent)
+
+                # Skip if parent not found (shouldn't happen with sorted find output)
+                if parent_path not in path_to_node:
+                    continue
+
+                # Get the parent node
+                parent_node = path_to_node[parent_path]
+
+                # Create a node for this path
+                filename = Path(path).name
+
+                if entry_type == "d":  # Directory
+                    dir_count += 1
+                    node = parent_node.add(f"[bold blue]{filename}/[/]")
+                    path_to_node[path] = node
+                else:  # File
+                    file_count += 1
+                    # Style based on file extension
+                    if any(
+                        filename.endswith(ext) for ext in [".py", ".js", ".sh", ".bash", ".zsh"]
+                    ):
+                        node = parent_node.add(f"[green]{filename}[/]")
+                    elif any(
+                        filename.endswith(ext)
+                        for ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff"]
+                    ):
+                        node = parent_node.add(f"[magenta]{filename}[/]")
+                    elif any(
+                        filename.endswith(ext) for ext in [".mp4", ".avi", ".mov", ".mkv", ".wmv"]
+                    ):
+                        node = parent_node.add(f"[cyan]{filename}[/]")
+                    elif any(
+                        filename.endswith(ext)
+                        for ext in [".tar", ".gz", ".zip", ".rar", ".7z", ".bz2"]
+                    ):
+                        node = parent_node.add(f"[yellow]{filename}[/]")
+                    else:
+                        node = parent_node.add(filename)
+
+            # Display the tree
+            console = Console()
+            console.print(tree)
+            console.print(
+                f"\nTotal: [bold cyan]{file_count}[/] files, [bold cyan]{dir_count}[/] directories"
+            )
+
+            return True
+
+        except Exception as e:
+            display_error(f"Error displaying directory tree: {str(e)}")
+            return False
+
+    def cmd_lcd(self, args: list[str]) -> bool:
+        """Change local download directory"""
+        if not args:
+            display_error("Usage: lcd <local_path>")
+            return False
+
+        try:
+            # Resolve path (make absolute if needed)
+            path = args[0]
+            path_obj = Path(path)
+            if not path_obj.is_absolute():
+                path_obj = path_obj.absolute()
+
+            new_path = str(path_obj)
+
+            # Create directory if it doesn't exist
+            if not path_obj.exists():
+                display_info(f"Local directory does not exist, creating: {new_path}")
+                path_obj.mkdir(parents=True, exist_ok=True)
+                # Ensure proper permissions
+                path_obj.chmod(0o755)
+            elif not path_obj.is_dir():
+                display_error(f"Path exists but is not a directory: {new_path}")
+                return False
+
+            # Set the local download directory
+            self.local_download_dir = new_path
+            display_success(f"Local download directory set to: {new_path}")
+            return True
+        except Exception as e:
+            display_error(f"Failed to change local directory: {str(e)}")
             return False

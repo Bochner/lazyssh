@@ -5,6 +5,27 @@ All notable changes to LazySSH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2025-03-29
+
+### Added
+- Added "tree" command to SCP mode to display remote directory structure in a hierarchical view using Rich's tree module
+- Added tab completion support for the tree command matching the behavior of the ls command
+- Added detailed help documentation for the tree command
+- Added documentation for all new commands in user guides and command references
+
+### Fixed
+- Optimized tree command to minimize SSH connections for better performance with large directory structures
+- Fixed "lcd" command in SCP mode that was present in the code but not working properly
+- Added proper help documentation and tab completion for the LCD command in SCP mode
+
+### Changed
+- Removed setup.py in favor of using pyproject.toml exclusively for modern Python packaging
+- Updated pre-commit checks to verify Python requirements only in pyproject.toml
+- Updated documentation to reflect all new commands and features
+- Improved SCP mode documentation with more detailed examples and common workflows
+- Added troubleshooting information for tree command and large directory visualization
+- Updated README with latest feature information and examples
+
 ## [1.2.0] - 2025-03-29
 
 ### Added

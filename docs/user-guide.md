@@ -182,9 +182,11 @@ In SCP mode, you'll have access to commands for transferring files securely:
 - `mget <pattern>` - Download multiple files
 - `ls [<path>]` - List remote files
 - `lls [<path>]` - List local files
+- `tree [<path>]` - Display remote directory structure in a tree view
 - `cd <path>` - Change remote directory
+- `lcd <path>` - Change local download directory
 - `pwd` - Show remote directory
-- `local [<path>]` - Set/show local download directory
+- `local [<path>]` - Set/show local download/upload directories
 - `exit` - Return to LazySSH
 
 ### 7. Closing Connections
@@ -230,6 +232,16 @@ This will:
 3. Ask for confirmation
 4. Download all matching files
 
+#### Directory Tree Visualization
+
+View the structure of remote directories in a hierarchical tree format:
+
+```
+scp myserver> tree /var/www
+```
+
+This will display a color-coded tree of all files and directories, making it easy to understand complex directory structures at a glance.
+
 #### Remote File Navigation
 
 ```
@@ -242,6 +254,7 @@ scp myserver> ls
 
 ```
 scp myserver> local ~/Downloads
+scp myserver> lcd ~/Downloads/server-logs
 ```
 
 ## Environment Variables
