@@ -15,7 +15,14 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 from rich.console import Console
-from rich.progress import Progress, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 from rich.prompt import Confirm, IntPrompt
 from rich.table import Table
 from rich.text import Text
@@ -556,7 +563,7 @@ class SCPMode:
             # Get file size for progress tracking
             file_size = self._get_file_size(local_file)
             human_size = self._format_file_size(file_size)
-            
+
             display_info(f"Uploading {local_file} to {remote_file} ({human_size})...")
 
             # Get the SCP command
@@ -575,20 +582,19 @@ class SCPMode:
                 TimeRemainingColumn(),
             ) as progress:
                 task = progress.add_task(f"Uploading {Path(local_file).name}", total=file_size)
-                
+
                 # Start the upload process
                 process = subprocess.Popen(
-                    cmd, 
-                    stdout=subprocess.PIPE, 
-                    stderr=subprocess.PIPE,
-                    text=True
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-                
+
                 # For uploads, we cannot easily track progress, so use an estimation approach
                 # that smoothly progresses from 0 to 100%
                 start_time = time.time()
-                estimated_duration = max(2, file_size / 1000000)  # Estimate based on file size (min 2 seconds)
-                
+                estimated_duration = max(
+                    2, file_size / 1000000
+                )  # Estimate based on file size (min 2 seconds)
+
                 while process.poll() is None:
                     elapsed = time.time() - start_time
                     # Calculate progress as a percentage of estimated time
@@ -596,10 +602,10 @@ class SCPMode:
                     current_progress = int(file_size * progress_percentage)
                     progress.update(task, completed=current_progress)
                     time.sleep(0.1)
-                
+
                 # Complete the progress bar
                 progress.update(task, completed=file_size)
-                
+
                 result = process.wait()
                 stderr = process.stderr.read() if process.stderr else ""
 
@@ -668,15 +674,12 @@ class SCPMode:
                 TimeRemainingColumn(),
             ) as progress:
                 task = progress.add_task(f"Downloading {Path(remote_file).name}", total=file_size)
-                
+
                 # Start the download process
                 process = subprocess.Popen(
-                    cmd, 
-                    stdout=subprocess.PIPE, 
-                    stderr=subprocess.PIPE,
-                    text=True
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-                
+
                 # Monitor progress
                 downloaded_file = Path(local_file)
                 while process.poll() is None:
@@ -685,10 +688,10 @@ class SCPMode:
                         progress.update(task, completed=current_size)
                     # Sleep a bit to avoid too frequent updates
                     time.sleep(0.1)
-                
+
                 # Complete the progress bar
                 progress.update(task, completed=file_size)
-                
+
                 result = process.wait()
                 stderr = process.stderr.read() if process.stderr else ""
 
@@ -727,8 +730,10 @@ class SCPMode:
             display_info(f"Contents of [bold blue]{path}[/]:")
 
             # Create a Rich table
-            table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1))
-            
+            table = Table(
+                show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1)
+            )
+
             # Add columns
             table.add_column("Permissions", style="dim")
             table.add_column("Links", justify="right", style="dim")
@@ -744,35 +749,35 @@ class SCPMode:
                 # Skip total line
                 if line.startswith("total "):
                     continue
-                    
+
                 # Parse the ls -la output, which follows a standard format
                 # Example: -rw-r--r-- 1 username group 12345 Jan 01 12:34 filename
                 parts = line.split(maxsplit=8)
                 if len(parts) < 9:
                     continue
-                    
+
                 perms, links, owner, group, size_str, date1, date2, date3, name = parts
-                
+
                 # Format the size to be human readable
                 try:
                     size_bytes = int(size_str)
                     human_size = self._format_file_size(size_bytes)
                 except ValueError:
                     human_size = size_str
-                
+
                 # Format the date in a consistent way - attempt to convert to a standard format
                 try:
                     # Try to parse the date parts into a consistent format
                     # Handle different date formats from ls
                     date_str = f"{date1} {date2} {date3}"
-                    
+
                     # Parse the date - try different formats
                     date_formats = [
-                        "%b %d %Y",      # Jan 01 2023
-                        "%b %d %H:%M",   # Jan 01 12:34
-                        "%Y-%m-%d %H:%M" # 2023-01-01 12:34
+                        "%b %d %Y",  # Jan 01 2023
+                        "%b %d %H:%M",  # Jan 01 12:34
+                        "%Y-%m-%d %H:%M",  # 2023-01-01 12:34
                     ]
-                    
+
                     parsed_date = None
                     for fmt in date_formats:
                         try:
@@ -780,7 +785,7 @@ class SCPMode:
                             break
                         except ValueError:
                             continue
-                    
+
                     if parsed_date:
                         # Format in a consistent way
                         date = time.strftime("%b %d %Y %H:%M", parsed_date)
@@ -790,18 +795,20 @@ class SCPMode:
                 except Exception:
                     # If any error, just use the original
                     date = f"{date1} {date2} {date3}"
-                
+
                 # Color the filename based on type
                 name_text = Text(name)
                 if perms.startswith("d"):  # Directory
                     name_text.stylize("bold blue")
                 elif perms.startswith("l"):  # Symlink
                     name_text.stylize("cyan")
-                elif perms.startswith("-") and ("x" in perms[1:4] or "x" in perms[4:7] or "x" in perms[7:10]):  # Executable
+                elif perms.startswith("-") and (
+                    "x" in perms[1:4] or "x" in perms[4:7] or "x" in perms[7:10]
+                ):  # Executable
                     name_text.stylize("green")
-                
+
                 table.add_row(perms, links, owner, group, human_size, date, name_text)
-                
+
             # Display the table
             console = Console()
             console.print(table)
@@ -878,14 +885,16 @@ class SCPMode:
 
             # Display matched files in a Rich table instead of simple list
             display_info(f"Found {len(matched_files)} matching files:")
-            
+
             # Create a Rich table for listing the files
-            table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1))
-            
+            table = Table(
+                show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1)
+            )
+
             # Add columns
             table.add_column("Filename", style="cyan")
             table.add_column("Size", justify="right")
-            
+
             # Add files to table
             for filename in matched_files:
                 # Get file size
@@ -905,7 +914,7 @@ class SCPMode:
                         table.add_row(filename, "unknown size")
                 else:
                     table.add_row(filename, "unknown size")
-            
+
             # Display the table
             console = Console()
             console.print(table)
@@ -929,10 +938,10 @@ class SCPMode:
 
             # Download files with progress tracking
             success_count = 0
-            
+
             # Start timing the download
             start_time = time.time()
-            
+
             with Progress(
                 TextColumn("[bold blue]{task.description}", justify="right"),
                 BarColumn(),
@@ -945,8 +954,8 @@ class SCPMode:
                 TimeRemainingColumn(),
             ) as progress:
                 # Create a task for overall progress based on total bytes, not file count
-                overall_task = progress.add_task(f"Overall progress", total=total_size)
-                
+                overall_task = progress.add_task("Overall progress", total=total_size)
+
                 for idx, filename in enumerate(matched_files):
                     remote_file = str(Path(self.current_remote_dir) / filename)
                     local_file = str(Path(self.local_download_dir) / filename)
@@ -954,20 +963,19 @@ class SCPMode:
 
                     try:
                         # Create a task for this file
-                        file_task = progress.add_task(f"[cyan]Downloading {filename}", total=file_size)
-                        
+                        file_task = progress.add_task(
+                            f"[cyan]Downloading {filename}", total=file_size
+                        )
+
                         # Get the SCP command
                         remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
                         cmd = self._get_scp_command(remote_path, local_file)
 
                         # Start the download process
                         process = subprocess.Popen(
-                            cmd, 
-                            stdout=subprocess.PIPE, 
-                            stderr=subprocess.PIPE,
-                            text=True
+                            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                         )
-                        
+
                         # Monitor progress
                         downloaded_file = Path(local_file)
                         last_size = 0
@@ -976,25 +984,25 @@ class SCPMode:
                                 current_size = downloaded_file.stat().st_size
                                 # Update file progress
                                 progress.update(file_task, completed=current_size)
-                                
+
                                 # Update overall progress with the delta from last check
                                 if current_size > last_size:
                                     progress.update(overall_task, advance=current_size - last_size)
                                     last_size = current_size
                             time.sleep(0.1)
-                        
+
                         # Complete the progress bar for this file
                         final_size = file_size
                         if downloaded_file.exists():
                             final_size = downloaded_file.stat().st_size
-                        
+
                         # Update file task to completion
                         progress.update(file_task, completed=final_size)
-                        
+
                         # Update overall progress with any remaining bytes
                         if final_size > last_size:
                             progress.update(overall_task, advance=final_size - last_size)
-                        
+
                         result = process.wait()
                         stderr = process.stderr.read() if process.stderr else ""
 
@@ -1002,7 +1010,7 @@ class SCPMode:
                             display_error(f"Failed to download {filename}: {stderr}")
                         else:
                             success_count += 1
-                        
+
                     except Exception as e:
                         display_error(f"Failed to download {filename}: {str(e)}")
 
@@ -1162,9 +1170,15 @@ class SCPMode:
                 display_info("[bold cyan]\nExit SCP mode and return to lazyssh prompt:[/bold cyan]")
                 display_info("[yellow]Usage:[/yellow] [cyan]exit[/cyan]")
             elif cmd == "lls":
-                display_info("[bold cyan]\nList contents of the local download directory:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]lls[/cyan] [[yellow]<local_path>[/yellow]]")
-                display_info("If [yellow]<local_path>[/yellow] is not specified, lists the current local download directory")
+                display_info(
+                    "[bold cyan]\nList contents of the local download directory:[/bold cyan]"
+                )
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]lls[/cyan] [[yellow]<local_path>[/yellow]]"
+                )
+                display_info(
+                    "If [yellow]<local_path>[/yellow] is not specified, lists the current local download directory"
+                )
                 display_info("Shows file sizes and directory summary information")
             else:
                 display_error(f"Unknown command: {cmd}")
@@ -1225,8 +1239,10 @@ class SCPMode:
             display_info(f"Contents of [bold blue]{target_dir_path}[/]:")
 
             # Create a Rich table
-            table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1))
-            
+            table = Table(
+                show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1)
+            )
+
             # Add columns - removed Type column
             table.add_column("Permissions", style="dim")
             table.add_column("Size", justify="right")
@@ -1242,7 +1258,7 @@ class SCPMode:
             for item in sorted(target_dir_path.iterdir()):
                 # Get file stat info
                 stat = item.stat()
-                
+
                 # Format permission bits similar to Unix ls
                 mode = stat.st_mode
                 perms = ""
@@ -1250,10 +1266,10 @@ class SCPMode:
                     perms += "r" if mode & (who >> 2) else "-"
                     perms += "w" if mode & (who >> 1) else "-"
                     perms += "x" if mode & who else "-"
-                
+
                 # Format modification time - more concise format
                 mtime = time.strftime("%b %d %Y %H:%M", time.localtime(stat.st_mtime))
-                
+
                 if item.is_dir():
                     dir_count += 1
                     name_text = Text(f"{item.name}/")
@@ -1268,25 +1284,33 @@ class SCPMode:
 
                     # Format size for display
                     human_size = self._format_file_size(size)
-                    
+
                     # Create name text with styling
                     name_text = Text(item.name)
-                    
+
                     # Colorize based on file type and permissions
-                    if item.suffix.lower() in ['.py', '.js', '.sh', '.bash', '.zsh']:
+                    if item.suffix.lower() in [".py", ".js", ".sh", ".bash", ".zsh"]:
                         name_text.stylize("green")  # Script files
-                    elif item.suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff']:
+                    elif item.suffix.lower() in [
+                        ".jpg",
+                        ".jpeg",
+                        ".png",
+                        ".gif",
+                        ".bmp",
+                        ".tif",
+                        ".tiff",
+                    ]:
                         name_text.stylize("magenta")  # Image files
-                    elif item.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv', '.wmv']:
+                    elif item.suffix.lower() in [".mp4", ".avi", ".mov", ".mkv", ".wmv"]:
                         name_text.stylize("cyan")  # Video files
-                    elif item.suffix.lower() in ['.tar', '.gz', '.zip', '.rar', '.7z', '.bz2']:
+                    elif item.suffix.lower() in [".tar", ".gz", ".zip", ".rar", ".7z", ".bz2"]:
                         name_text.stylize("yellow")  # Archive files
-                    
+
                     # Check if executable and style if needed
                     if (mode & 0o100) or (mode & 0o010) or (mode & 0o001):
                         if not name_text.style:
                             name_text.stylize("green")
-                    
+
                     table.add_row(perms, human_size, mtime, name_text)
 
             # Display the table
@@ -1295,7 +1319,9 @@ class SCPMode:
 
             # Show summary footer
             human_total = self._format_file_size(total_size)
-            console.print(f"\nTotal: [bold cyan]{file_count}[/] files, [bold cyan]{dir_count}[/] directories, [bold green]{human_total}[/] total size")
+            console.print(
+                f"\nTotal: [bold cyan]{file_count}[/] files, [bold cyan]{dir_count}[/] directories, [bold green]{human_total}[/] total size"
+            )
 
             return True
 
