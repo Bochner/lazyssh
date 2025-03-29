@@ -3,6 +3,7 @@
 import os
 import shlex
 import subprocess
+import time
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 from rich.prompt import Confirm, IntPrompt
+from rich.progress import Progress, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 
 from .models import SSHConnection
 from .ssh import SSHManager
@@ -288,6 +290,7 @@ class SCPMode:
             "cd": self.cmd_cd,
             "local": self.cmd_local,
             "mget": self.cmd_mget,
+            "lls": self.cmd_lls,
         }
 
         # Create the history directory if it doesn't exist
@@ -505,8 +508,23 @@ class SCPMode:
         return str(Path(base_dir) / path)
 
     def _get_scp_command(self, source: str, destination: str) -> list[str]:
-        """Get the SCP command using the control socket"""
-        return ["scp", "-o", f"ControlPath={self.socket_path}", source, destination]
+        """Build the SCP command"""
+        return ["scp", "-q", "-o", f"ControlPath={self.socket_path}", source, destination]
+
+    def _get_file_size(self, path: str, is_remote: bool = False) -> int:
+        """Get the size of a file in bytes"""
+        try:
+            if is_remote and self.conn:
+                # Get size of remote file
+                result = self._execute_ssh_command(f"stat -c %s {path}")
+                if result and result.returncode == 0:
+                    return int(result.stdout.strip())
+                return 0
+            else:
+                # Get size of local file
+                return Path(path).stat().st_size
+        except Exception:
+            return 0
 
     def cmd_put(self, args: list[str]) -> bool:
         """Upload files to the remote server"""
@@ -532,16 +550,58 @@ class SCPMode:
                 display_error(f"Local file not found: {local_file}")
                 return False
 
-            display_info(f"Uploading {local_file} to {remote_file}...")
+            # Get file size for progress tracking
+            file_size = self._get_file_size(local_file)
+            human_size = self._format_file_size(file_size)
+            
+            display_info(f"Uploading {local_file} to {remote_file} ({human_size})...")
 
             # Get the SCP command
             remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
             cmd = self._get_scp_command(local_file, remote_path)
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            with Progress(
+                TextColumn("[bold blue]{task.description}", justify="right"),
+                BarColumn(),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                DownloadColumn(),
+                "•",
+                TransferSpeedColumn(),
+                "•",
+                TimeRemainingColumn(),
+            ) as progress:
+                task = progress.add_task(f"Uploading {Path(local_file).name}", total=file_size)
+                
+                # Start the upload process
+                process = subprocess.Popen(
+                    cmd, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                
+                # For uploads, we cannot easily track progress, so use an estimation approach
+                # that smoothly progresses from 0 to 100%
+                start_time = time.time()
+                estimated_duration = max(2, file_size / 1000000)  # Estimate based on file size (min 2 seconds)
+                
+                while process.poll() is None:
+                    elapsed = time.time() - start_time
+                    # Calculate progress as a percentage of estimated time
+                    progress_percentage = min(0.99, elapsed / estimated_duration)
+                    current_progress = int(file_size * progress_percentage)
+                    progress.update(task, completed=current_progress)
+                    time.sleep(0.1)
+                
+                # Complete the progress bar
+                progress.update(task, completed=file_size)
+                
+                result = process.wait()
+                stderr = process.stderr.read() if process.stderr else ""
 
-            if result.returncode != 0:
-                display_error(f"Upload failed: {result.stderr}")
+            if result != 0:
+                display_error(f"Upload failed: {stderr}")
                 return False
 
             display_success(f"Successfully uploaded {local_file} to {remote_file}")
@@ -576,6 +636,10 @@ class SCPMode:
                 display_error(f"Remote file not found: {remote_file}")
                 return False
 
+            # Get file size for progress tracking
+            file_size = self._get_file_size(remote_file, is_remote=True)
+            human_size = self._format_file_size(file_size)
+
             # Create local directory if it doesn't exist
             local_dir_path = Path(local_file).parent
             if local_dir_path.name and not local_dir_path.exists():
@@ -583,16 +647,50 @@ class SCPMode:
                 # Ensure proper permissions
                 local_dir_path.chmod(0o755)
 
-            display_info(f"Downloading {remote_file} to {local_file}...")
+            display_info(f"Downloading {remote_file} to {local_file} ({human_size})...")
 
             # Get the SCP command
             remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
             cmd = self._get_scp_command(remote_path, local_file)
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            with Progress(
+                TextColumn("[bold blue]{task.description}", justify="right"),
+                BarColumn(),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                DownloadColumn(),
+                "•",
+                TransferSpeedColumn(),
+                "•",
+                TimeRemainingColumn(),
+            ) as progress:
+                task = progress.add_task(f"Downloading {Path(remote_file).name}", total=file_size)
+                
+                # Start the download process
+                process = subprocess.Popen(
+                    cmd, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                
+                # Monitor progress
+                downloaded_file = Path(local_file)
+                while process.poll() is None:
+                    if downloaded_file.exists():
+                        current_size = downloaded_file.stat().st_size
+                        progress.update(task, completed=current_size)
+                    # Sleep a bit to avoid too frequent updates
+                    time.sleep(0.1)
+                
+                # Complete the progress bar
+                progress.update(task, completed=file_size)
+                
+                result = process.wait()
+                stderr = process.stderr.read() if process.stderr else ""
 
-            if result.returncode != 0:
-                display_error(f"Download failed: {result.stderr}")
+            if result != 0:
+                display_error(f"Download failed: {stderr}")
                 return False
 
             display_success(f"Successfully downloaded {remote_file} to {local_file}")
@@ -739,31 +837,97 @@ class SCPMode:
                 download_dir_path.mkdir(parents=True, exist_ok=True)
                 download_dir_path.chmod(0o755)
 
-            # Download files
+            # Download files with progress tracking
             success_count = 0
-            for filename in matched_files:
-                remote_file = str(Path(self.current_remote_dir) / filename)
-                local_file = str(Path(self.local_download_dir) / filename)
+            
+            # Start timing the download
+            start_time = time.time()
+            
+            with Progress(
+                TextColumn("[bold blue]{task.description}", justify="right"),
+                BarColumn(),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                DownloadColumn(),
+                "•",
+                TransferSpeedColumn(),
+                "•",
+                TimeRemainingColumn(),
+            ) as progress:
+                # Create a task for overall progress based on total bytes, not file count
+                overall_task = progress.add_task(f"Overall progress", total=total_size)
+                
+                for idx, filename in enumerate(matched_files):
+                    remote_file = str(Path(self.current_remote_dir) / filename)
+                    local_file = str(Path(self.local_download_dir) / filename)
+                    file_size = file_sizes.get(filename, 0)
 
-                try:
-                    display_info(f"Downloading {filename}...")
+                    try:
+                        # Create a task for this file
+                        file_task = progress.add_task(f"[cyan]Downloading {filename}", total=file_size)
+                        
+                        # Get the SCP command
+                        remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
+                        cmd = self._get_scp_command(remote_path, local_file)
 
-                    # Get the SCP command
-                    remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
-                    cmd = self._get_scp_command(remote_path, local_file)
+                        # Start the download process
+                        process = subprocess.Popen(
+                            cmd, 
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.PIPE,
+                            text=True
+                        )
+                        
+                        # Monitor progress
+                        downloaded_file = Path(local_file)
+                        last_size = 0
+                        while process.poll() is None:
+                            if downloaded_file.exists():
+                                current_size = downloaded_file.stat().st_size
+                                # Update file progress
+                                progress.update(file_task, completed=current_size)
+                                
+                                # Update overall progress with the delta from last check
+                                if current_size > last_size:
+                                    progress.update(overall_task, advance=current_size - last_size)
+                                    last_size = current_size
+                            time.sleep(0.1)
+                        
+                        # Complete the progress bar for this file
+                        final_size = file_size
+                        if downloaded_file.exists():
+                            final_size = downloaded_file.stat().st_size
+                        
+                        # Update file task to completion
+                        progress.update(file_task, completed=final_size)
+                        
+                        # Update overall progress with any remaining bytes
+                        if final_size > last_size:
+                            progress.update(overall_task, advance=final_size - last_size)
+                        
+                        result = process.wait()
+                        stderr = process.stderr.read() if process.stderr else ""
 
-                    result = subprocess.run(cmd, capture_output=True, text=True)
+                        if result != 0:
+                            display_error(f"Failed to download {filename}: {stderr}")
+                        else:
+                            success_count += 1
+                        
+                    except Exception as e:
+                        display_error(f"Failed to download {filename}: {str(e)}")
 
-                    if result.returncode != 0:
-                        display_error(f"Failed to download {filename}: {result.stderr}")
-                    else:
-                        success_count += 1
-                except Exception as e:
-                    display_error(f"Failed to download {filename}: {str(e)}")
+            # Calculate elapsed time
+            elapsed_time = time.time() - start_time
+            elapsed_str = f"{elapsed_time:.1f} seconds"
+            if elapsed_time > 60:
+                minutes = int(elapsed_time // 60)
+                seconds = int(elapsed_time % 60)
+                elapsed_str = f"{minutes}m {seconds}s"
 
             if success_count > 0:
+                # Include file size and elapsed time in success message
                 display_success(
-                    f"Successfully downloaded {success_count} of {len(matched_files)} files"
+                    f"Successfully downloaded {success_count} of {len(matched_files)} files ({self._format_file_size(total_size)} in {elapsed_str})"
                 )
 
             return success_count > 0
@@ -907,6 +1071,11 @@ class SCPMode:
             elif cmd == "exit":
                 display_info("[bold cyan]\nExit SCP mode and return to lazyssh prompt:[/bold cyan]")
                 display_info("[yellow]Usage:[/yellow] [cyan]exit[/cyan]")
+            elif cmd == "lls":
+                display_info("[bold cyan]\nList contents of the local download directory:[/bold cyan]")
+                display_info("[yellow]Usage:[/yellow] [cyan]lls[/cyan] [[yellow]<local_path>[/yellow]]")
+                display_info("If [yellow]<local_path>[/yellow] is not specified, lists the current local download directory")
+                display_info("Shows file sizes and directory summary information")
             else:
                 display_error(f"Unknown command: {cmd}")
                 self.cmd_help([])
@@ -916,6 +1085,7 @@ class SCPMode:
         display_info("  [cyan]put[/cyan]     - Upload a file to the remote server")
         display_info("  [cyan]get[/cyan]     - Download a file from the remote server")
         display_info("  [cyan]ls[/cyan]      - List files in a remote directory")
+        display_info("  [cyan]lls[/cyan]     - List files in the local download directory")
         display_info("  [cyan]pwd[/cyan]     - Show current remote working directory")
         display_info("  [cyan]cd[/cyan]      - Change remote working directory")
         display_info("  [cyan]local[/cyan]   - Set or display local download directory")
