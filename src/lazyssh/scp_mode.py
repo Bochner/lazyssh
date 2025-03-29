@@ -14,8 +14,11 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
-from rich.prompt import Confirm, IntPrompt
+from rich.console import Console
 from rich.progress import Progress, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+from rich.prompt import Confirm, IntPrompt
+from rich.table import Table
+from rich.text import Text
 
 from .models import SSHConnection
 from .ssh import SSHManager
@@ -706,8 +709,8 @@ class SCPMode:
             path = self._resolve_remote_path(args[0])
 
         try:
-            # Use ls -lah command via SSH for human-readable sizes
-            result = self._execute_ssh_command(f"ls -lah {path}")
+            # Use ls -la command via SSH for detailed listing
+            result = self._execute_ssh_command(f"ls -la {path}")
 
             if not result or result.returncode != 0:
                 display_error(
@@ -718,17 +721,90 @@ class SCPMode:
             # Format and display the output
             output = result.stdout.strip()
             if not output:
-                display_info(f"Directory {path} is empty")
+                display_info(f"Directory [bold blue]{path}[/] is empty")
                 return True
 
-            display_info(f"Contents of {path}:")
+            display_info(f"Contents of [bold blue]{path}[/]:")
 
-            # Filter out the "total X" line that shows disk block usage
+            # Create a Rich table
+            table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1))
+            
+            # Add columns
+            table.add_column("Permissions", style="dim")
+            table.add_column("Links", justify="right", style="dim")
+            table.add_column("Owner")
+            table.add_column("Group")
+            table.add_column("Size", justify="right")
+            table.add_column("Modified")
+            table.add_column("Name")
+
+            # Parse ls output and add rows
             lines = output.split("\n")
-            filtered_lines = [line for line in lines if not line.startswith("total ")]
-
-            for line in filtered_lines:
-                display_info(line)
+            for line in lines:
+                # Skip total line
+                if line.startswith("total "):
+                    continue
+                    
+                # Parse the ls -la output, which follows a standard format
+                # Example: -rw-r--r-- 1 username group 12345 Jan 01 12:34 filename
+                parts = line.split(maxsplit=8)
+                if len(parts) < 9:
+                    continue
+                    
+                perms, links, owner, group, size_str, date1, date2, date3, name = parts
+                
+                # Format the size to be human readable
+                try:
+                    size_bytes = int(size_str)
+                    human_size = self._format_file_size(size_bytes)
+                except ValueError:
+                    human_size = size_str
+                
+                # Format the date in a consistent way - attempt to convert to a standard format
+                try:
+                    # Try to parse the date parts into a consistent format
+                    # Handle different date formats from ls
+                    date_str = f"{date1} {date2} {date3}"
+                    
+                    # Parse the date - try different formats
+                    date_formats = [
+                        "%b %d %Y",      # Jan 01 2023
+                        "%b %d %H:%M",   # Jan 01 12:34
+                        "%Y-%m-%d %H:%M" # 2023-01-01 12:34
+                    ]
+                    
+                    parsed_date = None
+                    for fmt in date_formats:
+                        try:
+                            parsed_date = time.strptime(date_str, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    
+                    if parsed_date:
+                        # Format in a consistent way
+                        date = time.strftime("%b %d %Y %H:%M", parsed_date)
+                    else:
+                        # Fall back to original if parsing fails
+                        date = date_str
+                except Exception:
+                    # If any error, just use the original
+                    date = f"{date1} {date2} {date3}"
+                
+                # Color the filename based on type
+                name_text = Text(name)
+                if perms.startswith("d"):  # Directory
+                    name_text.stylize("bold blue")
+                elif perms.startswith("l"):  # Symlink
+                    name_text.stylize("cyan")
+                elif perms.startswith("-") and ("x" in perms[1:4] or "x" in perms[4:7] or "x" in perms[7:10]):  # Executable
+                    name_text.stylize("green")
+                
+                table.add_row(perms, links, owner, group, human_size, date, name_text)
+                
+            # Display the table
+            console = Console()
+            console.print(table)
 
             return True
         except Exception as e:
@@ -800,7 +876,17 @@ class SCPMode:
             total_size = 0
             file_sizes = {}
 
+            # Display matched files in a Rich table instead of simple list
             display_info(f"Found {len(matched_files)} matching files:")
+            
+            # Create a Rich table for listing the files
+            table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1))
+            
+            # Add columns
+            table.add_column("Filename", style="cyan")
+            table.add_column("Size", justify="right")
+            
+            # Add files to table
             for filename in matched_files:
                 # Get file size
                 size_result = self._execute_ssh_command(
@@ -814,19 +900,23 @@ class SCPMode:
 
                         # Format size in human-readable format
                         human_size = self._format_file_size(size)
-                        display_info(f"  {filename} ({human_size})")
+                        table.add_row(filename, human_size)
                     except ValueError:
-                        display_info(f"  {filename} (unknown size)")
+                        table.add_row(filename, "unknown size")
                 else:
-                    display_info(f"  {filename} (unknown size)")
+                    table.add_row(filename, "unknown size")
+            
+            # Display the table
+            console = Console()
+            console.print(table)
 
             # Format total size in human-readable format
             human_total = self._format_file_size(total_size)
-            display_info(f"Total download size: {human_total}")
+            display_info(f"Total download size: [bold green]{human_total}[/]")
 
             # Confirm download using Rich's Confirm.ask for a color-coded prompt
             if not Confirm.ask(
-                f"Download {len(matched_files)} files to {self.local_download_dir}?"
+                f"Download [bold cyan]{len(matched_files)}[/] files to [bold blue]{self.local_download_dir}[/]?"
             ):
                 display_info("Download cancelled")
                 return False
@@ -927,7 +1017,7 @@ class SCPMode:
             if success_count > 0:
                 # Include file size and elapsed time in success message
                 display_success(
-                    f"Successfully downloaded {success_count} of {len(matched_files)} files ({self._format_file_size(total_size)} in {elapsed_str})"
+                    f"Successfully downloaded [bold cyan]{success_count}[/] of [bold cyan]{len(matched_files)}[/] files ([bold green]{self._format_file_size(total_size)}[/] in [bold]{elapsed_str}[/])"
                 )
 
             return success_count > 0
@@ -1132,19 +1222,44 @@ class SCPMode:
                 display_error(f"Directory not found: {target_dir_path}")
                 return False
 
+            display_info(f"Contents of [bold blue]{target_dir_path}[/]:")
+
+            # Create a Rich table
+            table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1))
+            
+            # Add columns - removed Type column
+            table.add_column("Permissions", style="dim")
+            table.add_column("Size", justify="right")
+            table.add_column("Modified")
+            table.add_column("Name")
+
             # Get directory contents
             total_size = 0
             file_count = 0
             dir_count = 0
 
-            display_info(f"Contents of {target_dir_path}:")
-
-            # List directory contents in a simple format
+            # List directory contents in a table format
             for item in sorted(target_dir_path.iterdir()):
-                # Get file info
+                # Get file stat info
+                stat = item.stat()
+                
+                # Format permission bits similar to Unix ls
+                mode = stat.st_mode
+                perms = ""
+                for who in [0o700, 0o70, 0o7]:  # User, group, other
+                    perms += "r" if mode & (who >> 2) else "-"
+                    perms += "w" if mode & (who >> 1) else "-"
+                    perms += "x" if mode & who else "-"
+                
+                # Format modification time - more concise format
+                mtime = time.strftime("%b %d %Y %H:%M", time.localtime(stat.st_mtime))
+                
                 if item.is_dir():
                     dir_count += 1
-                    display_info(f"  {item.name}/")
+                    name_text = Text(f"{item.name}/")
+                    name_text.stylize("bold blue")
+                    size_text = "--"
+                    table.add_row(perms, size_text, mtime, name_text)
                 else:
                     # Get file size
                     size = item.stat().st_size
@@ -1153,13 +1268,34 @@ class SCPMode:
 
                     # Format size for display
                     human_size = self._format_file_size(size)
-                    display_info(f"  {item.name} ({human_size})")
+                    
+                    # Create name text with styling
+                    name_text = Text(item.name)
+                    
+                    # Colorize based on file type and permissions
+                    if item.suffix.lower() in ['.py', '.js', '.sh', '.bash', '.zsh']:
+                        name_text.stylize("green")  # Script files
+                    elif item.suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff']:
+                        name_text.stylize("magenta")  # Image files
+                    elif item.suffix.lower() in ['.mp4', '.avi', '.mov', '.mkv', '.wmv']:
+                        name_text.stylize("cyan")  # Video files
+                    elif item.suffix.lower() in ['.tar', '.gz', '.zip', '.rar', '.7z', '.bz2']:
+                        name_text.stylize("yellow")  # Archive files
+                    
+                    # Check if executable and style if needed
+                    if (mode & 0o100) or (mode & 0o010) or (mode & 0o001):
+                        if not name_text.style:
+                            name_text.stylize("green")
+                    
+                    table.add_row(perms, human_size, mtime, name_text)
 
-            # Show summary
+            # Display the table
+            console = Console()
+            console.print(table)
+
+            # Show summary footer
             human_total = self._format_file_size(total_size)
-            display_info(
-                f"\nTotal: {file_count} files, {dir_count} directories, {human_total} total size"
-            )
+            console.print(f"\nTotal: [bold cyan]{file_count}[/] files, [bold cyan]{dir_count}[/] directories, [bold green]{human_total}[/] total size")
 
             return True
 
