@@ -99,13 +99,13 @@ list
 list
 ```
 
-### `term` (or `terminal`)
+### `terminal`
 
 Opens a terminal for an existing SSH connection.
 
 **Syntax:**
 ```
-term <connection_name>
+terminal <connection_name>
 ```
 
 **Parameters:**
@@ -113,7 +113,7 @@ term <connection_name>
 
 **Example:**
 ```bash
-term myserver
+terminal myserver
 ```
 
 ### `close`
@@ -176,6 +176,20 @@ clear
 **Example:**
 ```bash
 clear
+```
+
+### `debug`
+
+Toggles debug mode on or off. When enabled, shows detailed logging information in the console.
+
+**Syntax:**
+```
+debug
+```
+
+**Example:**
+```bash
+debug
 ```
 
 ### `help`

@@ -13,6 +13,7 @@ from rich.prompt import Confirm
 
 from lazyssh import check_dependencies
 from lazyssh.command_mode import CommandMode
+from lazyssh.logging_module import APP_LOGGER, ensure_log_directory
 from lazyssh.models import SSHConnection
 from lazyssh.ssh import SSHManager
 from lazyssh.ui import (
@@ -516,7 +517,8 @@ def scp_mode_menu() -> bool:
 
 @click.command()
 @click.option("--prompt", is_flag=True, help="Start in prompt mode instead of command mode")
-def main(prompt: bool) -> None:
+@click.option("--debug", is_flag=True, help="Enable debug logging to console")
+def main(prompt: bool, debug: bool) -> None:
     """
     LazySSH - A comprehensive SSH toolkit for managing connections and tunnels.
 
@@ -524,6 +526,22 @@ def main(prompt: bool) -> None:
     checks dependencies, and starts the appropriate interface mode (command or prompt).
     """
     try:
+        # Initialize logging first
+        ensure_log_directory()
+        if APP_LOGGER:
+            APP_LOGGER.info("Starting LazySSH")
+
+        # Enable debug logging if requested
+        if debug:
+            from lazyssh.logging_module import set_debug_mode
+
+            set_debug_mode(True)
+            if APP_LOGGER:
+                APP_LOGGER.debug("Debug logging enabled")
+
+        # Display banner
+        display_banner()
+
         # Check dependencies
         missing_deps = check_dependencies()
         if missing_deps:
@@ -533,33 +551,52 @@ def main(prompt: bool) -> None:
             display_info("Please install the required dependencies and try again.")
             sys.exit(1)
 
-        # Display banner
-        display_banner()
-
         # Start in the specified mode
         current_mode = "prompt" if prompt else "command"
 
         while True:
             if current_mode == "prompt":
+                if APP_LOGGER:
+                    APP_LOGGER.info("Starting in prompt mode")
                 display_info("Current mode: Prompt (use option 6 to switch to command mode)")
-                _ = prompt_mode_main()  # Use _ to indicate unused result
-                current_mode = "command"
+                result = prompt_mode_main()  # Use result to check for mode switch
+                if result == "mode":
+                    current_mode = "command"
+                    if APP_LOGGER:
+                        APP_LOGGER.info("Switching to command mode")
+                else:
+                    break  # Exit if prompt_mode_main didn't return "mode"
             else:
+                if APP_LOGGER:
+                    APP_LOGGER.info("Starting in command mode")
                 display_info("Current mode: Command (type 'mode' to switch to prompt mode)")
                 cmd_mode = CommandMode(ssh_manager)
-                cmd_mode.run()
-                current_mode = "prompt"
+                cmd_result = cmd_mode.run()
+                if cmd_result == "mode":
+                    current_mode = "prompt"
+                    if APP_LOGGER:
+                        APP_LOGGER.info("Switching to prompt mode")
+                else:
+                    break  # Exit if cmd_mode.run didn't return "mode"
+
     except KeyboardInterrupt:
         display_warning("\nUse the exit command to safely exit LazySSH.")
         try:
             input("\nPress Enter to continue...")
-            main(prompt)  # Restart the main function
-            return None  # Explicitly return None
+            return None  # Return to caller
         except KeyboardInterrupt:
+            if APP_LOGGER:
+                APP_LOGGER.info("LazySSH terminated by user (KeyboardInterrupt)")
             display_info("\nExiting...")
             if check_active_connections():
                 safe_exit()
+    except Exception as e:
+        if APP_LOGGER:
+            APP_LOGGER.exception(f"Unhandled exception: {str(e)}")
+        display_error(f"An unexpected error occurred: {str(e)}")
+        display_info("Please report this issue on GitHub.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    main()  # pragma: no cover

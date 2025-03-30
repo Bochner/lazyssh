@@ -28,6 +28,14 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
+from .logging_module import get_connection_logger  # noqa: F401
+from .logging_module import (
+    SCP_LOGGER,
+    format_size,
+    log_file_transfer,
+    log_scp_command,
+    update_transfer_stats,
+)
 from .models import SSHConnection
 from .ssh import SSHManager
 from .ui import display_error, display_info, display_success
@@ -51,7 +59,7 @@ class SCPModeCompleter(Completer):
 
         if not words or (len(words) == 1 and not text.endswith(" ")):
             # Show base commands if at start
-            for cmd in self.scp_mode.commands:
+            for cmd in self.scp_mode.commands.keys():
                 if not word_before_cursor or cmd.startswith(word_before_cursor):
                     yield Completion(cmd, start_position=-len(word_before_cursor))
             return
@@ -98,10 +106,10 @@ class SCPModeCompleter(Completer):
                     if partial_path:
                         base_dir = str(Path(partial_path).parent)
                     else:
-                        base_dir = self.scp_mode.local_upload_dir
+                        base_dir = self.scp_mode.local_upload_dir or ""
 
                     if not base_dir:
-                        base_dir = self.scp_mode.local_upload_dir
+                        base_dir = self.scp_mode.local_upload_dir or ""
 
                     # Get filename part for matching
                     filename_part = Path(partial_path).name if partial_path else ""
@@ -277,92 +285,112 @@ class SCPMode:
     """SCP mode for file transfers through established SSH connections"""
 
     def __init__(self, ssh_manager: SSHManager, selected_connection: str | None = None):
+        """Initialize SCP mode"""
         self.ssh_manager = ssh_manager
-        self.selected_connection: str | None = selected_connection
-        self.current_remote_dir = "~"  # Default to home directory
-        self.local_download_dir = (
-            os.getcwd()
-        )  # Default to current working directory (will be updated after connection)
-        self.local_upload_dir = (
-            os.getcwd()
-        )  # Default to current working directory (will be updated after connection)
+        self.console = Console()
+
+        # State tracking
         self.socket_path: str | None = None
-        self.conn: SSHConnection | None = None  # Initialize as None until connect() is called
+        self.conn: SSHConnection | None = None
+        self.connections = ssh_manager.connections
 
-        # Initialize commands
-        self.commands = {
-            "help": self.cmd_help,
-            "exit": self.cmd_exit,
-            "quit": self.cmd_exit,
-            "put": self.cmd_put,
-            "get": self.cmd_get,
-            "ls": self.cmd_ls,
-            "pwd": self.cmd_pwd,
-            "cd": self.cmd_cd,
-            "local": self.cmd_local,
-            "mget": self.cmd_mget,
-            "lls": self.cmd_lls,
-            "tree": self.cmd_tree,
-            "lcd": self.cmd_lcd,
-        }
+        # Connection name (for logging)
+        self.connection_name = selected_connection
 
-        # Create the history directory if it doesn't exist
-        history_dir = str(Path.home() / ".lazyssh")
-        os.makedirs(history_dir, exist_ok=True)
+        # Stats tracking
+        self.download_count = 0
+        self.download_bytes = 0
+        self.upload_count = 0
+        self.upload_bytes = 0
+
+        # Log directory setup
+        self.log_dir = Path("/tmp/lazyssh/logs")
+        if not self.log_dir.exists():
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self.log_dir.chmod(0o700)  # Secure permissions
+
+        # Set up history file
+        self.history_dir = Path.home() / ".lazyssh"
+        self.history_dir.mkdir(parents=True, exist_ok=True)
+        self.history_file = self.history_dir / "scp_history"
+
+        # Initialize directories
+        self.current_remote_dir = "~"  # Default to user's home dir
+        self.local_download_dir: str | None = None  # Set dynamically on connection
+        self.local_upload_dir: str | None = None  # Set dynamically on connection
 
         # Initialize prompt_toolkit components
         self.completer = SCPModeCompleter(self)
         self.session: PromptSession = PromptSession(
-            history=FileHistory(str(Path.home() / ".lazyssh" / "scp_history"))
+            history=FileHistory(str(self.history_file)),
+            completer=self.completer,
+            complete_while_typing=True,
         )
         self.style = Style.from_dict(
             {
-                "prompt": "ansigreen bold",
-                "path": "ansiyellow",
-                "local": "ansiblue",
+                "prompt": "ansicyan bold",
+                "path": "ansigreen",
+                "dir1": "ansiyellow",
+                "dir2": "ansimagenta",
+                "brackets": "ansigreen",
             }
         )
 
+        # Available commands
+        self.commands = {
+            "get": self.cmd_get,
+            "put": self.cmd_put,
+            "ls": self.cmd_ls,
+            "cd": self.cmd_cd,
+            "pwd": self.cmd_pwd,
+            "mget": self.cmd_mget,
+            "local": self.cmd_local,
+            "lls": self.cmd_lls,
+            "help": self.cmd_help,
+            "exit": self.cmd_exit,
+            "tree": self.cmd_tree,
+            "lcd": self.cmd_lcd,
+        }
+
+        # Try to connect to selected connection if provided
         if selected_connection:
-            socket_path = f"/tmp/{selected_connection}"
-            if socket_path in ssh_manager.connections:
-                self.conn = ssh_manager.connections[socket_path]
-                self.socket_path = socket_path
-                conn_data_dir = self.conn.downloads_dir if self.conn else None
-                if conn_data_dir:
-                    self.local_download_dir = conn_data_dir
-                conn_upload_dir = self.conn.uploads_dir if self.conn else None
-                if conn_upload_dir:
-                    self.local_upload_dir = conn_upload_dir
+            self.socket_path = f"/tmp/{selected_connection}"
+            self.connect()
+
+        # Log initialization
+        if SCP_LOGGER:
+            SCP_LOGGER.debug("SCPMode initialized")
 
     def connect(self) -> bool:
         """Verify the SSH connection is active via control socket"""
-        if not self.selected_connection:
-            display_error("No SSH connection selected")
+        if not self.socket_path:
             return False
 
-        # The selected_connection is now the socket name directly
-        conn_name = self.selected_connection
-        socket_path = f"/tmp/{conn_name}"
-
-        # Find connection by socket path
-        if socket_path in self.ssh_manager.connections:
-            self.socket_path = socket_path
-            self.conn = self.ssh_manager.connections[socket_path]
-        else:
-            # If we get here, the connection wasn't found
-            display_error(f"Connection '{conn_name}' not found")
+        if self.socket_path not in self.connections:
+            display_error(f"SSH connection not found: {self.socket_path}")
             return False
 
-        # Verify the connection is active
-        if not self.ssh_manager.check_connection(self.socket_path):
-            display_error(f"SSH connection '{self.selected_connection}' is not active")
-            display_info("Try reconnecting or creating a new connection")
-            return False
+        self.conn = self.connections[self.socket_path]
 
-        # Set the local download and upload directories to the connection's directories
-        self.local_download_dir = self.conn.downloads_dir
-        self.local_upload_dir = self.conn.uploads_dir
+        # Extract connection name from socket path
+        if not self.connection_name:
+            self.connection_name = Path(self.socket_path).name
+
+        # Set default directories
+        conn_download_dir = self.conn.downloads_dir
+        conn_upload_dir = f"/tmp/lazyssh/{self.connection_name}.d/uploads"
+
+        self.local_download_dir = str(conn_download_dir)
+        self.local_upload_dir = str(conn_upload_dir)
+
+        # Create upload directory if it doesn't exist
+        conn_upload_path = Path(conn_upload_dir)
+        if not conn_upload_path.exists():
+            try:
+                conn_upload_path.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                display_error(f"Failed to create uploads directory: {conn_upload_dir}")
+                return False
 
         # Get initial remote directory
         try:
@@ -374,61 +402,71 @@ class SCPMode:
                 "pwd",
             ]
             result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                self.current_remote_dir = result.stdout.strip()
+            else:
+                self.current_remote_dir = "~"
+        except Exception:
+            self.current_remote_dir = "~"
 
-            if result.returncode != 0:
-                display_error(f"Failed to get remote directory: {result.stderr}")
-                return False
+        display_success(f"Connected to {self.conn.host} as {self.conn.username}")
+        display_info(f"Local download directory: {self.local_download_dir}")
+        display_info(f"Local upload directory: {self.local_upload_dir}")
+        display_info(f"Current remote directory: {self.current_remote_dir}")
+        if SCP_LOGGER:
+            SCP_LOGGER.info(f"SCP mode connected to {self.conn.host} via {self.socket_path}")
 
-            self.current_remote_dir = result.stdout.strip()
-            display_success(f"Connected to {self.conn.username}@{self.conn.host}")
-            return True
-        except Exception as e:
-            display_error(f"Connection error: {str(e)}")
-            return False
+        # Create connection-specific logs directory
+        conn_log_dir = Path(f"/tmp/lazyssh/{self.connection_name}.d/logs")
+        if not conn_log_dir.exists():
+            conn_log_dir.mkdir(parents=True, exist_ok=True)
+            conn_log_dir.chmod(0o700)
 
-    def _execute_ssh_command(self, remote_command: str) -> Any | None:
-        """Execute a command on the SSH server and return the result"""
-        if not self.socket_path:
-            display_error("Not connected to an SSH server")
+        return True
+
+    def _execute_ssh_command(self, remote_command: str) -> subprocess.CompletedProcess | None:
+        """Execute a command on the remote host via SSH and return the result"""
+        if not self.conn or not self.connection_name:
+            display_error("No active connection")
             return None
 
-        # Build the SSH command using the control socket
-        command = [
-            "ssh",
-            "-S",
-            self.socket_path,
-            "-l",
-            self.conn.username if self.conn else "unknown",
-            self.conn.host if self.conn else "unknown",
-            remote_command,
-        ]
-
-        # Execute the command and capture the output
         try:
-            result = subprocess.run(command, capture_output=True, text=True)
+            cmd = [
+                "ssh",
+                "-o",
+                f"ControlPath={self.socket_path}",
+                f"{self.conn.username}@{self.conn.host}",
+                remote_command,
+            ]
+
+            # Log the command execution with connection name
+            log_scp_command(self.connection_name, remote_command)
+
+            result = subprocess.run(cmd, capture_output=True, text=True)
             return result
         except Exception as e:
-            display_error(f"Failed to execute command: {e}")
+            display_error(f"SSH command error: {str(e)}")
             return None
 
     def get_prompt_text(self) -> HTML:
         """Get the prompt text with HTML formatting"""
-        conn_name = self.selected_connection or "none"
+        conn_name = self.connection_name or "none"
         return HTML(
             f"<prompt>scp {conn_name}</prompt>:<path>{self.current_remote_dir}</path>"
-            f" [↓<local>{self.local_download_dir}</local> | ↑<local>{self.local_upload_dir}</local>]> "
+            f" <brackets>[</brackets><brackets>↓</brackets><dir1>{self.local_download_dir}</dir1> <brackets>|</brackets> <brackets>↑</brackets><dir2>{self.local_upload_dir}</dir2><brackets>]</brackets><brackets>></brackets> "
         )
 
     def run(self) -> None:
         """Run the SCP mode interface"""
         # If no connection is selected, prompt for selection
-        if not self.selected_connection:
+        if not self.connection_name:
             if not self._select_connection():
                 return
 
-        # Connect to the selected SSH session
-        if not self.connect():
-            return
+        # Connect to the selected SSH session if not already connected
+        if not self.conn:
+            if not self.connect():
+                return
 
         while True:
             try:
@@ -465,7 +503,7 @@ class SCPMode:
         connection_map = {}
 
         # Build a map of connection names to actual connections
-        for socket_path, conn in self.ssh_manager.connections.items():
+        for socket_path, conn in self.connections.items():
             conn_name = Path(socket_path).name
             connections.append(conn_name)
             connection_map[conn_name] = conn
@@ -484,7 +522,7 @@ class SCPMode:
         try:
             choice = IntPrompt.ask("Enter selection (number)", default=1)
             if 1 <= choice <= len(connections):
-                self.selected_connection = connections[choice - 1]
+                self.connection_name = connections[choice - 1]
                 return True
             else:
                 display_error("Invalid selection")
@@ -493,32 +531,41 @@ class SCPMode:
             return False
 
     def _resolve_remote_path(self, path: str) -> str:
-        """Resolve a remote path relative to the current directory"""
+        """Resolve a remote path relative to the current remote directory"""
         if not path:
-            return self.current_remote_dir
+            return self.current_remote_dir or ""
+
+        # Handle absolute paths as is
         if path.startswith("/"):
             return path
+
+        # Handle paths with ~ for home directory
         if path.startswith("~"):
             # Execute command to expand ~ on the remote server
             result = self._execute_ssh_command(f"echo {path}")
             if result and result.returncode == 0:
-                expanded_path: str = result.stdout.strip()
-                return expanded_path
+                expanded_path = result.stdout.strip()
+                return expanded_path if expanded_path else path
             return path
 
         # Join with current directory
-        return str(Path(self.current_remote_dir) / path)
+        if self.current_remote_dir:
+            return str(Path(self.current_remote_dir) / path)
+        return path
 
     def _resolve_local_path(self, path: str, for_upload: bool = False) -> str:
         """Resolve a local path relative to the local download or upload directory"""
         if not path:
-            return self.local_upload_dir if for_upload else self.local_download_dir
+            base_dir = self.local_upload_dir if for_upload else self.local_download_dir
+            return base_dir if base_dir else ""
         if Path(path).is_absolute():
             return path
 
         # Join with local download or upload directory
         base_dir = self.local_upload_dir if for_upload else self.local_download_dir
-        return str(Path(base_dir) / path)
+        if base_dir:
+            return str(Path(base_dir) / path)
+        return path
 
     def _get_scp_command(self, source: str, destination: str) -> list[str]:
         """Build the SCP command"""
@@ -539,174 +586,266 @@ class SCPMode:
         except Exception:
             return 0
 
-    def cmd_put(self, args: list[str]) -> bool:
-        """Upload files to the remote server"""
-        if not args:
-            display_error("Usage: put <local_file> [remote_path]")
-            return False
+    def cmd_put(self, args: list[str]) -> None:
+        """Upload a file to the remote host"""
+        if not self.conn or not self.check_connection():
+            display_error("No active connection")
+            return
 
-        if not self.conn:
-            display_error("Not connected to an SSH server")
-            return False
+        if len(args) < 1:
+            display_error("Usage: put <local_file_path> [remote_file_path]")
+            return
 
-        local_file = self._resolve_local_path(args[0], for_upload=True)
+        local_path = args[0]
 
-        if len(args) == 2:
-            remote_file = self._resolve_remote_path(args[1])
-        else:
-            # Use the same filename in the current remote directory
-            filename = Path(local_file).name
-            remote_file = str(Path(self.current_remote_dir) / filename)
+        # Check if the local file exists
+        local_file = Path(local_path)
+        if not local_file.exists():
+            display_error(f"Local file not found: {local_path}")
+            return
+
+        # Get the file size before upload
+        file_size = local_file.stat().st_size
+
+        # Determine the remote path
+        remote_path = args[1] if len(args) > 1 else None
+
+        if not remote_path:
+            # Use the filename from the local path
+            filename = Path(local_path).name
+            remote_path = f"{self.current_remote_dir}/{filename}"
 
         try:
-            if not Path(local_file).exists():
-                display_error(f"Local file not found: {local_file}")
-                return False
+            # Execute the SCP command
+            remote_dest = f"{self.conn.username}@{self.conn.host}:{remote_path}"
+            cmd = self._get_scp_command(local_path, remote_dest)
 
-            # Get file size for progress tracking
-            file_size = self._get_file_size(local_file)
-            human_size = self._format_file_size(file_size)
+            # Show a progress bar for upload
+            display_info(f"Uploading {local_path} to {remote_path}")
 
-            display_info(f"Uploading {local_file} to {remote_file} ({human_size})...")
+            # Start timing the upload
+            start_time = time.time()
 
-            # Get the SCP command
-            remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
-            cmd = self._get_scp_command(local_file, remote_path)
-
+            # Create a progress bar
             with Progress(
                 TextColumn("[bold blue]{task.description}", justify="right"),
                 BarColumn(),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
-                DownloadColumn(),
+                TextColumn("[bold green]{task.completed:.2f}/{task.total:.2f} MB", justify="right"),
                 "•",
                 TransferSpeedColumn(),
                 "•",
                 TimeRemainingColumn(),
             ) as progress:
-                task = progress.add_task(f"Uploading {Path(local_file).name}", total=file_size)
+                # Convert bytes to MB for display
+                file_size_mb = file_size / (1024 * 1024)
+                upload_task = progress.add_task(
+                    f"[cyan]Uploading {Path(local_path).name}", total=file_size_mb
+                )
 
                 # Start the upload process
                 process = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
 
-                # For uploads, we cannot easily track progress, so use an estimation approach
-                # that smoothly progresses from 0 to 100%
-                start_time = time.time()
-                estimated_duration = max(
-                    2, file_size / 1000000
-                )  # Estimate based on file size (min 2 seconds)
-
+                # Since SCP doesn't provide progress feedback, we monitor remote file size
+                # We'll poll for completion instead
                 while process.poll() is None:
+                    # Just update time-based progress as an approximation
+                    # Actual progress can't be determined for uploads without server feedback
                     elapsed = time.time() - start_time
-                    # Calculate progress as a percentage of estimated time
-                    progress_percentage = min(0.99, elapsed / estimated_duration)
-                    current_progress = int(file_size * progress_percentage)
-                    progress.update(task, completed=current_progress)
+                    # Estimate progress based on time and file size
+                    # Using a reasonable upload rate estimate (10MB/s)
+                    est_progress = min(elapsed * 10, file_size_mb)  # Cap at total size
+                    progress.update(upload_task, completed=est_progress)
                     time.sleep(0.1)
 
-                # Complete the progress bar
-                progress.update(task, completed=file_size)
+                # Process is complete, set to 100%
+                progress.update(upload_task, completed=file_size_mb)
 
+                # Get result
                 result = process.wait()
                 stderr = process.stderr.read() if process.stderr else ""
 
-            if result != 0:
+            # Calculate elapsed time
+            elapsed_time = time.time() - start_time
+            elapsed_str = f"{elapsed_time:.1f} seconds"
+            if elapsed_time > 60:
+                minutes = int(elapsed_time // 60)
+                seconds = int(elapsed_time % 60)
+                elapsed_str = f"{minutes}m {seconds}s"
+
+            if result == 0:
+                # Log the file transfer with size
+                if self.connection_name:
+                    log_file_transfer(
+                        connection_name=str(self.connection_name) if self.connection_name else "",
+                        source=local_path,
+                        destination=remote_path,
+                        size=file_size,
+                        operation="upload",
+                    )
+                    # Update transfer stats
+                    update_transfer_stats(self.connection_name, 1, file_size)
+                display_success(
+                    f"Uploaded {local_path} ({format_size(file_size)}) in {elapsed_str}"
+                )
+            else:
                 display_error(f"Upload failed: {stderr}")
-                return False
-
-            display_success(f"Successfully uploaded {local_file} to {remote_file}")
-            return True
         except Exception as e:
-            display_error(f"Upload failed: {str(e)}")
-            return False
+            display_error(f"Upload error: {str(e)}")
 
-    def cmd_get(self, args: list[str]) -> bool:
-        """Download files from the remote server"""
-        if not args:
-            display_error("Usage: get <remote_file> [local_path]")
-            return False
+    def cmd_get(self, args: list[str]) -> None:
+        """Download a file from the remote host"""
+        if not self.conn or not self.check_connection():
+            display_error("No active connection")
+            return
 
-        if not self.conn:
-            display_error("Not connected to an SSH server")
-            return False
+        if len(args) < 1:
+            display_error("Usage: get <remote_file_path> [local_file_path]")
+            return
 
-        remote_file = self._resolve_remote_path(args[0])
+        remote_path = args[0]
 
-        if len(args) == 2:
-            local_file = self._resolve_local_path(args[1])
-        else:
-            # Use the same filename in the local download directory
-            filename = Path(remote_file).name
-            local_file = str(Path(self.local_download_dir) / filename)
+        # If remote path is relative, make it absolute based on current remote dir
+        if not remote_path.startswith("/"):
+            remote_path = f"{self.current_remote_dir}/{remote_path}"
+
+        # Determine the local path
+        local_path = args[1] if len(args) > 1 else None
+
+        if not local_path and self.local_download_dir:
+            # Use the filename from the remote path
+            filename = Path(remote_path).name
+            local_path = str(Path(self.local_download_dir) / filename)
+        elif not local_path:
+            display_error("Local download directory not set")
+            return
+
+        # Create parent directory if it doesn't exist
+        local_dir = Path(str(local_path)).parent if local_path else None
+        if local_dir and not local_dir.exists():
+            try:
+                local_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                display_error(f"Failed to create directory {local_dir}: {str(e)}")
+                return
 
         try:
-            # First check if the remote file exists
-            check_cmd = self._execute_ssh_command(f"test -f {remote_file} && echo 'exists'")
-            if not check_cmd or check_cmd.returncode != 0 or "exists" not in check_cmd.stdout:
-                display_error(f"Remote file not found: {remote_file}")
-                return False
+            # Get file size before download to log it properly
+            size_cmd = f"stat -c %s '{remote_path}'"
+            size_result = self._execute_ssh_command(size_cmd)
+            file_size = 0
+            if size_result and size_result.returncode == 0:
+                file_size = int(size_result.stdout.strip())
 
-            # Get file size for progress tracking
-            file_size = self._get_file_size(remote_file, is_remote=True)
-            human_size = self._format_file_size(file_size)
+            # Execute the SCP command
+            remote_source = f"{self.conn.username}@{self.conn.host}:{remote_path}"
+            cmd = self._get_scp_command(remote_source, str(local_path))
 
-            # Create local directory if it doesn't exist
-            local_dir_path = Path(local_file).parent
-            if local_dir_path.name and not local_dir_path.exists():
-                local_dir_path.mkdir(parents=True, exist_ok=True)
-                # Ensure proper permissions
-                local_dir_path.chmod(0o755)
+            # Show a progress bar for download
+            display_info(f"Downloading {remote_path} to {local_path}")
 
-            display_info(f"Downloading {remote_file} to {local_file} ({human_size})...")
+            # Start timing the download
+            start_time = time.time()
 
-            # Get the SCP command
-            remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
-            cmd = self._get_scp_command(remote_path, local_file)
-
+            # Create a progress bar
             with Progress(
                 TextColumn("[bold blue]{task.description}", justify="right"),
                 BarColumn(),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
-                DownloadColumn(),
+                TextColumn("[bold green]{task.completed:.2f}/{task.total:.2f} MB", justify="right"),
                 "•",
                 TransferSpeedColumn(),
                 "•",
                 TimeRemainingColumn(),
             ) as progress:
-                task = progress.add_task(f"Downloading {Path(remote_file).name}", total=file_size)
+                # Convert bytes to MB for display
+                file_size_mb = file_size / (1024 * 1024)
+                download_task = progress.add_task(
+                    f"[cyan]Downloading {Path(remote_path).name}", total=file_size_mb
+                )
 
                 # Start the download process
                 process = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
 
-                # Monitor progress
-                downloaded_file = Path(local_file)
+                # Poll the local file size to show progress
+                local_size = 0
                 while process.poll() is None:
-                    if downloaded_file.exists():
-                        current_size = downloaded_file.stat().st_size
-                        progress.update(task, completed=current_size)
-                    # Sleep a bit to avoid too frequent updates
+                    local_file_path = Path(str(local_path)) if local_path else None
+                    if local_file_path and local_file_path.exists():
+                        try:
+                            new_size = local_file_path.stat().st_size
+                            if new_size > local_size:
+                                local_size = new_size
+                                # Convert to MB for the progress bar
+                                progress.update(download_task, completed=local_size / (1024 * 1024))
+                        except (OSError, FileNotFoundError):
+                            pass  # Ignore file access errors during download
                     time.sleep(0.1)
 
-                # Complete the progress bar
-                progress.update(task, completed=file_size)
+                # Process is complete, set to 100% if we know the file size
+                if file_size > 0:
+                    progress.update(download_task, completed=file_size_mb)
+                else:
+                    # If we didn't know the file size in advance, get it now
+                    try:
+                        final_size = (
+                            file_size  # Default to file_size if local file can't be accessed
+                        )
+                        if local_file_path and local_file_path.exists():
+                            final_size = local_file_path.stat().st_size
+                            progress.update(
+                                download_task,
+                                completed=final_size / (1024 * 1024),
+                                total=final_size / (1024 * 1024),
+                            )
+                            file_size = final_size  # Update file_size for logging
+                    except (OSError, FileNotFoundError):
+                        pass
 
+                # Get result
                 result = process.wait()
                 stderr = process.stderr.read() if process.stderr else ""
 
-            if result != 0:
-                display_error(f"Download failed: {stderr}")
-                return False
+            # Calculate elapsed time
+            elapsed_time = time.time() - start_time
+            elapsed_str = f"{elapsed_time:.1f} seconds"
+            if elapsed_time > 60:
+                minutes = int(elapsed_time // 60)
+                seconds = int(elapsed_time % 60)
+                elapsed_str = f"{minutes}m {seconds}s"
 
-            display_success(f"Successfully downloaded {remote_file} to {local_file}")
-            return True
+            if result == 0:
+                # Calculate final file size for display and logging
+                final_size = file_size  # Default to file_size if local file can't be accessed
+                if local_file_path and local_file_path.exists():
+                    final_size = local_file_path.stat().st_size
+                    file_size = final_size
+
+                # Log the file transfer
+                if self.connection_name:
+                    log_file_transfer(
+                        connection_name=str(self.connection_name) if self.connection_name else "",
+                        source=remote_path,
+                        destination=str(local_path) if local_path else "",
+                        size=file_size,
+                        operation="download",
+                    )
+                    # Update transfer stats
+                    update_transfer_stats(self.connection_name, 1, file_size)
+
+                display_success(
+                    f"Downloaded {remote_path} ({format_size(file_size)}) in {elapsed_str}"
+                )
+            else:
+                display_error(f"Download failed: {stderr}")
         except Exception as e:
-            display_error(f"Download failed: {str(e)}")
-            return False
+            display_error(f"Download error: {str(e)}")
 
     def cmd_ls(self, args: list[str]) -> bool:
         """List contents of a remote directory"""
@@ -934,13 +1073,16 @@ class SCPMode:
                 return False
 
             # Ensure download directory exists with proper permissions
-            download_dir_path = Path(self.local_download_dir)
+            download_dir_path = (
+                Path(self.local_download_dir) if self.local_download_dir else Path(".")
+            )
             if not download_dir_path.exists():
                 download_dir_path.mkdir(parents=True, exist_ok=True)
                 download_dir_path.chmod(0o755)
 
             # Download files with progress tracking
             success_count = 0
+            total_downloaded_bytes = 0
 
             # Start timing the download
             start_time = time.time()
@@ -961,7 +1103,11 @@ class SCPMode:
 
                 for idx, filename in enumerate(matched_files):
                     remote_file = str(Path(self.current_remote_dir) / filename)
-                    local_file = str(Path(self.local_download_dir) / filename)
+                    local_file = (
+                        str(Path(str(self.local_download_dir)) / filename)
+                        if self.local_download_dir
+                        else filename
+                    )
                     file_size = file_sizes.get(filename, 0)
 
                     try:
@@ -1006,13 +1152,24 @@ class SCPMode:
                         if final_size > last_size:
                             progress.update(overall_task, advance=final_size - last_size)
 
-                        result = process.wait()
+                        process_result = process.wait()
                         stderr = process.stderr.read() if process.stderr else ""
 
-                        if result != 0:
+                        if process_result != 0:
                             display_error(f"Failed to download {filename}: {stderr}")
                         else:
                             success_count += 1
+                            # Log each successful file transfer individually
+                            log_file_transfer(
+                                connection_name=(
+                                    str(self.connection_name) if self.connection_name else ""
+                                ),
+                                source=remote_file,
+                                destination=local_file,
+                                size=final_size,
+                                operation="download",
+                            )
+                            total_downloaded_bytes += final_size
 
                     except Exception as e:
                         display_error(f"Failed to download {filename}: {str(e)}")
@@ -1026,9 +1183,15 @@ class SCPMode:
                 elapsed_str = f"{minutes}m {seconds}s"
 
             if success_count > 0:
+                # Update the total transfer stats only after all downloads are complete
+                if self.connection_name:
+                    update_transfer_stats(
+                        str(self.connection_name), success_count, total_downloaded_bytes
+                    )
+
                 # Include file size and elapsed time in success message
                 display_success(
-                    f"Successfully downloaded [bold cyan]{success_count}[/] of [bold cyan]{len(matched_files)}[/] files ([bold green]{self._format_file_size(total_size)}[/] in [bold]{elapsed_str}[/])"
+                    f"Successfully downloaded [bold cyan]{success_count}[/] of [bold cyan]{len(matched_files)}[/] files ([bold green]{self._format_file_size(total_downloaded_bytes)}[/] in [bold]{elapsed_str}[/])"
                 )
 
             return success_count > 0
@@ -1230,21 +1393,16 @@ class SCPMode:
         return True
 
     def _format_file_size(self, size_bytes: int) -> str:
-        """Format file size in human-readable format (KB, MB, GB)"""
-        if size_bytes < 1024:
-            return f"{size_bytes} bytes"
-        elif size_bytes < 1024 * 1024:
-            return f"{size_bytes / 1024:.1f} KB"
-        elif size_bytes < 1024 * 1024 * 1024:
-            return f"{size_bytes / (1024 * 1024):.1f} MB"
-        else:
-            return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+        """Format a file size in bytes to a human-readable string"""
+        return format_size(size_bytes)
 
     def cmd_lls(self, args: list[str]) -> bool:
         """List contents of the local download directory with total size and file count"""
         try:
             # Determine which directory to list
-            target_dir_path = Path(self.local_download_dir)
+            target_dir_path = (
+                Path(str(self.local_download_dir)) if self.local_download_dir else Path(".")
+            )
             if args:
                 # Allow listing other directories relative to the download dir
                 path = args[0]
@@ -1252,7 +1410,10 @@ class SCPMode:
                 if path_obj.is_absolute():
                     target_dir_path = path_obj
                 else:
-                    target_dir_path = Path(self.local_download_dir) / path
+                    target_dir_path = (
+                        Path(str(self.local_download_dir) if self.local_download_dir else ".")
+                        / path
+                    )
 
             # Check if directory exists
             if not target_dir_path.exists() or not target_dir_path.is_dir():
@@ -1485,4 +1646,27 @@ class SCPMode:
             return True
         except Exception as e:
             display_error(f"Failed to change local directory: {str(e)}")
+            return False
+
+    def check_connection(self) -> bool:
+        """Check if the SSH connection is still active"""
+        if not self.socket_path or not self.conn:
+            return False
+
+        # Check if the socket file exists
+        if not Path(self.socket_path).exists():
+            return False
+
+        # Try a simple command to check connection
+        try:
+            cmd = [
+                "ssh",
+                "-o",
+                f"ControlPath={self.socket_path}",
+                f"{self.conn.username}@{self.conn.host}",
+                "echo connected",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+            return result.returncode == 0
+        except Exception:
             return False

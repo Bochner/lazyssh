@@ -5,7 +5,7 @@ This package provides tools for managing SSH connections, creating tunnels,
 and opening terminal sessions through an interactive command-line interface.
 """
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
 __author__ = "Bochner"
 __email__ = ""
 __license__ = "MIT"
@@ -13,6 +13,24 @@ __license__ = "MIT"
 import os
 import subprocess
 from pathlib import Path
+
+# Include logging module in the package exports
+from .logging_module import (  # noqa: F401
+    APP_LOGGER,
+    CMD_LOGGER,
+    SCP_LOGGER,
+    SSH_LOGGER,
+    format_size,
+    get_connection_logger,
+    get_logger,
+    log_file_transfer,
+    log_scp_command,
+    log_ssh_command,
+    log_ssh_connection,
+    log_tunnel_creation,
+    set_debug_mode,
+    update_transfer_stats,
+)
 
 
 def check_dependencies() -> list[str]:
@@ -28,11 +46,22 @@ def check_dependencies() -> list[str]:
     ssh_path = _check_executable("ssh")
     if not ssh_path:
         missing_deps.append("OpenSSH Client (ssh)")
+        if APP_LOGGER:
+            APP_LOGGER.error("OpenSSH Client (ssh) not found but required")
 
     # Check for terminator (recommended but not strictly required)
     terminator_path = _check_executable("terminator")
     if not terminator_path:
         missing_deps.append("Terminator terminal emulator (optional)")
+        if APP_LOGGER:
+            APP_LOGGER.warning("Terminator terminal emulator not found (recommended but optional)")
+
+    if missing_deps:
+        if APP_LOGGER:
+            APP_LOGGER.debug(f"Dependencies check: Missing: {', '.join(missing_deps)}")
+    else:
+        if APP_LOGGER:
+            APP_LOGGER.debug("Dependencies check: All required dependencies found")
 
     return missing_deps
 
