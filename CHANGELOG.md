@@ -5,6 +5,35 @@ All notable changes to LazySSH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-03-29
+
+### Added
+- Implemented robust logging system using Python's logging module and rich.logging
+- Added logging for all SSH connections, commands, tunnels, and file transfers
+- Created dedicated log directory at /tmp/lazyssh/logs with proper permissions
+- Added separate loggers for different components (SSH, Command Mode, SCP Mode)
+- Implemented both console and file logging with rich formatting
+- Added environment variable support for log level configuration (LAZYSSH_LOG_LEVEL)
+- Added 'debug' command to toggle console log visibility (logs to files always enabled)
+- Added --debug CLI flag to enable debug logging from startup
+- Enhanced SCP mode logging with connection-specific logs at /tmp/lazyssh/<connection_name>.d/logs
+- Improved file transfer logging in SCP mode with detailed size reporting and transfer statistics
+- Added tracking and logging of total files and bytes transferred per connection
+
+### Fixed
+- Fixed incorrect file count in transfer statistics when uploading or downloading single files
+- Fixed mget command to properly log each downloaded file and update total statistics
+- Added progress bar display for file uploads in SCP mode similar to downloads
+- Fixed SCP upload directory structure to be parallel to downloads directory (/tmp/lazyssh/<connection_name>.d/uploads)
+- Fixed datetime usage in logging module to correctly format timestamps
+- Fixed SCP prompt coloring to ensure consistent visual appearance
+- Corrected variable naming inconsistencies in SCPMode class
+- Prevented double connection establishment when entering SCP mode
+- Fixed remote command execution to properly handle CompletedProcess return values
+- Removed "lazy" command alias to prevent it from appearing in tab completion
+- Consistent replacement of os.path with pathlib for modern Python practices
+- Fixed tab completion to only show valid commands defined in the command dictionary
+
 ## [1.2.1] - 2025-03-29
 
 ### Added

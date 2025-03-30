@@ -14,6 +14,13 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
+from .logging_module import (  # noqa: F401
+    APP_LOGGER,
+    CMD_LOGGER,
+    DEBUG_MODE,
+    log_ssh_command,
+    set_debug_mode,
+)
 from .models import SSHConnection
 from .scp_mode import SCPMode
 from .ssh import SSHManager
@@ -45,7 +52,7 @@ class LazySSHCompleter(Completer):
 
         if not words or (len(words) == 1 and not text.endswith(" ")):
             # Show base commands if at start
-            for cmd in self.command_mode.commands:
+            for cmd in self.command_mode.commands.keys():
                 if not word_before_cursor or cmd.startswith(word_before_cursor):
                     yield Completion(cmd, start_position=-len(word_before_cursor))
             return
@@ -170,8 +177,8 @@ class LazySSHCompleter(Completer):
                         if not word_before_cursor or tunnel.id.startswith(word_before_cursor):
                             yield Completion(tunnel.id, start_position=-len(word_before_cursor))
 
-        elif command == "terminal" or command == "close" or command == "term":
-            # For terminal, term and close commands, we only expect one argument: the SSH connection name
+        elif command == "terminal" or command == "close":
+            # For terminal and close commands, we only expect one argument: the SSH connection name
             arg_position = len(words) - 1
 
             # Only show completions if we're at the exact position to enter the connection name
@@ -192,7 +199,7 @@ class LazySSHCompleter(Completer):
             # Or if we've just typed the command and a space, show completions
             if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
                 # Show available commands for help
-                for cmd in self.command_mode.commands:
+                for cmd in self.command_mode.commands.keys():
                     if not word_before_cursor or cmd.startswith(word_before_cursor):
                         yield Completion(cmd, start_position=-len(word_before_cursor))
 
@@ -219,38 +226,38 @@ class LazySSHCompleter(Completer):
 
 
 class CommandMode:
-    def __init__(self, ssh_manager: SSHManager):
+    def __init__(self, ssh_manager: SSHManager) -> None:
+        """Initialize Command Mode interface"""
+        # Initialize the SSH Manager
         self.ssh_manager = ssh_manager
+
+        # Define available commands
         self.commands = {
+            "connect": self.cmd_lazyssh,  # Alias for lazyssh
+            "list": self.cmd_list,
+            "lazyssh": self.cmd_lazyssh,
             "help": self.cmd_help,
+            "terminal": self.cmd_terminal,
+            "debug": self.cmd_debug,
+            "scp": self.cmd_scp,
             "exit": self.cmd_exit,
             "quit": self.cmd_exit,
-            "lazyssh": self.cmd_lazyssh,
-            "tunc": self.cmd_tunc,  # Create tunnel command
-            "tund": self.cmd_tund,  # Delete tunnel command
-            "list": self.cmd_list,
+            "tunc": self.cmd_tunc,
+            "tund": self.cmd_tund,
             "close": self.cmd_close,
-            "terminal": self.cmd_terminal,
-            "term": self.cmd_terminal,  # Alias for terminal
-            "mode": self.cmd_mode,
             "clear": self.cmd_clear,
-            "scp": self.cmd_scp,  # New SCP mode command
+            "mode": self.cmd_mode,
         }
 
-        # Create the history directory if it doesn't exist
-        history_dir = str(Path.home() / ".lazyssh")
-        os.makedirs(history_dir, exist_ok=True)
+        # Initialize history
+        self.history_dir = Path.home() / ".lazyssh"
+        if not self.history_dir.exists():
+            self.history_dir.mkdir(parents=True, exist_ok=True)
+        self.history_file = self.history_dir / "command_history"
 
-        # Initialize prompt_toolkit components
-        self.completer = LazySSHCompleter(self)
-        self.session: PromptSession = PromptSession(
-            history=FileHistory(str(Path.home() / ".lazyssh" / "command_history"))
-        )
-        self.style = Style.from_dict(
-            {
-                "prompt": "ansicyan bold",
-            }
-        )
+        # Log initialization
+        if CMD_LOGGER:
+            CMD_LOGGER.debug("CommandMode initialized")
 
     def _get_connection_completions(self) -> list[str]:
         """Get list of connection names for completion"""
@@ -272,58 +279,90 @@ class CommandMode:
                 if conn.tunnels:
                     display_tunnels(socket_path, conn)
 
-    def run(self) -> None:
+    def run(self) -> str | None:
         """Run the command mode interface"""
-        while True:
-            try:
-                # Show current status and mode before each prompt
-                print()  # Empty line for better readability
-                self.show_status()
+        # Create the session
+        try:
+            session: PromptSession = PromptSession(
+                history=FileHistory(str(self.history_file)),
+                completer=LazySSHCompleter(self),
+                style=Style.from_dict(
+                    {
+                        "prompt": "ansicyan bold",
+                    }
+                ),
+            )
 
-                # Get command with prompt_toolkit
-                command = self.session.prompt(
-                    self.get_prompt_text(),
-                    style=self.style,
-                    completer=self.completer,
-                    complete_while_typing=True,
-                )
+            if CMD_LOGGER:
+                CMD_LOGGER.info("Starting command mode interface")
 
-                if not command.strip():
-                    continue
+            # Display the banner and help
+            # self.show_available_commands()  # Remove this line to prevent auto-showing commands
 
+            # Main loop
+            while True:
                 try:
-                    parts = shlex.split(command)
-                except ValueError:
-                    display_error("Error parsing command. Check your quotes.")
-                    continue
+                    # Get user input
+                    text = session.prompt(lambda: self.get_prompt_text())
 
-                if not parts:
-                    continue
+                    # Skip if empty
+                    if not text.strip():
+                        continue
 
-                cmd, *args = parts
+                    # Parse the command and arguments
+                    try:
+                        parts = shlex.split(text)
+                    except ValueError as e:
+                        display_error(f"Invalid command syntax: {e}")
+                        if CMD_LOGGER:
+                            CMD_LOGGER.error(f"Invalid command syntax: {e}")
+                        continue
 
-                if cmd not in self.commands:
-                    display_error(f"Unknown command: {cmd}")
-                    display_info("Type 'help' for available commands")
-                    self.show_available_commands()
-                    continue
+                    # Get the command and arguments
+                    cmd = parts[0].lower() if parts else ""
+                    args = parts[1:] if len(parts) > 1 else []
 
-                result = self.commands[cmd](args)
-                if result == "mode":
-                    return  # Return to let main program switch modes
-                elif result is True and cmd == "exit":
-                    # Exit handled by cmd_exit
-                    continue
+                    # Check if the command exists
+                    if cmd not in self.commands:
+                        display_error(f"Unknown command: {cmd}")
+                        display_info("Type 'help' to see available commands")
+                        if CMD_LOGGER:
+                            CMD_LOGGER.warning(f"Unknown command attempted: {cmd}")
+                        continue
 
-            except KeyboardInterrupt:
-                display_warning("Use 'exit' command to exit LazySSH safely.")
-                continue
-            except EOFError:
-                display_warning("Use 'exit' command to exit LazySSH safely.")
-                continue
-            except Exception as e:
-                display_error(f"Error: {str(e)}")
-                display_info("Type 'help' for command usage")
+                    # Log the command
+                    if CMD_LOGGER:
+                        CMD_LOGGER.info(f"Executing command: {cmd} {' '.join(args)}")
+
+                    # Execute the command
+                    result = self.commands[cmd](args)
+
+                    # Handle the result
+                    if result == "mode":
+                        # Special case for switching modes
+                        if CMD_LOGGER:
+                            CMD_LOGGER.info("Switching to prompt mode")
+                        return "mode"
+
+                    elif result:
+                        # Success
+                        if not cmd == "list":  # Don't show status after list command
+                            self.show_status()
+                    # else handled by the command method
+
+                except (KeyboardInterrupt, EOFError):
+                    # Handle Ctrl+C and Ctrl+D
+                    if CMD_LOGGER:
+                        CMD_LOGGER.info("User interrupted command mode (Ctrl+C or Ctrl+D)")
+                    break
+
+        except Exception as e:
+            display_error(f"Error in command mode: {str(e)}")
+            if CMD_LOGGER:
+                CMD_LOGGER.exception(f"Unhandled error in command mode: {str(e)}")
+            return None
+
+        return None
 
     def show_available_commands(self) -> None:
         """Show available commands when user enters an unknown command"""
@@ -373,6 +412,8 @@ class CommandMode:
                     "Usage: lazyssh -ip <ip> -port <port> -user <username> -socket <n> "
                     "[-proxy [port]] [-ssh-key <identity_file>] [-shell <shell>] [-no-term]"
                 )
+                if CMD_LOGGER:
+                    CMD_LOGGER.error(f"Missing required parameters: {', '.join(missing)}")
                 return False
 
             # Check if the socket name already exists
@@ -424,7 +465,16 @@ class CommandMode:
                         conn.dynamic_port = int(params["proxy"])
                     except ValueError:
                         display_error("Proxy port must be a number")
+                        if CMD_LOGGER:
+                            CMD_LOGGER.error(f"Invalid proxy port: {params['proxy']}")
                         return False
+
+            # Log connection attempt
+            if CMD_LOGGER:
+                CMD_LOGGER.info(
+                    f"Creating SSH connection: {conn.username}@{conn.host}:{conn.port} "
+                    f"(socket: {params['socket']})"
+                )
 
             # Create the connection
             if self.ssh_manager.create_connection(conn):
@@ -435,6 +485,8 @@ class CommandMode:
             return False
         except ValueError as e:
             display_error(str(e))
+            if CMD_LOGGER:
+                CMD_LOGGER.error(f"Error in lazyssh command: {str(e)}")
             return False
 
     def cmd_tunc(self, args: list[str]) -> bool:
@@ -533,7 +585,7 @@ class CommandMode:
             display_info("[bold cyan]\nLazySSH Command Mode - Available Commands:[/bold cyan]\n")
             display_info("[magenta bold]SSH Connection:[/magenta bold]")
             display_info(
-                "  [cyan]lazyssh[/cyan] -ip [yellow]<ip>[/yellow] -port [yellow]<port>[/yellow] -user [yellow]<username>[/yellow] -socket [yellow]<name>[/yellow] "
+                "  [cyan]lazyssh[/cyan] -ip [yellow]<ip>[/yellow] -port [yellow]<port>[/yellow] -user [yellow]<username>[/yellow] -socket [yellow]<n>[/yellow] "
                 "[-proxy [yellow]<port>[/yellow]] [-ssh-key [yellow]<path>[/yellow]] [-shell [yellow]<shell>[/yellow]] [-no-term]"
             )
             display_info("  [cyan]close[/cyan] [yellow]<ssh_id>[/yellow]")
@@ -560,8 +612,8 @@ class CommandMode:
             display_info("  [dim]Example:[/dim] [green]tund 1[/green]\n")
 
             display_info("[magenta bold]Terminal:[/magenta bold]")
-            display_info("  [cyan]term[/cyan] [yellow]<ssh_id>[/yellow]")
-            display_info("  [dim]Example:[/dim] [green]term ubuntu[/green]\n")
+            display_info("  [cyan]terminal[/cyan] [yellow]<ssh_id>[/yellow]")
+            display_info("  [dim]Example:[/dim] [green]terminal ubuntu[/green]\n")
 
             display_info("[magenta bold]File Transfer:[/magenta bold]")
             display_info("  [cyan]scp[/cyan] [[yellow]<ssh_id>[/yellow]]")
@@ -570,6 +622,7 @@ class CommandMode:
             display_info("[magenta bold]System Commands:[/magenta bold]")
             display_info("  [cyan]list[/cyan]    - Show all connections and tunnels")
             display_info("  [cyan]mode[/cyan]    - Switch mode (command/prompt)")
+            display_info("  [cyan]debug[/cyan]   - Toggle debug logging to console")
             display_info("  [cyan]help[/cyan]    - Show this help")
             display_info("  [cyan]exit[/cyan]    - Exit the program")
             return True
@@ -640,13 +693,13 @@ class CommandMode:
             )
             display_info("\n[magenta bold]Example:[/magenta bold]")
             display_info("  [green]tund 1[/green]")
-        elif cmd == "term":
+        elif cmd == "terminal":
             display_info("[bold cyan]\nOpen a terminal for an SSH connection:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]term[/cyan] [yellow]<ssh_id>[/yellow]")
+            display_info("[yellow]Usage:[/yellow] [cyan]terminal[/cyan] [yellow]<ssh_id>[/yellow]")
             display_info("[magenta bold]Parameters:[/magenta bold]")
             display_info("  [cyan]ssh_id[/cyan] : The identifier of the SSH connection")
             display_info("\n[magenta bold]Example:[/magenta bold]")
-            display_info("  [green]term ubuntu[/green]")
+            display_info("  [green]terminal ubuntu[/green]")
         elif cmd == "mode":
             display_info("[bold cyan]\nSwitch between command and interactive modes:[/bold cyan]")
             display_info("[yellow]Usage:[/yellow] [cyan]mode[/cyan]")
@@ -696,6 +749,20 @@ class CommandMode:
             display_info(
                 "  [green]scp[/green]                               [dim]# Enter SCP mode and select a connection interactively[/dim]"
             )
+        elif cmd == "debug":
+            display_info("[bold cyan]\nToggle debug logging to console:[/bold cyan]")
+            display_info(
+                "[yellow]Usage:[/yellow] [cyan]debug[/cyan] [[yellow]off|disable|false|0[/yellow]]"
+            )
+            display_info("\n[magenta bold]Description:[/magenta bold]")
+            display_info("  Toggles debug logging output to the console.")
+            display_info("  Logs are always saved to /tmp/lazyssh/logs regardless of this setting.")
+            display_info("  When enabled, all log messages will be displayed in the console.")
+            display_info("\n[magenta bold]Examples:[/magenta bold]")
+            display_info(
+                "  [green]debug[/green]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
+            )
+            display_info("  [green]debug off[/green]  [dim]# Explicitly disable debug mode[/dim]")
         else:
             display_error(f"Unknown command: {cmd}")
             self.cmd_help([])
@@ -741,19 +808,22 @@ class CommandMode:
         sys.exit(0)
 
     def cmd_mode(self, args: list[str]) -> str:
-        """Switch mode (command/prompt)"""
+        """Switch to prompt mode"""
+        # Switch to prompt mode
+        display_info("Switching to prompt mode...")
         return "mode"
 
     def cmd_clear(self, args: list[str]) -> bool:
-        """Clear the screen"""
+        """Clear the terminal screen"""
+        # Implementation for clearing the screen
         os.system("clear")
         return True
 
     def cmd_terminal(self, args: list[str]) -> bool:
         """Handle terminal command for opening a terminal"""
         if len(args) != 1:
-            display_error("Usage: term <ssh_id>")
-            display_info("Example: term ubuntu")
+            display_error("Usage: terminal <ssh_id>")
+            display_info("Example: terminal ubuntu")
             return False
 
         conn_name = args[0]
@@ -761,6 +831,8 @@ class CommandMode:
 
         if socket_path not in self.ssh_manager.connections:
             display_error(f"SSH connection '{conn_name}' not found")
+            if CMD_LOGGER:
+                CMD_LOGGER.error(f"Connection not found for terminal: {conn_name}")
             return False
 
         try:
@@ -774,6 +846,8 @@ class CommandMode:
             # Display the command that will be executed
             display_info("Opening terminal with command:")
             display_info(ssh_cmd)
+            if CMD_LOGGER:
+                CMD_LOGGER.info(f"Opening terminal for connection: {conn_name}")
 
             self.ssh_manager.open_terminal(socket_path)
             display_success(f"Terminal opened for connection '{conn_name}'")
@@ -824,4 +898,35 @@ class CommandMode:
         scp_mode = SCPMode(self.ssh_manager, selected_connection)
         scp_mode.run()
         display_info("Exited SCP mode")
+        return True
+
+    def cmd_debug(self, args: list[str]) -> bool:
+        """Enable or disable debug logging"""
+        if args and args[0].lower() in ("off", "disable", "false", "0"):
+            set_debug_mode(False)
+            display_info("Debug logging disabled")
+            if CMD_LOGGER:
+                CMD_LOGGER.info("Debug logging disabled")
+        else:
+            set_debug_mode(True)
+            display_info("Debug logging enabled")
+            if CMD_LOGGER:
+                CMD_LOGGER.info("Debug logging enabled")
+        return True
+
+    def cmd_disconnectall(self, args: list[str]) -> bool:
+        """Close all connections"""
+        # Implementation for disconnecting all connections
+        if not self.ssh_manager.connections:
+            display_info("No active connections to close")
+            return True
+
+        display_info(f"Closing {len(self.ssh_manager.connections)} connections...")
+
+        # Make a copy of the connections to avoid modification during iteration
+        connections = self.ssh_manager.connections.copy()
+        for socket_path in list(connections.keys()):
+            self.ssh_manager.close_connection(socket_path)
+
+        display_success("All connections closed")
         return True
