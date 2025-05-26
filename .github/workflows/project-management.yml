@@ -1,0 +1,446 @@
+name: Project Management Automation
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled, assigned, unassigned]
+  pull_request:
+    types: [opened, edited, labeled, unlabeled, assigned, unassigned, ready_for_review]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sundays
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Auto-label based on title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue || context.payload.pull_request;
+            const title = issue.title.toLowerCase();
+            const body = issue.body?.toLowerCase() || '';
+            
+            const labels = [];
+            
+            // Auto-label based on title prefixes
+            if (title.includes('[bug]') || title.includes('🐛')) {
+              labels.push('bug');
+            }
+            if (title.includes('[feature]') || title.includes('✨')) {
+              labels.push('enhancement');
+            }
+            if (title.includes('[epic]') || title.includes('🎯')) {
+              labels.push('epic');
+            }
+            if (title.includes('[docs]') || title.includes('📚')) {
+              labels.push('documentation');
+            }
+            
+            // Auto-label based on content
+            if (body.includes('scp') || body.includes('file transfer')) {
+              labels.push('scp-mode');
+            }
+            if (body.includes('ssh') || body.includes('connection')) {
+              labels.push('connection-management');
+            }
+            if (body.includes('performance') || body.includes('slow') || body.includes('optimization')) {
+              labels.push('performance');
+            }
+            if (body.includes('ui') || body.includes('interface') || body.includes('display')) {
+              labels.push('ui-ux');
+            }
+            if (body.includes('security') || body.includes('vulnerability') || body.includes('auth')) {
+              labels.push('security');
+            }
+            if (body.includes('test') || body.includes('testing')) {
+              labels.push('testing');
+            }
+            
+            // Add needs-triage label for new issues
+            labels.push('needs-triage');
+            
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: issue.number,
+                labels: labels
+              });
+            }
+
+  priority-assignment:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Assign priority based on keywords
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue || context.payload.pull_request;
+            const title = issue.title.toLowerCase();
+            const body = issue.body?.toLowerCase() || '';
+            
+            let priority = '';
+            
+            // High priority keywords
+            if (title.includes('critical') || title.includes('urgent') || title.includes('security') ||
+                body.includes('critical') || body.includes('blocks') || body.includes('security vulnerability')) {
+              priority = 'high-priority';
+            }
+            // Medium priority keywords
+            else if (title.includes('important') || title.includes('enhancement') ||
+                     body.includes('feature request') || body.includes('improvement')) {
+              priority = 'medium-priority';
+            }
+            // Low priority for documentation and minor issues
+            else if (title.includes('docs') || title.includes('documentation') ||
+                     body.includes('documentation') || body.includes('typo')) {
+              priority = 'low-priority';
+            }
+            
+            if (priority) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: issue.number,
+                labels: [priority]
+              });
+            }
+
+  stale-issue-management:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Mark stale issues
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had recent activity. 
+            It will be closed if no further activity occurs. Thank you for your contributions.
+            
+            If this issue is still relevant, please:
+            - Add a comment to keep it open
+            - Update the issue with current information
+            - Add the `keep-open` label to prevent auto-closure
+          stale-pr-message: |
+            This pull request has been automatically marked as stale because it has not had recent activity.
+            It will be closed if no further activity occurs. Thank you for your contributions.
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'
+          days-before-stale: 60
+          days-before-close: 14
+          exempt-issue-labels: 'epic,keep-open,high-priority'
+          exempt-pr-labels: 'keep-open,high-priority'
+
+  issue-metrics:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed'
+    steps:
+      - name: Calculate issue metrics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+            
+            if (!issue) return;
+            
+            const createdAt = new Date(issue.created_at);
+            const closedAt = new Date(issue.closed_at);
+            const leadTime = Math.round((closedAt - createdAt) / (1000 * 60 * 60 * 24)); // days
+            
+            // Add a comment with metrics (for tracking purposes)
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: `📊 **Issue Metrics**
+              - Lead Time: ${leadTime} days
+              - Labels: ${issue.labels.map(l => l.name).join(', ')}
+              - Assignees: ${issue.assignees.map(a => a.login).join(', ') || 'None'}
+              
+              *This comment is automatically generated for project metrics tracking.*`
+            });
+
+  welcome-new-contributors:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Welcome new contributors
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue || context.payload.pull_request;
+            const author = issue.user.login;
+            
+            // Check if this is the user's first contribution
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              creator: author,
+              state: 'all',
+              per_page: 2
+            });
+            
+            if (issues.length === 1) {
+              const welcomeMessage = `👋 Welcome to LazySSH, @${author}! 
+              
+              Thank you for your ${context.payload.issue ? 'issue' : 'pull request'}! 
+              
+              ${context.payload.issue ? 
+                `This appears to be your first issue. A maintainer will review it soon and add appropriate labels.
+                
+                **What happens next?**
+                1. A maintainer will triage your issue
+                2. If accepted, it will be added to our project board
+                3. You or another contributor can work on it
+                
+                **Want to contribute?** Check out our [Contributing Guide](CONTRIBUTING.md) and look for issues labeled \`good-first-issue\`.` :
+                `This appears to be your first pull request! A maintainer will review it soon.
+                
+                **What happens next?**
+                1. Automated checks will run
+                2. A maintainer will review your code
+                3. You may need to address feedback
+                4. Once approved, your PR will be merged
+                
+                Thank you for contributing to LazySSH! 🚀`
+              }`;
+              
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body: welcomeMessage
+              });
+            }
+
+  update-project-boards:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'labeled' || github.event.action == 'unlabeled' || github.event.action == 'opened' || github.event.action == 'closed'
+    steps:
+      - name: Update project board based on labels and status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue || context.payload.pull_request;
+            const action = context.payload.action;
+            
+            console.log(`Processing ${issue.pull_request ? 'PR' : 'issue'} #${issue.number} - Action: ${action}`);
+            console.log('Current labels:', issue.labels.map(l => l.name));
+            
+            // Project board automation logic
+            let targetColumn = null;
+            let projectAction = null;
+            
+            // Determine target column based on labels and status
+            if (action === 'closed') {
+              targetColumn = 'Done';
+              projectAction = 'move';
+            } else if (issue.labels.some(l => l.name === 'in-progress')) {
+              targetColumn = 'In Progress';
+              projectAction = 'move';
+            } else if (issue.labels.some(l => l.name === 'ready-for-review')) {
+              targetColumn = 'Review';
+              projectAction = 'move';
+            } else if (issue.labels.some(l => l.name === 'blocked')) {
+              targetColumn = 'Blocked';
+              projectAction = 'move';
+            } else if (issue.labels.some(l => l.name === 'needs-triage')) {
+              targetColumn = 'Triage';
+              projectAction = 'move';
+            } else if (action === 'opened') {
+              targetColumn = 'Backlog';
+              projectAction = 'add';
+            }
+            
+            if (targetColumn && projectAction) {
+              console.log(`Would ${projectAction} issue to "${targetColumn}" column`);
+              
+              // Add issue metrics for tracking
+              const labels = issue.labels.map(l => l.name);
+              const priority = labels.find(l => l.includes('priority')) || 'no-priority';
+              const component = labels.find(l => ['scp-mode', 'ui-ux', 'performance', 'security'].includes(l)) || 'general';
+              
+              console.log(`Priority: ${priority}, Component: ${component}`);
+              
+              // Store metadata for project tracking
+              const metadata = {
+                issue_number: issue.number,
+                title: issue.title,
+                priority: priority,
+                component: component,
+                labels: labels,
+                assignees: issue.assignees.map(a => a.login),
+                created_at: issue.created_at,
+                updated_at: issue.updated_at,
+                target_column: targetColumn,
+                action: projectAction
+              };
+              
+              console.log('Project metadata:', JSON.stringify(metadata, null, 2));
+            }
+
+  milestone-management:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'labeled' || github.event.action == 'opened'
+    steps:
+      - name: Auto-assign to milestones
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue || context.payload.pull_request;
+            
+            // Get all milestones
+            const { data: milestones } = await github.rest.issues.listMilestones({
+              owner,
+              repo,
+              state: 'open'
+            });
+            
+            console.log(`Found ${milestones.length} open milestones`);
+            
+            // Auto-assign based on labels
+            const labels = issue.labels.map(l => l.name);
+            let targetMilestone = null;
+            
+            // Version-specific assignments
+            if (labels.includes('v2.0') || labels.includes('epic')) {
+              targetMilestone = milestones.find(m => m.title.includes('v2.0'));
+            } else if (labels.includes('v1.1') || labels.includes('hotfix')) {
+              targetMilestone = milestones.find(m => m.title.includes('v1.1'));
+            } else if (labels.includes('high-priority') && !labels.includes('epic')) {
+              // High priority items go to next minor release
+              targetMilestone = milestones.find(m => m.title.includes('v1.1'));
+            } else if (labels.includes('documentation') || labels.includes('testing')) {
+              // Documentation and testing can go to any active milestone
+              targetMilestone = milestones.find(m => m.due_on && new Date(m.due_on) > new Date());
+            }
+            
+            if (targetMilestone && !issue.milestone) {
+              console.log(`Assigning to milestone: ${targetMilestone.title}`);
+              
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: issue.number,
+                milestone: targetMilestone.number
+              });
+              
+                             // Add comment about milestone assignment
+               await github.rest.issues.createComment({
+                 owner,
+                 repo,
+                 issue_number: issue.number,
+                 body: `🎯 **Milestone Assignment**\n\nThis issue has been automatically assigned to milestone **${targetMilestone.title}**.\n\n**Milestone Details:**\n- Due Date: ${targetMilestone.due_on ? new Date(targetMilestone.due_on).toLocaleDateString() : 'Not set'}\n- Progress: ${targetMilestone.closed_issues}/${targetMilestone.open_issues + targetMilestone.closed_issues} issues completed\n- Description: ${targetMilestone.description || 'No description'}\n\nIf this assignment is incorrect, please update the milestone manually or contact a maintainer.`
+               });
+            } else if (issue.milestone) {
+              console.log(`Issue already assigned to milestone: ${issue.milestone.title}`);
+            } else {
+              console.log('No suitable milestone found for auto-assignment');
+            }
+
+  project-metrics:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.action == 'closed'
+    steps:
+      - name: Calculate and report project metrics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            // Get repository statistics
+            const { data: repoData } = await github.rest.repos.get({ owner, repo });
+            
+            // Get issues and PRs for metrics
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+            
+            const { data: closedIssues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'closed',
+              per_page: 100,
+              since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() // Last 30 days
+            });
+            
+            // Calculate metrics
+            const totalOpen = openIssues.length;
+            const totalClosed = closedIssues.length;
+            const issuesOnly = openIssues.filter(item => !item.pull_request);
+            const prsOnly = openIssues.filter(item => item.pull_request);
+            
+            // Priority breakdown
+            const highPriority = issuesOnly.filter(issue => 
+              issue.labels.some(l => l.name === 'high-priority')).length;
+            const mediumPriority = issuesOnly.filter(issue => 
+              issue.labels.some(l => l.name === 'medium-priority')).length;
+            const lowPriority = issuesOnly.filter(issue => 
+              issue.labels.some(l => l.name === 'low-priority')).length;
+            
+            // Component breakdown
+            const scpMode = issuesOnly.filter(issue => 
+              issue.labels.some(l => l.name === 'scp-mode')).length;
+            const performance = issuesOnly.filter(issue => 
+              issue.labels.some(l => l.name === 'performance')).length;
+            const uiUx = issuesOnly.filter(issue => 
+              issue.labels.some(l => l.name === 'ui-ux')).length;
+            const security = issuesOnly.filter(issue => 
+              issue.labels.some(l => l.name === 'security')).length;
+            
+            // Calculate average resolution time for closed issues
+            const avgResolutionTime = closedIssues.reduce((acc, issue) => {
+              if (issue.closed_at && issue.created_at) {
+                const resolutionTime = new Date(issue.closed_at) - new Date(issue.created_at);
+                return acc + resolutionTime;
+              }
+              return acc;
+            }, 0) / closedIssues.length;
+            
+            const avgDays = Math.round(avgResolutionTime / (1000 * 60 * 60 * 24));
+            
+            // Get milestones
+            const { data: milestones } = await github.rest.issues.listMilestones({
+              owner,
+              repo,
+              state: 'open'
+            });
+            
+                         // Create metrics report
+             const metricsReport = `# 📊 LazySSH Project Metrics Report\\n\\n*Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}*\\n\\n## 📈 Overall Statistics\\n- **Total Open Issues**: ${issuesOnly.length}\\n- **Total Open PRs**: ${prsOnly.length}\\n- **Issues Closed (30 days)**: ${totalClosed}\\n- **Average Resolution Time**: ${avgDays} days\\n- **Repository Stars**: ${repoData.stargazers_count}\\n- **Repository Forks**: ${repoData.forks_count}\\n\\n## 🎯 Priority Breakdown\\n- **High Priority**: ${highPriority} issues\\n- **Medium Priority**: ${mediumPriority} issues\\n- **Low Priority**: ${lowPriority} issues\\n- **No Priority**: ${issuesOnly.length - highPriority - mediumPriority - lowPriority} issues\\n\\n## 🔧 Component Breakdown\\n- **SCP Mode**: ${scpMode} issues\\n- **Performance**: ${performance} issues\\n- **UI/UX**: ${uiUx} issues\\n- **Security**: ${security} issues\\n\\n## 🎯 Milestone Progress\\n${milestones.map(milestone => { const total = milestone.open_issues + milestone.closed_issues; const progress = total > 0 ? Math.round((milestone.closed_issues / total) * 100) : 0; return \`- **\${milestone.title}**: \${progress}% complete (\${milestone.closed_issues}/\${total})\`; }).join('\\n')}\\n\\n## 📋 Recommendations\\n${highPriority > 5 ? '⚠️ High number of high-priority issues - consider sprint planning\\n' : ''}${avgDays > 14 ? '⚠️ Average resolution time is high - consider process improvements\\n' : ''}${issuesOnly.length - highPriority - mediumPriority - lowPriority > 10 ? '⚠️ Many issues lack priority labels - consider triage session\\n' : ''}${milestones.length === 0 ? '⚠️ No active milestones - consider creating release milestones\\n' : ''}\\n---\\n*This report is automatically generated by the project management workflow.*`;
+            
+            console.log('Project Metrics Report:');
+            console.log(metricsReport);
+            
+            // Create or update a metrics issue (optional)
+            if (context.event_name === 'schedule') {
+              const title = `📊 Weekly Project Metrics - ${new Date().toLocaleDateString()}`;
+              
+              try {
+                await github.rest.issues.create({
+                  owner,
+                  repo,
+                  title: title,
+                  body: metricsReport,
+                  labels: ['metrics', 'infrastructure', 'low-priority']
+                });
+                console.log('Created weekly metrics issue');
+              } catch (error) {
+                console.log('Failed to create metrics issue:', error.message);
+              }
+            }
+

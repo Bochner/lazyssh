@@ -1,0 +1,51 @@
+name: Update Label Colors
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    paths:
+      - '.github/scripts/update-labels.py'
+      - '.github/workflows/update-labels.yml'
+
+jobs:
+  update-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+      
+      - name: Update label colors
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/scripts/update-labels.py
+      
+      - name: Create summary
+        run: |
+          echo "## 🎨 Label Color Update Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The label colors have been updated with a vibrant, meaningful color scheme:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Color Categories:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Priority Labels**: Red spectrum (high → medium → low)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Type Labels**: Blue spectrum (bugs, features, epics)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Component Labels**: Green spectrum (core features)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status Labels**: Various colors for workflow states" >> $GITHUB_STEP_SUMMARY
+          echo "- **Infrastructure Labels**: Purple/tech colors" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version Labels**: Gradient colors for releases" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Labels should now be much more visible and easier to distinguish at a glance! 🌈" >> $GITHUB_STEP_SUMMARY 
