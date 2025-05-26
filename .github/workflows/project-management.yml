@@ -9,6 +9,7 @@ on:
     types: [created]
   schedule:
     - cron: '0 0 * * 0'  # Run weekly on Sundays
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   auto-label:
