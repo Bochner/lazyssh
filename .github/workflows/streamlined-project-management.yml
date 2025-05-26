@@ -2,9 +2,9 @@ name: Streamlined Project Management
 
 on:
   issues:
-    types: [opened]
+    types: [opened, closed, reopened]
   pull_request:
-    types: [opened]
+    types: [opened, closed, reopened, ready_for_review]
   schedule:
     - cron: '0 9 * * 1'  # Weekly on Mondays at 9 AM UTC
 

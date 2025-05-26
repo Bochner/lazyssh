@@ -1,0 +1,307 @@
+name: Branch Protection Enforcement
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'  # Weekly on Mondays at 5 AM UTC
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/branch-protection.yml'
+
+jobs:
+  enforce-branch-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce branch protection rules
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            // Define branch protection configuration for LazySSH
+            const branchProtectionConfig = {
+              main: {
+                required_status_checks: {
+                  strict: true,
+                  contexts: [
+                    'ci/tests',
+                    'ci/lint',
+                    'ci/type-check'
+                  ]
+                },
+                enforce_admins: false,
+                required_pull_request_reviews: {
+                  required_approving_review_count: 1,
+                  dismiss_stale_reviews: true,
+                  require_code_owner_reviews: false,
+                  require_last_push_approval: false
+                },
+                restrictions: null,
+                allow_force_pushes: false,
+                allow_deletions: false,
+                required_linear_history: false,
+                allow_auto_merge: true,
+                required_conversation_resolution: true
+              }
+            };
+            
+            try {
+              for (const [branchName, config] of Object.entries(branchProtectionConfig)) {
+                console.log(`Updating branch protection for: ${branchName}`);
+                
+                try {
+                  await github.rest.repos.updateBranchProtection({
+                    owner,
+                    repo,
+                    branch: branchName,
+                    ...config
+                  });
+                  
+                  console.log(`✅ Updated branch protection for ${branchName}`);
+                } catch (error) {
+                  if (error.status === 404) {
+                    console.log(`⚠️ Branch '${branchName}' not found, skipping...`);
+                  } else {
+                    console.log(`❌ Error updating ${branchName}: ${error.message}`);
+                  }
+                }
+              }
+              
+              // List current protection status
+              console.log('\n📊 Current Branch Protection Status:');
+              
+              const { data: branches } = await github.rest.repos.listBranches({
+                owner,
+                repo,
+                protected: true
+              });
+              
+              for (const branch of branches) {
+                try {
+                  const { data: protection } = await github.rest.repos.getBranchProtection({
+                    owner,
+                    repo,
+                    branch: branch.name
+                  });
+                  
+                  console.log(`\n🔒 ${branch.name}:`);
+                  console.log(`  - Required reviews: ${protection.required_pull_request_reviews?.required_approving_review_count || 0}`);
+                  console.log(`  - Dismiss stale reviews: ${protection.required_pull_request_reviews?.dismiss_stale_reviews || false}`);
+                  console.log(`  - Required status checks: ${protection.required_status_checks?.contexts?.length || 0}`);
+                  console.log(`  - Enforce for admins: ${protection.enforce_admins?.enabled || false}`);
+                  console.log(`  - Allow force pushes: ${protection.allow_force_pushes?.enabled || false}`);
+                  
+                } catch (error) {
+                  console.log(`  - Error reading protection: ${error.message}`);
+                }
+              }
+              
+            } catch (error) {
+              console.error('Error managing branch protection:', error);
+              throw error;
+            }
+
+  check-compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch protection compliance
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            try {
+              // Get recent pull requests
+              const { data: recentPRs } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'closed',
+                sort: 'updated',
+                direction: 'desc',
+                per_page: 20
+              });
+              
+              console.log('🔍 Branch Protection Compliance Report:');
+              console.log('');
+              
+              let violationsFound = false;
+              
+              for (const pr of recentPRs) {
+                if (pr.merged && pr.base.ref === 'main') {
+                  // Check if PR had required reviews
+                  const { data: reviews } = await github.rest.pulls.listReviews({
+                    owner,
+                    repo,
+                    pull_number: pr.number
+                  });
+                  
+                  const approvedReviews = reviews.filter(r => r.state === 'APPROVED');
+                  
+                  if (approvedReviews.length === 0) {
+                    console.log(`⚠️ PR #${pr.number} merged without approval`);
+                    violationsFound = true;
+                  }
+                  
+                  // Check if PR had required status checks
+                  try {
+                    const { data: commits } = await github.rest.pulls.listCommits({
+                      owner,
+                      repo,
+                      pull_number: pr.number
+                    });
+                    
+                    if (commits.length > 0) {
+                      const lastCommit = commits[commits.length - 1];
+                      const { data: checkRuns } = await github.rest.checks.listForRef({
+                        owner,
+                        repo,
+                        ref: lastCommit.sha
+                      });
+                      
+                      const failedChecks = checkRuns.check_runs.filter(c => c.conclusion === 'failure');
+                      
+                      if (failedChecks.length > 0) {
+                        console.log(`⚠️ PR #${pr.number} merged with failing checks: ${failedChecks.map(c => c.name).join(', ')}`);
+                        violationsFound = true;
+                      }
+                    }
+                  } catch (error) {
+                    console.log(`   Could not check status for PR #${pr.number}: ${error.message}`);
+                  }
+                }
+              }
+              
+              if (!violationsFound) {
+                console.log('✅ No branch protection violations found in recent PRs');
+              }
+              
+              // Check for direct pushes to main
+              const { data: commits } = await github.rest.repos.listCommits({
+                owner,
+                repo,
+                sha: 'main',
+                per_page: 20
+              });
+              
+              const directPushes = commits.filter(commit => {
+                // Check if commit was made directly (not via PR)
+                return !commit.commit.message.includes('Merge pull request');
+              });
+              
+              if (directPushes.length > 0) {
+                console.log('\n⚠️ Recent direct pushes to main branch detected:');
+                directPushes.slice(0, 5).forEach(commit => {
+                  console.log(`  - ${commit.sha.substring(0, 7)}: ${commit.commit.message.split('\n')[0]}`);
+                });
+              } else {
+                console.log('\n✅ No recent direct pushes to main branch');
+              }
+              
+            } catch (error) {
+              console.error('Error checking compliance:', error);
+            }
+
+  repository-settings-audit:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Audit repository security settings
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            try {
+              const { data: repository } = await github.rest.repos.get({
+                owner,
+                repo
+              });
+              
+              console.log('🔍 Repository Security Audit:');
+              console.log('');
+              
+              // Check basic security settings
+              const securityChecks = [
+                {
+                  name: 'Private repository',
+                  status: repository.private,
+                  recommendation: 'Consider if repository should be private'
+                },
+                {
+                  name: 'Issues enabled',
+                  status: repository.has_issues,
+                  recommendation: 'Issues should be enabled for bug tracking'
+                },
+                {
+                  name: 'Wiki disabled',
+                  status: !repository.has_wiki,
+                  recommendation: 'Disable wiki if not used to reduce attack surface'
+                },
+                {
+                  name: 'Projects enabled',
+                  status: repository.has_projects,
+                  recommendation: 'Enable projects for better issue management'
+                },
+                {
+                  name: 'Discussions enabled',
+                  status: repository.has_discussions,
+                  recommendation: 'Enable discussions for community engagement'
+                },
+                {
+                  name: 'Delete head branches',
+                  status: repository.delete_branch_on_merge,
+                  recommendation: 'Auto-delete head branches to keep repository clean'
+                },
+                {
+                  name: 'Squash merge allowed',
+                  status: repository.allow_squash_merge,
+                  recommendation: 'Allow squash merge for cleaner history'
+                },
+                {
+                  name: 'Merge commits disabled',
+                  status: !repository.allow_merge_commit,
+                  recommendation: 'Disable merge commits to maintain linear history'
+                }
+              ];
+              
+              securityChecks.forEach(check => {
+                const icon = check.status ? '✅' : '⚠️';
+                console.log(`${icon} ${check.name}: ${check.status ? 'PASS' : 'NEEDS ATTENTION'}`);
+                if (!check.status) {
+                  console.log(`   💡 ${check.recommendation}`);
+                }
+              });
+              
+              // Check if vulnerability alerts are enabled
+              try {
+                await github.rest.repos.checkVulnerabilityAlerts({
+                  owner,
+                  repo
+                });
+                console.log('✅ Vulnerability alerts: ENABLED');
+              } catch (error) {
+                if (error.status === 404) {
+                  console.log('⚠️ Vulnerability alerts: DISABLED');
+                  console.log('   💡 Enable vulnerability alerts for security monitoring');
+                }
+              }
+              
+              // Check if automated security fixes are enabled
+              try {
+                await github.rest.repos.checkAutomatedSecurityFixes({
+                  owner,
+                  repo
+                });
+                console.log('✅ Automated security fixes: ENABLED');
+              } catch (error) {
+                if (error.status === 404) {
+                  console.log('⚠️ Automated security fixes: DISABLED');
+                  console.log('   💡 Enable automated security fixes for dependency updates');
+                }
+              }
+              
+            } catch (error) {
+              console.error('Error during security audit:', error);
+            } 

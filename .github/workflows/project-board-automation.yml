@@ -1,0 +1,332 @@
+name: Project Board Automation
+
+on:
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled, assigned, unassigned]
+  pull_request:
+    types: [opened, closed, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  update-project-board:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move items in project board
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const item = context.payload.issue || context.payload.pull_request;
+            const isIssue = !!context.payload.issue;
+            const action = context.payload.action;
+            
+            if (!item) return;
+            
+            // Get repository projects (Project Boards v1)
+            try {
+              const { data: projects } = await github.rest.projects.listForRepo({
+                owner,
+                repo
+              });
+              
+              if (projects.length === 0) {
+                console.log('No project boards found for this repository');
+                return;
+              }
+              
+              // Find the main project board (could be "LazySSH Development" or similar)
+              const mainProject = projects.find(p => 
+                p.name.toLowerCase().includes('development') ||
+                p.name.toLowerCase().includes('lazyssh') ||
+                p.name.toLowerCase().includes('main')
+              ) || projects[0];
+              
+              console.log(`Using project board: ${mainProject.name}`);
+              
+              // Get project columns
+              const { data: columns } = await github.rest.projects.listColumns({
+                project_id: mainProject.id
+              });
+              
+              // Define column mapping
+              const columnMap = {
+                'backlog': columns.find(c => c.name.toLowerCase().includes('backlog') || c.name.toLowerCase().includes('todo')),
+                'triage': columns.find(c => c.name.toLowerCase().includes('triage') || c.name.toLowerCase().includes('new')),
+                'in_progress': columns.find(c => c.name.toLowerCase().includes('progress') || c.name.toLowerCase().includes('doing')),
+                'review': columns.find(c => c.name.toLowerCase().includes('review') || c.name.toLowerCase().includes('testing')),
+                'done': columns.find(c => c.name.toLowerCase().includes('done') || c.name.toLowerCase().includes('closed'))
+              };
+              
+              // Check if item is already in the project
+              let existingCard = null;
+              for (const column of columns) {
+                try {
+                  const { data: cards } = await github.rest.projects.listCards({
+                    column_id: column.id
+                  });
+                  
+                  existingCard = cards.find(card => 
+                    card.content_url && card.content_url.includes(`/${isIssue ? 'issues' : 'pulls'}/${item.number}`)
+                  );
+                  
+                  if (existingCard) break;
+                } catch (error) {
+                  console.log(`Error checking column ${column.name}:`, error.message);
+                }
+              }
+              
+              // Determine target column based on item state and labels
+              let targetColumn = null;
+              const labels = item.labels?.map(label => label.name) || [];
+              
+              if (action === 'opened') {
+                if (labels.includes('needs-triage')) {
+                  targetColumn = columnMap.triage;
+                } else if (labels.includes('ready-for-review')) {
+                  targetColumn = columnMap.review;
+                } else {
+                  targetColumn = columnMap.backlog;
+                }
+              }
+              
+              else if (action === 'closed') {
+                targetColumn = columnMap.done;
+              }
+              
+              else if (action === 'reopened') {
+                if (isIssue) {
+                  targetColumn = columnMap.backlog;
+                } else {
+                  targetColumn = columnMap.review;
+                }
+              }
+              
+              else if (action === 'labeled') {
+                if (labels.includes('work-in-progress')) {
+                  targetColumn = columnMap.in_progress;
+                } else if (labels.includes('ready-for-review')) {
+                  targetColumn = columnMap.review;
+                } else if (labels.includes('needs-triage')) {
+                  targetColumn = columnMap.triage;
+                }
+              }
+              
+              else if (action === 'assigned') {
+                targetColumn = columnMap.in_progress;
+              }
+              
+              else if (action === 'ready_for_review') {
+                targetColumn = columnMap.review;
+              }
+              
+              else if (action === 'converted_to_draft') {
+                targetColumn = columnMap.in_progress;
+              }
+              
+              // Handle PR review events
+              if (context.payload.review) {
+                const review = context.payload.review;
+                if (review.state === 'approved') {
+                  // Check if all required reviews are approved
+                  const { data: reviews } = await github.rest.pulls.listReviews({
+                    owner,
+                    repo,
+                    pull_number: item.number
+                  });
+                  
+                  const latestReviews = {};
+                  reviews.forEach(r => {
+                    latestReviews[r.user.login] = r.state;
+                  });
+                  
+                  const hasApprovals = Object.values(latestReviews).some(state => state === 'APPROVED');
+                  const hasRequestedChanges = Object.values(latestReviews).some(state => state === 'CHANGES_REQUESTED');
+                  
+                  if (hasApprovals && !hasRequestedChanges) {
+                    // Move to a "Ready to Merge" column if it exists
+                    targetColumn = columns.find(c => c.name.toLowerCase().includes('ready') && c.name.toLowerCase().includes('merge')) || columnMap.review;
+                  }
+                } else if (review.state === 'changes_requested') {
+                  targetColumn = columnMap.in_progress;
+                }
+              }
+              
+              // Create card if it doesn't exist
+              if (!existingCard && targetColumn) {
+                try {
+                  const { data: newCard } = await github.rest.projects.createCard({
+                    column_id: targetColumn.id,
+                    content_id: item.id,
+                    content_type: isIssue ? 'Issue' : 'PullRequest'
+                  });
+                  
+                  console.log(`Created card for ${isIssue ? 'issue' : 'PR'} #${item.number} in column: ${targetColumn.name}`);
+                  return;
+                } catch (error) {
+                  console.log(`Error creating card: ${error.message}`);
+                  return;
+                }
+              }
+              
+              // Move existing card if target column is different
+              if (existingCard && targetColumn && existingCard.column_url !== targetColumn.url) {
+                try {
+                  await github.rest.projects.moveCard({
+                    card_id: existingCard.id,
+                    position: 'top',
+                    column_id: targetColumn.id
+                  });
+                  
+                  console.log(`Moved ${isIssue ? 'issue' : 'PR'} #${item.number} to column: ${targetColumn.name}`);
+                } catch (error) {
+                  console.log(`Error moving card: ${error.message}`);
+                }
+              }
+              
+            } catch (error) {
+              console.error('Error managing project board:', error);
+            }
+
+  create-project-board:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Create LazySSH project board
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            try {
+              // Check if project already exists
+              const { data: projects } = await github.rest.projects.listForRepo({
+                owner,
+                repo
+              });
+              
+              const existingProject = projects.find(p => p.name === 'LazySSH Development');
+              
+              if (existingProject) {
+                console.log('LazySSH Development project board already exists');
+                return;
+              }
+              
+              // Create new project
+              const { data: project } = await github.rest.projects.createForRepo({
+                owner,
+                repo,
+                name: 'LazySSH Development',
+                body: 'Development workflow for LazySSH - SSH toolkit for managing connections and tunnels'
+              });
+              
+              console.log(`Created project: ${project.name}`);
+              
+              // Create columns
+              const columns = [
+                { name: '📥 Triage', position: 1 },
+                { name: '📋 Backlog', position: 2 },
+                { name: '🔨 In Progress', position: 3 },
+                { name: '👀 Review/Testing', position: 4 },
+                { name: '🚀 Ready to Merge', position: 5 },
+                { name: '✅ Done', position: 6 }
+              ];
+              
+              for (const column of columns) {
+                await github.rest.projects.createColumn({
+                  project_id: project.id,
+                  name: column.name
+                });
+                console.log(`Created column: ${column.name}`);
+              }
+              
+            } catch (error) {
+              console.error('Error creating project board:', error);
+            }
+
+  sync-existing-items:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Sync existing issues and PRs to project board
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            try {
+              // Get the main project
+              const { data: projects } = await github.rest.projects.listForRepo({
+                owner,
+                repo
+              });
+              
+              const mainProject = projects.find(p => 
+                p.name.toLowerCase().includes('development') ||
+                p.name.toLowerCase().includes('lazyssh')
+              );
+              
+              if (!mainProject) {
+                console.log('No suitable project board found');
+                return;
+              }
+              
+              // Get project columns
+              const { data: columns } = await github.rest.projects.listColumns({
+                project_id: mainProject.id
+              });
+              
+              const triageColumn = columns.find(c => c.name.toLowerCase().includes('triage'));
+              const backlogColumn = columns.find(c => c.name.toLowerCase().includes('backlog'));
+              const doneColumn = columns.find(c => c.name.toLowerCase().includes('done'));
+              
+              // Get open issues
+              const { data: openIssues } = await github.rest.issues.listForRepo({
+                owner,
+                repo,
+                state: 'open',
+                per_page: 50
+              });
+              
+              for (const issue of openIssues) {
+                const labels = issue.labels?.map(label => label.name) || [];
+                let targetColumn = backlogColumn;
+                
+                if (labels.includes('needs-triage')) {
+                  targetColumn = triageColumn;
+                }
+                
+                // Check if already in project
+                let alreadyInProject = false;
+                for (const column of columns) {
+                  try {
+                    const { data: cards } = await github.rest.projects.listCards({
+                      column_id: column.id
+                    });
+                    
+                    if (cards.some(card => card.content_url && card.content_url.includes(`/issues/${issue.number}`))) {
+                      alreadyInProject = true;
+                      break;
+                    }
+                  } catch (error) {
+                    // Continue checking other columns
+                  }
+                }
+                
+                if (!alreadyInProject && targetColumn) {
+                  try {
+                    await github.rest.projects.createCard({
+                      column_id: targetColumn.id,
+                      content_id: issue.id,
+                      content_type: 'Issue'
+                    });
+                    console.log(`Added issue #${issue.number} to ${targetColumn.name}`);
+                  } catch (error) {
+                    console.log(`Error adding issue #${issue.number}: ${error.message}`);
+                  }
+                }
+              }
+              
+            } catch (error) {
+              console.error('Error syncing existing items:', error);
+            } 
