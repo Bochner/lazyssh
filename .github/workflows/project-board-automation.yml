@@ -31,6 +31,10 @@ on:
         required: false
         default: false
         type: boolean
+      debug_project:
+        description: 'Debug specific project access (provide project number)'
+        required: false
+        type: string
 
 env:
   PROJECT_NAME: "LazySSH Development"
@@ -38,31 +42,65 @@ env:
 jobs:
   discover-projects:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.discover_projects == 'true'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.discover_projects == 'true' || github.event.inputs.debug_project != '')
     steps:
-      - name: List all available projects
+      - name: Check GitHub token permissions
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Check what scopes the token has
+            try {
+              const response = await github.request('GET /user');
+              console.log('Token user info:', response.data.login);
+              console.log('Token type:', response.headers['x-oauth-scopes'] || 'Unknown');
+            } catch (error) {
+              console.log('Error checking token:', error.message);
+            }
+
+      - name: List all available projects (Enhanced Debug)
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner } = context.repo;
+            const debugProjectNumber = context.payload.inputs?.debug_project;
+            
+            console.log(`=== DEBUGGING PROJECT ACCESS FOR ${owner} ===`);
+            console.log(`Target project number: ${debugProjectNumber || 'all'}`);
+            console.log('');
             
             // Check if owner is a user or organization
             let isUser = false;
             let isOrg = false;
             
-            // Try to fetch as user first
+            // Try to fetch as user first with more detailed queries
             try {
               const userQuery = `
                 query($owner: String!) {
                   user(login: $owner) {
                     id
-                    projectsV2(first: 20) {
+                    login
+                    name
+                    projectsV2(first: 50, orderBy: {field: CREATED_AT, direction: DESC}) {
+                      totalCount
                       nodes {
                         id
                         title
                         number
                         url
+                        public
+                        closed
+                        createdAt
+                        updatedAt
+                        owner {
+                          ... on User {
+                            login
+                          }
+                          ... on Organization {
+                            login
+                          }
+                        }
                       }
                     }
                   }
@@ -71,21 +109,105 @@ jobs:
               const userResult = await github.graphql(userQuery, { owner });
               if (userResult.user) {
                 isUser = true;
-                console.log(`Found user account: ${owner}`);
-                console.log('Available Projects:');
-                console.log('==================');
+                console.log(`✅ Found user account: ${owner}`);
+                console.log(`   ID: ${userResult.user.id}`);
+                console.log(`   Name: ${userResult.user.name || 'N/A'}`);
+                console.log(`   Total projects: ${userResult.user.projectsV2.totalCount}`);
+                console.log('');
+                console.log('📋 Available Projects:');
+                console.log('=====================');
                 
                 if (userResult.user.projectsV2.nodes.length === 0) {
-                  console.log('No projects found. You need to create one manually.');
+                  console.log('❌ No projects found via API');
+                  console.log('   This might be due to:');
+                  console.log('   - Token permissions (need read:project scope)');
+                  console.log('   - Project visibility settings');
+                  console.log('   - API lag (try again in a few minutes)');
                 } else {
                   userResult.user.projectsV2.nodes.forEach(project => {
-                    console.log(`#${project.number}: ${project.title}`);
+                    const isTarget = debugProjectNumber && project.number.toString() === debugProjectNumber;
+                    console.log(`${isTarget ? '🎯' : '📌'} #${project.number}: ${project.title}`);
                     console.log(`   URL: ${project.url}`);
+                    console.log(`   ID: ${project.id}`);
+                    console.log(`   Public: ${project.public}`);
+                    console.log(`   Closed: ${project.closed}`);
+                    console.log(`   Created: ${project.createdAt}`);
+                    console.log(`   Updated: ${project.updatedAt}`);
+                    console.log(`   Owner: ${project.owner.login}`);
+                    console.log('');
                   });
+                  
+                  // If debugging a specific project, try to access it directly
+                  if (debugProjectNumber) {
+                    const targetProject = userResult.user.projectsV2.nodes.find(
+                      p => p.number.toString() === debugProjectNumber
+                    );
+                    
+                    if (targetProject) {
+                      console.log(`✅ Found target project #${debugProjectNumber} in list`);
+                      
+                      // Try to query it directly
+                      try {
+                        const directQuery = `
+                          query($owner: String!, $number: Int!) {
+                            user(login: $owner) {
+                              projectV2(number: $number) {
+                                id
+                                title
+                                number
+                                fields(first: 20) {
+                                  nodes {
+                                    ... on ProjectV2Field {
+                                      id
+                                      name
+                                      dataType
+                                    }
+                                    ... on ProjectV2SingleSelectField {
+                                      id
+                                      name
+                                      dataType
+                                      options {
+                                        id
+                                        name
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        `;
+                        
+                        const directResult = await github.graphql(directQuery, {
+                          owner,
+                          number: parseInt(debugProjectNumber)
+                        });
+                        
+                        if (directResult.user?.projectV2) {
+                          console.log(`✅ Successfully queried project #${debugProjectNumber} directly`);
+                          console.log(`   Fields found: ${directResult.user.projectV2.fields.nodes.length}`);
+                          directResult.user.projectV2.fields.nodes.forEach(field => {
+                            console.log(`   - ${field.name} (${field.dataType})`);
+                            if (field.options) {
+                              field.options.forEach(option => {
+                                console.log(`     * ${option.name}`);
+                              });
+                            }
+                          });
+                        } else {
+                          console.log(`❌ Direct query failed for project #${debugProjectNumber}`);
+                        }
+                      } catch (directError) {
+                        console.log(`❌ Direct query error: ${directError.message}`);
+                      }
+                    } else {
+                      console.log(`❌ Project #${debugProjectNumber} not found in projects list`);
+                    }
+                  }
                 }
               }
             } catch (error) {
-              console.log(`Not a user account: ${error.message}`);
+              console.log(`❌ Error querying user: ${error.message}`);
             }
             
             // If not a user, try as organization
@@ -95,12 +217,19 @@ jobs:
                   query($owner: String!) {
                     organization(login: $owner) {
                       id
-                      projectsV2(first: 20) {
+                      login
+                      name
+                      projectsV2(first: 50) {
+                        totalCount
                         nodes {
                           id
                           title
                           number
                           url
+                          public
+                          closed
+                          createdAt
+                          updatedAt
                         }
                       }
                     }
@@ -109,27 +238,39 @@ jobs:
                 const orgResult = await github.graphql(orgQuery, { owner });
                 if (orgResult.organization) {
                   isOrg = true;
-                  console.log(`Found organization account: ${owner}`);
-                  console.log('Available Projects:');
-                  console.log('==================');
+                  console.log(`✅ Found organization account: ${owner}`);
+                  console.log('📋 Available Projects:');
+                  console.log('=====================');
                   
                   if (orgResult.organization.projectsV2.nodes.length === 0) {
-                    console.log('No projects found. You need to create one manually.');
+                    console.log('❌ No projects found');
                   } else {
                     orgResult.organization.projectsV2.nodes.forEach(project => {
-                      console.log(`#${project.number}: ${project.title}`);
+                      console.log(`📌 #${project.number}: ${project.title}`);
                       console.log(`   URL: ${project.url}`);
+                      console.log(`   ID: ${project.id}`);
+                      console.log(`   Public: ${project.public}`);
+                      console.log('');
                     });
                   }
                 }
               } catch (error) {
-                console.log(`Not an organization account: ${error.message}`);
+                console.log(`❌ Error querying organization: ${error.message}`);
               }
             }
             
             if (!isUser && !isOrg) {
-              console.log(`Could not find user or organization: ${owner}`);
+              console.log(`❌ Could not find user or organization: ${owner}`);
             }
+            
+            console.log('');
+            console.log('🔧 TROUBLESHOOTING TIPS:');
+            console.log('========================');
+            console.log('1. Check that your project is public or the token has proper permissions');
+            console.log('2. Verify the project URL and number match');
+            console.log('3. Try running this workflow again in a few minutes (API lag)');
+            console.log('4. Check if the project is a "Project (classic)" vs "Project (beta/v2)"');
+            console.log('5. Only Project V2 (beta) projects work with this automation');
 
   update-project-board:
     runs-on: ubuntu-latest
