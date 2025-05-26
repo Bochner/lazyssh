@@ -7,6 +7,21 @@ on:
     types: [opened, closed, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
   pull_request_review:
     types: [submitted]
+  workflow_dispatch:
+    inputs:
+      sync_all:
+        description: 'Sync all open issues and PRs to project board'
+        required: false
+        default: 'false'
+        type: boolean
+      issue_number:
+        description: 'Specific issue number to process (optional)'
+        required: false
+        type: string
+      pr_number:
+        description: 'Specific PR number to process (optional)'
+        required: false
+        type: string
 
 jobs:
   update-project-board:
