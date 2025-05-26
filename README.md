@@ -82,6 +82,33 @@ For detailed documentation, please see the [docs directory](docs/):
 
 MIT License
 
+## GitHub Project Board
+
+This repository uses GitHub Projects for issue and PR tracking. To use the automated project board features:
+
+### Setting Up Project Board
+
+For detailed setup instructions, see [.github/setup-project-board.md](.github/setup-project-board.md).
+
+Quick setup:
+1. Create a new project at: https://github.com/users/YOUR_USERNAME/projects
+2. Name it "LazySSH Development" 
+3. Configure the Status field with the predefined options
+4. Link your repository to the project
+
+### Workflow Automation
+
+The repository includes automated workflows that will:
+- Add new issues and PRs to the project board
+- Update status based on labels and PR state
+- Sync existing items when manually triggered
+
+To manually trigger a sync of all open issues and PRs:
+1. Go to Actions → Project Board Automation
+2. Click "Run workflow"
+3. Check "Sync all open issues and PRs"
+4. Click "Run workflow"
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

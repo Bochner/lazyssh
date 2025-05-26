@@ -42,65 +42,115 @@ jobs:
           script: |
             const projectNumber = context.payload.inputs?.project_number || 1;
             
-            const query = `
-              query($owner: String!, $number: Int!) {
+            // First, check if owner is a user or organization
+            const ownerTypeQuery = `
+              query($owner: String!) {
                 user(login: $owner) {
-                  projectV2(number: $number) {
-                    id
-                    title
-                    fields(first: 20) {
-                      nodes {
-                        ... on ProjectV2Field {
-                          id
-                          name
-                        }
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options {
-                            id
-                            name
-                          }
-                        }
-                      }
-                    }
-                  }
+                  id
+                  __typename
                 }
                 organization(login: $owner) {
-                  projectV2(number: $number) {
-                    id
-                    title
-                    fields(first: 20) {
-                      nodes {
-                        ... on ProjectV2Field {
-                          id
-                          name
-                        }
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options {
-                            id
-                            name
-                          }
-                        }
-                      }
-                    }
-                  }
+                  id
+                  __typename
                 }
               }
             `;
             
-            const variables = {
-              owner: context.repo.owner,
-              number: parseInt(projectNumber)
-            };
+            const ownerResult = await github.graphql(ownerTypeQuery, {
+              owner: context.repo.owner
+            });
             
-            const result = await github.graphql(query, variables);
-            const project = result.user?.projectV2 || result.organization?.projectV2;
+            const isUser = !!ownerResult.user;
+            const isOrg = !!ownerResult.organization;
+            
+            console.log(`Owner ${context.repo.owner} is: ${isUser ? 'User' : 'Organization'}`);
+            
+            // Query project based on owner type
+            let project = null;
+            
+            if (isUser) {
+              const userQuery = `
+                query($owner: String!, $number: Int!) {
+                  user(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      title
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2Field {
+                            id
+                            name
+                          }
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options {
+                              id
+                              name
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              
+              try {
+                const result = await github.graphql(userQuery, {
+                  owner: context.repo.owner,
+                  number: parseInt(projectNumber)
+                });
+                project = result.user?.projectV2;
+              } catch (error) {
+                console.log(`Error querying user project: ${error.message}`);
+              }
+            }
+            
+            if (isOrg && !project) {
+              const orgQuery = `
+                query($owner: String!, $number: Int!) {
+                  organization(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      title
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2Field {
+                            id
+                            name
+                          }
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options {
+                              id
+                              name
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              
+              try {
+                const result = await github.graphql(orgQuery, {
+                  owner: context.repo.owner,
+                  number: parseInt(projectNumber)
+                });
+                project = result.organization?.projectV2;
+              } catch (error) {
+                console.log(`Error querying organization project: ${error.message}`);
+              }
+            }
             
             if (!project) {
-              throw new Error(`Project #${projectNumber} not found for ${context.repo.owner}`);
+              console.log(`Project #${projectNumber} not found for ${context.repo.owner}`);
+              console.log('Available projects can be viewed at: https://github.com/users/' + context.repo.owner + '/projects');
+              core.setOutput('project-found', 'false');
+              return;
             }
             
             console.log(`Found project: ${project.title}`);
@@ -113,9 +163,12 @@ jobs:
             );
             
             if (!statusField) {
-              throw new Error('No Status field found in project');
+              console.log('No Status field found in project');
+              core.setOutput('project-found', 'false');
+              return;
             }
             
+            core.setOutput('project-found', 'true');
             core.setOutput('project-id', project.id);
             core.setOutput('status-field-id', statusField.id);
             core.setOutput('status-options', JSON.stringify(statusField.options || []));
@@ -129,7 +182,7 @@ jobs:
       - name: Add item to project
         id: add-item
         uses: actions/github-script@v7
-        if: github.event.action == 'opened' || github.event_name == 'workflow_dispatch'
+        if: (github.event.action == 'opened' || github.event_name == 'workflow_dispatch') && steps.get-project.outputs.project-found == 'true'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -240,7 +293,7 @@ jobs:
 
       - name: Update item status
         uses: actions/github-script@v7
-        if: steps.add-item.outputs.item-id || github.event.action != 'opened'
+        if: steps.get-project.outputs.project-found == 'true' && (steps.add-item.outputs.item-id || github.event.action != 'opened')
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -446,9 +499,8 @@ jobs:
           script: |
             const { owner } = context.repo;
             
-            // Note: Creating a new Project v2 requires organization-level permissions
-            // This will only work if the repository is under an organization
-            // For personal repos, projects need to be created manually
+            // Note: Creating a new Project v2 requires appropriate permissions
+            // For personal repos, projects need to be created manually through the GitHub UI
             
             const createMutation = `
               mutation($ownerId: ID!, $title: String!) {
@@ -464,23 +516,43 @@ jobs:
               }
             `;
             
-            // First, get the owner ID (user or organization)
-            const ownerQuery = `
+            // First, check if owner is a user or organization and get the ID
+            const ownerTypeQuery = `
               query($login: String!) {
                 user(login: $login) {
                   id
+                  __typename
                 }
                 organization(login: $login) {
                   id
+                  __typename
                 }
               }
             `;
             
-            const ownerResult = await github.graphql(ownerQuery, { login: owner });
-            const ownerId = ownerResult.user?.id || ownerResult.organization?.id;
+            let ownerId = null;
+            let isUser = false;
+            
+            try {
+              const ownerResult = await github.graphql(ownerTypeQuery, { login: owner });
+              
+              if (ownerResult.user) {
+                ownerId = ownerResult.user.id;
+                isUser = true;
+                console.log(`Found user account: ${owner}`);
+              } else if (ownerResult.organization) {
+                ownerId = ownerResult.organization.id;
+                isUser = false;
+                console.log(`Found organization account: ${owner}`);
+              }
+            } catch (error) {
+              console.log(`Error checking account type: ${error.message}`);
+            }
             
             if (!ownerId) {
-              throw new Error(`Could not find user or organization: ${owner}`);
+              console.log(`Could not find user or organization: ${owner}`);
+              console.log('Please create the project manually at: https://github.com/users/' + owner + '/projects');
+              return;
             }
             
             try {
@@ -553,78 +625,127 @@ jobs:
             const { owner, repo } = context.repo;
             const projectNumber = context.payload.inputs?.project_number || 1;
             
-            // Get project info
-            const projectQuery = `
-              query($owner: String!, $number: Int!) {
+            // First, check if owner is a user or organization
+            const ownerTypeQuery = `
+              query($owner: String!) {
                 user(login: $owner) {
-                  projectV2(number: $number) {
-                    id
-                    fields(first: 20) {
-                      nodes {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options {
-                            id
-                            name
-                          }
-                        }
-                      }
-                    }
-                    items(first: 100) {
-                      nodes {
-                        content {
-                          ... on Issue {
-                            number
-                          }
-                          ... on PullRequest {
-                            number
-                          }
-                        }
-                      }
-                    }
-                  }
+                  id
+                  __typename
                 }
                 organization(login: $owner) {
-                  projectV2(number: $number) {
-                    id
-                    fields(first: 20) {
-                      nodes {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options {
-                            id
-                            name
-                          }
-                        }
-                      }
-                    }
-                    items(first: 100) {
-                      nodes {
-                        content {
-                          ... on Issue {
-                            number
-                          }
-                          ... on PullRequest {
-                            number
-                          }
-                        }
-                      }
-                    }
-                  }
+                  id
+                  __typename
                 }
               }
             `;
             
-            const projectResult = await github.graphql(projectQuery, {
-              owner,
-              number: parseInt(projectNumber)
+            const ownerResult = await github.graphql(ownerTypeQuery, {
+              owner
             });
             
-            const project = projectResult.user?.projectV2 || projectResult.organization?.projectV2;
+            const isUser = !!ownerResult.user;
+            const isOrg = !!ownerResult.organization;
+            
+            console.log(`Owner ${owner} is: ${isUser ? 'User' : 'Organization'}`);
+            
+            // Get project info based on owner type
+            let project = null;
+            
+            if (isUser) {
+              const userProjectQuery = `
+                query($owner: String!, $number: Int!) {
+                  user(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options {
+                              id
+                              name
+                            }
+                          }
+                        }
+                      }
+                      items(first: 100) {
+                        nodes {
+                          content {
+                            ... on Issue {
+                              number
+                            }
+                            ... on PullRequest {
+                              number
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              
+              try {
+                const result = await github.graphql(userProjectQuery, {
+                  owner,
+                  number: parseInt(projectNumber)
+                });
+                project = result.user?.projectV2;
+              } catch (error) {
+                console.log(`Error querying user project: ${error.message}`);
+              }
+            }
+            
+            if (isOrg && !project) {
+              const orgProjectQuery = `
+                query($owner: String!, $number: Int!) {
+                  organization(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options {
+                              id
+                              name
+                            }
+                          }
+                        }
+                      }
+                      items(first: 100) {
+                        nodes {
+                          content {
+                            ... on Issue {
+                              number
+                            }
+                            ... on PullRequest {
+                              number
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              
+              try {
+                const result = await github.graphql(orgProjectQuery, {
+                  owner,
+                  number: parseInt(projectNumber)
+                });
+                project = result.organization?.projectV2;
+              } catch (error) {
+                console.log(`Error querying organization project: ${error.message}`);
+              }
+            }
+            
             if (!project) {
-              console.log(`Project #${projectNumber} not found`);
+              console.log(`Project #${projectNumber} not found for ${owner}`);
+              console.log('Available projects can be viewed at: https://github.com/users/' + owner + '/projects');
               return;
             }
             
