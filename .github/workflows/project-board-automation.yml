@@ -43,25 +43,53 @@ jobs:
             const projectNumber = context.payload.inputs?.project_number || 1;
             
             // First, check if owner is a user or organization
-            const ownerTypeQuery = `
-              query($owner: String!) {
-                user(login: $owner) {
-                  id
-                  __typename
+            let ownerResult = { user: null, organization: null };
+            let isUser = false;
+            let isOrg = false;
+            
+            // Try to fetch as user first
+            try {
+              const userQuery = `
+                query($owner: String!) {
+                  user(login: $owner) {
+                    id
+                    __typename
+                  }
                 }
-                organization(login: $owner) {
-                  id
-                  __typename
-                }
+              `;
+              const userResult = await github.graphql(userQuery, {
+                owner: context.repo.owner
+              });
+              if (userResult.user) {
+                ownerResult.user = userResult.user;
+                isUser = true;
               }
-            `;
+            } catch (error) {
+              console.log(`Not a user account: ${error.message}`);
+            }
             
-            const ownerResult = await github.graphql(ownerTypeQuery, {
-              owner: context.repo.owner
-            });
-            
-            const isUser = !!ownerResult.user;
-            const isOrg = !!ownerResult.organization;
+            // If not a user, try as organization
+            if (!isUser) {
+              try {
+                const orgQuery = `
+                  query($owner: String!) {
+                    organization(login: $owner) {
+                      id
+                      __typename
+                    }
+                  }
+                `;
+                const orgResult = await github.graphql(orgQuery, {
+                  owner: context.repo.owner
+                });
+                if (orgResult.organization) {
+                  ownerResult.organization = orgResult.organization;
+                  isOrg = true;
+                }
+              } catch (error) {
+                console.log(`Not an organization account: ${error.message}`);
+              }
+            }
             
             console.log(`Owner ${context.repo.owner} is: ${isUser ? 'User' : 'Organization'}`);
             
@@ -517,36 +545,51 @@ jobs:
             `;
             
             // First, check if owner is a user or organization and get the ID
-            const ownerTypeQuery = `
-              query($login: String!) {
-                user(login: $login) {
-                  id
-                  __typename
-                }
-                organization(login: $login) {
-                  id
-                  __typename
-                }
-              }
-            `;
-            
             let ownerId = null;
             let isUser = false;
             
+            // Try to fetch as user first
             try {
-              const ownerResult = await github.graphql(ownerTypeQuery, { login: owner });
+              const userQuery = `
+                query($login: String!) {
+                  user(login: $login) {
+                    id
+                    __typename
+                  }
+                }
+              `;
+              const userResult = await github.graphql(userQuery, { login: owner });
               
-              if (ownerResult.user) {
-                ownerId = ownerResult.user.id;
+              if (userResult.user) {
+                ownerId = userResult.user.id;
                 isUser = true;
                 console.log(`Found user account: ${owner}`);
-              } else if (ownerResult.organization) {
-                ownerId = ownerResult.organization.id;
-                isUser = false;
-                console.log(`Found organization account: ${owner}`);
               }
             } catch (error) {
-              console.log(`Error checking account type: ${error.message}`);
+              console.log(`Not a user account: ${error.message}`);
+            }
+            
+            // If not a user, try as organization
+            if (!ownerId) {
+              try {
+                const orgQuery = `
+                  query($login: String!) {
+                    organization(login: $login) {
+                      id
+                      __typename
+                    }
+                  }
+                `;
+                const orgResult = await github.graphql(orgQuery, { login: owner });
+                
+                if (orgResult.organization) {
+                  ownerId = orgResult.organization.id;
+                  isUser = false;
+                  console.log(`Found organization account: ${owner}`);
+                }
+              } catch (error) {
+                console.log(`Not an organization account: ${error.message}`);
+              }
             }
             
             if (!ownerId) {
@@ -626,25 +669,49 @@ jobs:
             const projectNumber = context.payload.inputs?.project_number || 1;
             
             // First, check if owner is a user or organization
-            const ownerTypeQuery = `
-              query($owner: String!) {
-                user(login: $owner) {
-                  id
-                  __typename
+            let ownerResult = { user: null, organization: null };
+            let isUser = false;
+            let isOrg = false;
+            
+            // Try to fetch as user first
+            try {
+              const userQuery = `
+                query($owner: String!) {
+                  user(login: $owner) {
+                    id
+                    __typename
+                  }
                 }
-                organization(login: $owner) {
-                  id
-                  __typename
-                }
+              `;
+              const userResult = await github.graphql(userQuery, { owner });
+              if (userResult.user) {
+                ownerResult.user = userResult.user;
+                isUser = true;
               }
-            `;
+            } catch (error) {
+              console.log(`Not a user account: ${error.message}`);
+            }
             
-            const ownerResult = await github.graphql(ownerTypeQuery, {
-              owner
-            });
-            
-            const isUser = !!ownerResult.user;
-            const isOrg = !!ownerResult.organization;
+            // If not a user, try as organization
+            if (!isUser) {
+              try {
+                const orgQuery = `
+                  query($owner: String!) {
+                    organization(login: $owner) {
+                      id
+                      __typename
+                    }
+                  }
+                `;
+                const orgResult = await github.graphql(orgQuery, { owner });
+                if (orgResult.organization) {
+                  ownerResult.organization = orgResult.organization;
+                  isOrg = true;
+                }
+              } catch (error) {
+                console.log(`Not an organization account: ${error.message}`);
+              }
+            }
             
             console.log(`Owner ${owner} is: ${isUser ? 'User' : 'Organization'}`);
             
