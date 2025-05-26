@@ -26,11 +26,111 @@ on:
         description: 'Project number to use (defaults to first available)'
         required: false
         type: string
+      discover_projects:
+        description: 'List all available projects (for debugging)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   PROJECT_NAME: "LazySSH Development"
 
 jobs:
+  discover-projects:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.discover_projects == 'true'
+    steps:
+      - name: List all available projects
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner } = context.repo;
+            
+            // Check if owner is a user or organization
+            let isUser = false;
+            let isOrg = false;
+            
+            // Try to fetch as user first
+            try {
+              const userQuery = `
+                query($owner: String!) {
+                  user(login: $owner) {
+                    id
+                    projectsV2(first: 20) {
+                      nodes {
+                        id
+                        title
+                        number
+                        url
+                      }
+                    }
+                  }
+                }
+              `;
+              const userResult = await github.graphql(userQuery, { owner });
+              if (userResult.user) {
+                isUser = true;
+                console.log(`Found user account: ${owner}`);
+                console.log('Available Projects:');
+                console.log('==================');
+                
+                if (userResult.user.projectsV2.nodes.length === 0) {
+                  console.log('No projects found. You need to create one manually.');
+                } else {
+                  userResult.user.projectsV2.nodes.forEach(project => {
+                    console.log(`#${project.number}: ${project.title}`);
+                    console.log(`   URL: ${project.url}`);
+                  });
+                }
+              }
+            } catch (error) {
+              console.log(`Not a user account: ${error.message}`);
+            }
+            
+            // If not a user, try as organization
+            if (!isUser) {
+              try {
+                const orgQuery = `
+                  query($owner: String!) {
+                    organization(login: $owner) {
+                      id
+                      projectsV2(first: 20) {
+                        nodes {
+                          id
+                          title
+                          number
+                          url
+                        }
+                      }
+                    }
+                  }
+                `;
+                const orgResult = await github.graphql(orgQuery, { owner });
+                if (orgResult.organization) {
+                  isOrg = true;
+                  console.log(`Found organization account: ${owner}`);
+                  console.log('Available Projects:');
+                  console.log('==================');
+                  
+                  if (orgResult.organization.projectsV2.nodes.length === 0) {
+                    console.log('No projects found. You need to create one manually.');
+                  } else {
+                    orgResult.organization.projectsV2.nodes.forEach(project => {
+                      console.log(`#${project.number}: ${project.title}`);
+                      console.log(`   URL: ${project.url}`);
+                    });
+                  }
+                }
+              } catch (error) {
+                console.log(`Not an organization account: ${error.message}`);
+              }
+            }
+            
+            if (!isUser && !isOrg) {
+              console.log(`Could not find user or organization: ${owner}`);
+            }
+
   update-project-board:
     runs-on: ubuntu-latest
     steps:
@@ -177,6 +277,19 @@ jobs:
             if (!project) {
               console.log(`Project #${projectNumber} not found for ${context.repo.owner}`);
               console.log('Available projects can be viewed at: https://github.com/users/' + context.repo.owner + '/projects');
+              console.log('');
+              console.log('To fix this issue:');
+              console.log('1. Go to https://github.com/users/' + context.repo.owner + '/projects');
+              console.log('2. Create a new project (Project V2) named "LazySSH Development"');
+              console.log('3. Add a "Status" field with these options:');
+              console.log('   - 📥 Triage');
+              console.log('   - 📋 Backlog'); 
+              console.log('   - 🔨 In Progress');
+              console.log('   - 👀 Review/Testing');
+              console.log('   - 🚀 Ready to Merge');
+              console.log('   - ✅ Done');
+              console.log('4. Note the project number from the URL (e.g., if URL is /users/username/projects/3, the number is 3)');
+              console.log('5. Update the workflow_dispatch input or create the project as #1');
               core.setOutput('project-found', 'false');
               return;
             }
@@ -518,7 +631,7 @@ jobs:
 
   create-project-board:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.sync_all != 'true'
     steps:
       - name: Create LazySSH project board (v2)
         uses: actions/github-script@v7
@@ -652,7 +765,26 @@ jobs:
                 console.log('LazySSH Development project already exists');
               } else {
                 console.error('Error creating project:', error.message);
-                console.log('Note: Creating projects requires organization permissions or manual creation for personal repos');
+                console.log('');
+                console.log('❌ MANUAL PROJECT CREATION REQUIRED ❌');
+                console.log('');
+                console.log('GitHub Actions cannot create projects for personal accounts.');
+                console.log('Please create the project manually:');
+                console.log('');
+                console.log('1. Go to: https://github.com/users/' + owner + '/projects');
+                console.log('2. Click "New project"');
+                console.log('3. Choose "Table" view');
+                console.log('4. Name it "LazySSH Development"');
+                console.log('5. Add a "Status" field (Single select) with these options:');
+                console.log('   - 📥 Triage');
+                console.log('   - 📋 Backlog');
+                console.log('   - 🔨 In Progress');
+                console.log('   - 👀 Review/Testing');
+                console.log('   - 🚀 Ready to Merge');
+                console.log('   - ✅ Done');
+                console.log('6. Note the project number from the URL');
+                console.log('7. Re-run this workflow with sync_all=true and the correct project_number');
+                console.log('');
               }
             }
 
@@ -813,6 +945,9 @@ jobs:
             if (!project) {
               console.log(`Project #${projectNumber} not found for ${owner}`);
               console.log('Available projects can be viewed at: https://github.com/users/' + owner + '/projects');
+              console.log('');
+              console.log('Please create the project first or use the correct project number.');
+              console.log('See the create-project-board job output for instructions.');
               return;
             }
             
