@@ -1,0 +1,193 @@
+name: Streamlined Project Management
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+  schedule:
+    - cron: '0 9 * * 1'  # Weekly on Mondays at 9 AM UTC
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Auto-label new items
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const item = context.payload.issue || context.payload.pull_request;
+            const title = item.title.toLowerCase();
+            const body = item.body?.toLowerCase() || '';
+            
+            const labels = [];
+            
+            // Priority detection
+            if (title.includes('critical') || title.includes('urgent')) {
+              labels.push('high-priority');
+            } else if (title.includes('bug') || title.includes('error')) {
+              labels.push('bug', 'medium-priority');
+            } else if (title.includes('feature') || title.includes('enhancement')) {
+              labels.push('enhancement', 'medium-priority');
+            } else {
+              labels.push('low-priority');
+            }
+            
+            // Component detection
+            if (body.includes('scp') || body.includes('file transfer')) {
+              labels.push('scp-mode');
+            }
+            if (body.includes('performance') || body.includes('slow')) {
+              labels.push('performance');
+            }
+            if (body.includes('ui') || body.includes('display')) {
+              labels.push('ui-ux');
+            }
+            if (body.includes('security')) {
+              labels.push('security');
+            }
+            
+            // Add needs-triage for new issues
+            if (context.payload.issue) {
+              labels.push('needs-triage');
+            }
+            
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: item.number,
+                labels: labels
+              });
+            }
+
+  welcome:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Welcome new contributors
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const item = context.payload.issue || context.payload.pull_request;
+            const author = item.user.login;
+            
+            // Check if this is their first contribution
+            const { data: items } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              creator: author,
+              state: 'all',
+              per_page: 2
+            });
+            
+            if (items.length === 1) {
+              const isIssue = !!context.payload.issue;
+              const type = isIssue ? 'issue' : 'pull request';
+              
+              const message = [
+                `👋 Welcome to LazySSH, @${author}!`,
+                '',
+                `Thank you for your ${type}! A maintainer will review it soon.`,
+                '',
+                '**Helpful links:**',
+                '- [Contributing Guide](CONTRIBUTING.md)',
+                '- [Documentation](docs/)',
+                '- [Good First Issues](https://github.com/' + owner + '/' + repo + '/labels/good-first-issue)'
+              ].join('\n');
+              
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: item.number,
+                body: message
+              });
+            }
+
+  stale-issues:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Mark stale issues
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: |
+            This issue has been marked as stale due to inactivity.
+            
+            If this is still relevant, please comment to keep it open.
+            Otherwise, it will be closed in 7 days.
+          stale-pr-message: |
+            This PR has been marked as stale due to inactivity.
+            
+            Please update it or it will be closed in 7 days.
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'
+          days-before-stale: 45
+          days-before-close: 7
+          exempt-issue-labels: 'high-priority,keep-open'
+
+  weekly-metrics:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Generate metrics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            const { data: openItems } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+            
+            const issues = openItems.filter(item => !item.pull_request);
+            const prs = openItems.filter(item => item.pull_request);
+            
+            const highPriority = issues.filter(i => 
+              i.labels.some(l => l.name === 'high-priority')
+            ).length;
+            
+            const needsTriage = issues.filter(i => 
+              i.labels.some(l => l.name === 'needs-triage')
+            ).length;
+            
+            const report = [
+              '# 📊 LazySSH Weekly Metrics',
+              '',
+              `**Date**: ${new Date().toLocaleDateString()}`,
+              '',
+              '## Current Status',
+              `- **Open Issues**: ${issues.length}`,
+              `- **Open PRs**: ${prs.length}`,
+              `- **Need Triage**: ${needsTriage}`,
+              `- **High Priority**: ${highPriority}`,
+              '',
+              '## Action Items'
+            ];
+            
+            if (needsTriage > 5) {
+              report.push('⚠️ **High triage backlog** - Review pending issues');
+            }
+            if (highPriority > 3) {
+              report.push('⚠️ **High priority issues** - Address critical items');
+            }
+            if (issues.length > 25) {
+              report.push('⚠️ **Issue backlog growing** - Consider cleanup');
+            }
+            
+            if (report.length === 11) {
+              report.push('✅ All metrics look good!');
+            }
+            
+            report.push('');
+            report.push('---');
+            report.push('*Automated weekly metrics*');
+            
+            console.log(report.join('\n')); 
