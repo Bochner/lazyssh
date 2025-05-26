@@ -1,4 +1,4 @@
-name: Project Board Automation
+name: Project Board Automation (v2)
 
 on:
   issues:
@@ -12,7 +12,7 @@ on:
       sync_all:
         description: 'Sync all open issues and PRs to project board'
         required: false
-        default: 'false'
+        default: false
         type: boolean
       issue_number:
         description: 'Specific issue number to process (optional)'
@@ -22,326 +22,696 @@ on:
         description: 'Specific PR number to process (optional)'
         required: false
         type: string
+      project_number:
+        description: 'Project number to use (defaults to first available)'
+        required: false
+        type: string
+
+env:
+  PROJECT_NAME: "LazySSH Development"
 
 jobs:
   update-project-board:
     runs-on: ubuntu-latest
     steps:
-      - name: Move items in project board
+      - name: Get Project ID
+        id: get-project
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { owner, repo } = context.repo;
+            const projectNumber = context.payload.inputs?.project_number || 1;
+            
+            const query = `
+              query($owner: String!, $number: Int!) {
+                user(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    title
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2Field {
+                          id
+                          name
+                        }
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    title
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2Field {
+                          id
+                          name
+                        }
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+            
+            const variables = {
+              owner: context.repo.owner,
+              number: parseInt(projectNumber)
+            };
+            
+            const result = await github.graphql(query, variables);
+            const project = result.user?.projectV2 || result.organization?.projectV2;
+            
+            if (!project) {
+              throw new Error(`Project #${projectNumber} not found for ${context.repo.owner}`);
+            }
+            
+            console.log(`Found project: ${project.title}`);
+            
+            // Find the Status field
+            const statusField = project.fields.nodes.find(field => 
+              field.name.toLowerCase() === 'status' || 
+              field.name.toLowerCase() === 'column' ||
+              field.name.toLowerCase() === 'state'
+            );
+            
+            if (!statusField) {
+              throw new Error('No Status field found in project');
+            }
+            
+            core.setOutput('project-id', project.id);
+            core.setOutput('status-field-id', statusField.id);
+            core.setOutput('status-options', JSON.stringify(statusField.options || []));
+            
+            return {
+              projectId: project.id,
+              statusFieldId: statusField.id,
+              statusOptions: statusField.options || []
+            };
+
+      - name: Add item to project
+        id: add-item
+        uses: actions/github-script@v7
+        if: github.event.action == 'opened' || github.event_name == 'workflow_dispatch'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const projectId = steps['get-project'].outputs['project-id'];
+            const item = context.payload.issue || context.payload.pull_request;
+            
+            if (!item && github.event_name !== 'workflow_dispatch') {
+              console.log('No item to process');
+              return;
+            }
+            
+            // For workflow_dispatch, handle specific issue/PR if provided
+            let contentId = item?.node_id;
+            let itemNumber = item?.number;
+            
+            if (github.event_name === 'workflow_dispatch') {
+              const issueNumber = context.payload.inputs?.issue_number;
+              const prNumber = context.payload.inputs?.pr_number;
+              
+              if (issueNumber) {
+                const { data: issue } = await github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: parseInt(issueNumber)
+                });
+                contentId = issue.node_id;
+                itemNumber = issue.number;
+              } else if (prNumber) {
+                const { data: pr } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: parseInt(prNumber)
+                });
+                contentId = pr.node_id;
+                itemNumber = pr.number;
+              }
+            }
+            
+            if (!contentId) {
+              console.log('No content ID available');
+              return;
+            }
+            
+            // Check if item already exists in project
+            const checkQuery = `
+              query($projectId: ID!, $contentId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    items(first: 100) {
+                      nodes {
+                        id
+                        content {
+                          ... on Issue {
+                            id
+                            number
+                          }
+                          ... on PullRequest {
+                            id
+                            number
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+            
+            const checkResult = await github.graphql(checkQuery, {
+              projectId,
+              contentId
+            });
+            
+            const existingItem = checkResult.node.items.nodes.find(
+              item => item.content?.id === contentId
+            );
+            
+            if (existingItem) {
+              console.log(`Item #${itemNumber} already exists in project`);
+              core.setOutput('item-id', existingItem.id);
+              return { itemId: existingItem.id };
+            }
+            
+            // Add item to project
+            const addMutation = `
+              mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {
+                  projectId: $projectId
+                  contentId: $contentId
+                }) {
+                  item {
+                    id
+                  }
+                }
+              }
+            `;
+            
+            const addResult = await github.graphql(addMutation, {
+              projectId,
+              contentId
+            });
+            
+            const itemId = addResult.addProjectV2ItemById.item.id;
+            console.log(`Added item #${itemNumber} to project`);
+            core.setOutput('item-id', itemId);
+            
+            return { itemId };
+
+      - name: Update item status
+        uses: actions/github-script@v7
+        if: steps.add-item.outputs.item-id || github.event.action != 'opened'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const projectId = steps['get-project'].outputs['project-id'];
+            const statusFieldId = steps['get-project'].outputs['status-field-id'];
+            const statusOptions = JSON.parse(steps['get-project'].outputs['status-options']);
+            
+            let itemId = steps['add-item'].outputs['item-id'];
+            
             const item = context.payload.issue || context.payload.pull_request;
             const isIssue = !!context.payload.issue;
             const action = context.payload.action;
             
-            if (!item) return;
-            
-            // Get repository projects (Project Boards v1)
-            try {
-              const { data: projects } = await github.rest.projects.listForRepo({
-                owner,
-                repo
-              });
+            // If we don't have an item ID, find it in the project
+            if (!itemId && item) {
+              const findQuery = `
+                query($projectId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        nodes {
+                          id
+                          content {
+                            ... on Issue {
+                              id
+                              number
+                            }
+                            ... on PullRequest {
+                              id
+                              number
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
               
-              if (projects.length === 0) {
-                console.log('No project boards found for this repository');
+              const findResult = await github.graphql(findQuery, { projectId });
+              const foundItem = findResult.node.items.nodes.find(
+                projectItem => projectItem.content?.number === item.number
+              );
+              
+              if (foundItem) {
+                itemId = foundItem.id;
+                console.log(`Found existing item #${item.number} in project`);
+              } else {
+                console.log(`Item #${item.number} not found in project`);
                 return;
               }
-              
-              // Find the main project board (could be "LazySSH Development" or similar)
-              const mainProject = projects.find(p => 
-                p.name.toLowerCase().includes('development') ||
-                p.name.toLowerCase().includes('lazyssh') ||
-                p.name.toLowerCase().includes('main')
-              ) || projects[0];
-              
-              console.log(`Using project board: ${mainProject.name}`);
-              
-              // Get project columns
-              const { data: columns } = await github.rest.projects.listColumns({
-                project_id: mainProject.id
-              });
-              
-              // Define column mapping
-              const columnMap = {
-                'backlog': columns.find(c => c.name.toLowerCase().includes('backlog') || c.name.toLowerCase().includes('todo')),
-                'triage': columns.find(c => c.name.toLowerCase().includes('triage') || c.name.toLowerCase().includes('new')),
-                'in_progress': columns.find(c => c.name.toLowerCase().includes('progress') || c.name.toLowerCase().includes('doing')),
-                'review': columns.find(c => c.name.toLowerCase().includes('review') || c.name.toLowerCase().includes('testing')),
-                'done': columns.find(c => c.name.toLowerCase().includes('done') || c.name.toLowerCase().includes('closed'))
-              };
-              
-              // Check if item is already in the project
-              let existingCard = null;
-              for (const column of columns) {
-                try {
-                  const { data: cards } = await github.rest.projects.listCards({
-                    column_id: column.id
-                  });
-                  
-                  existingCard = cards.find(card => 
-                    card.content_url && card.content_url.includes(`/${isIssue ? 'issues' : 'pulls'}/${item.number}`)
-                  );
-                  
-                  if (existingCard) break;
-                } catch (error) {
-                  console.log(`Error checking column ${column.name}:`, error.message);
-                }
-              }
-              
-              // Determine target column based on item state and labels
-              let targetColumn = null;
-              const labels = item.labels?.map(label => label.name) || [];
-              
-              if (action === 'opened') {
-                if (labels.includes('needs-triage')) {
-                  targetColumn = columnMap.triage;
-                } else if (labels.includes('ready-for-review')) {
-                  targetColumn = columnMap.review;
-                } else {
-                  targetColumn = columnMap.backlog;
-                }
-              }
-              
-              else if (action === 'closed') {
-                targetColumn = columnMap.done;
-              }
-              
-              else if (action === 'reopened') {
-                if (isIssue) {
-                  targetColumn = columnMap.backlog;
-                } else {
-                  targetColumn = columnMap.review;
-                }
-              }
-              
-              else if (action === 'labeled') {
-                if (labels.includes('work-in-progress')) {
-                  targetColumn = columnMap.in_progress;
-                } else if (labels.includes('ready-for-review')) {
-                  targetColumn = columnMap.review;
-                } else if (labels.includes('needs-triage')) {
-                  targetColumn = columnMap.triage;
-                }
-              }
-              
-              else if (action === 'assigned') {
-                targetColumn = columnMap.in_progress;
-              }
-              
-              else if (action === 'ready_for_review') {
-                targetColumn = columnMap.review;
-              }
-              
-              else if (action === 'converted_to_draft') {
-                targetColumn = columnMap.in_progress;
-              }
-              
-              // Handle PR review events
-              if (context.payload.review) {
-                const review = context.payload.review;
-                if (review.state === 'approved') {
-                  // Check if all required reviews are approved
-                  const { data: reviews } = await github.rest.pulls.listReviews({
-                    owner,
-                    repo,
-                    pull_number: item.number
-                  });
-                  
-                  const latestReviews = {};
-                  reviews.forEach(r => {
-                    latestReviews[r.user.login] = r.state;
-                  });
-                  
-                  const hasApprovals = Object.values(latestReviews).some(state => state === 'APPROVED');
-                  const hasRequestedChanges = Object.values(latestReviews).some(state => state === 'CHANGES_REQUESTED');
-                  
-                  if (hasApprovals && !hasRequestedChanges) {
-                    // Move to a "Ready to Merge" column if it exists
-                    targetColumn = columns.find(c => c.name.toLowerCase().includes('ready') && c.name.toLowerCase().includes('merge')) || columnMap.review;
-                  }
-                } else if (review.state === 'changes_requested') {
-                  targetColumn = columnMap.in_progress;
-                }
-              }
-              
-              // Create card if it doesn't exist
-              if (!existingCard && targetColumn) {
-                try {
-                  const { data: newCard } = await github.rest.projects.createCard({
-                    column_id: targetColumn.id,
-                    content_id: item.id,
-                    content_type: isIssue ? 'Issue' : 'PullRequest'
-                  });
-                  
-                  console.log(`Created card for ${isIssue ? 'issue' : 'PR'} #${item.number} in column: ${targetColumn.name}`);
-                  return;
-                } catch (error) {
-                  console.log(`Error creating card: ${error.message}`);
-                  return;
-                }
-              }
-              
-              // Move existing card if target column is different
-              if (existingCard && targetColumn && existingCard.column_url !== targetColumn.url) {
-                try {
-                  await github.rest.projects.moveCard({
-                    card_id: existingCard.id,
-                    position: 'top',
-                    column_id: targetColumn.id
-                  });
-                  
-                  console.log(`Moved ${isIssue ? 'issue' : 'PR'} #${item.number} to column: ${targetColumn.name}`);
-                } catch (error) {
-                  console.log(`Error moving card: ${error.message}`);
-                }
-              }
-              
-            } catch (error) {
-              console.error('Error managing project board:', error);
             }
+            
+            if (!itemId) {
+              console.log('No item ID available');
+              return;
+            }
+            
+            // Determine target status based on action and labels
+            let targetStatus = null;
+            const labels = item?.labels?.map(label => label.name) || [];
+            
+            // Define status mapping
+            const statusMap = {
+              'triage': statusOptions.find(opt => 
+                opt.name.toLowerCase().includes('triage') || 
+                opt.name.toLowerCase().includes('new')
+              ),
+              'backlog': statusOptions.find(opt => 
+                opt.name.toLowerCase().includes('backlog') || 
+                opt.name.toLowerCase().includes('todo')
+              ),
+              'in_progress': statusOptions.find(opt => 
+                opt.name.toLowerCase().includes('progress') || 
+                opt.name.toLowerCase().includes('doing') ||
+                opt.name.toLowerCase().includes('development')
+              ),
+              'review': statusOptions.find(opt => 
+                opt.name.toLowerCase().includes('review') || 
+                opt.name.toLowerCase().includes('testing')
+              ),
+              'ready_to_merge': statusOptions.find(opt => 
+                opt.name.toLowerCase().includes('ready') && 
+                opt.name.toLowerCase().includes('merge')
+              ),
+              'done': statusOptions.find(opt => 
+                opt.name.toLowerCase().includes('done') || 
+                opt.name.toLowerCase().includes('closed') ||
+                opt.name.toLowerCase().includes('complete')
+              )
+            };
+            
+            // Determine target status based on event
+            switch (action) {
+              case 'opened':
+                if (labels.includes('needs-triage')) {
+                  targetStatus = statusMap.triage;
+                } else if (labels.includes('ready-for-review')) {
+                  targetStatus = statusMap.review;
+                } else {
+                  targetStatus = statusMap.backlog;
+                }
+                break;
+                
+              case 'closed':
+                targetStatus = statusMap.done;
+                break;
+                
+              case 'reopened':
+                targetStatus = isIssue ? statusMap.backlog : statusMap.review;
+                break;
+                
+              case 'labeled':
+                if (labels.includes('work-in-progress')) {
+                  targetStatus = statusMap.in_progress;
+                } else if (labels.includes('ready-for-review')) {
+                  targetStatus = statusMap.review;
+                } else if (labels.includes('needs-triage')) {
+                  targetStatus = statusMap.triage;
+                }
+                break;
+                
+              case 'assigned':
+                targetStatus = statusMap.in_progress;
+                break;
+                
+              case 'ready_for_review':
+                targetStatus = statusMap.review;
+                break;
+                
+              case 'converted_to_draft':
+                targetStatus = statusMap.in_progress;
+                break;
+            }
+            
+            // Handle PR review events
+            if (context.payload.review) {
+              const review = context.payload.review;
+              if (review.state === 'approved') {
+                // Check if all required reviews are approved
+                const { data: reviews } = await github.rest.pulls.listReviews({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: item.number
+                });
+                
+                const latestReviews = {};
+                reviews.forEach(r => {
+                  latestReviews[r.user.login] = r.state;
+                });
+                
+                const hasApprovals = Object.values(latestReviews).some(state => state === 'APPROVED');
+                const hasRequestedChanges = Object.values(latestReviews).some(state => state === 'CHANGES_REQUESTED');
+                
+                if (hasApprovals && !hasRequestedChanges) {
+                  targetStatus = statusMap.ready_to_merge || statusMap.review;
+                }
+              } else if (review.state === 'changes_requested') {
+                targetStatus = statusMap.in_progress;
+              }
+            }
+            
+            if (!targetStatus) {
+              console.log('No target status determined');
+              return;
+            }
+            
+            // Update the item's status
+            const updateMutation = `
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId
+                  itemId: $itemId
+                  fieldId: $fieldId
+                  value: {
+                    singleSelectOptionId: $optionId
+                  }
+                }) {
+                  projectV2Item {
+                    id
+                  }
+                }
+              }
+            `;
+            
+            await github.graphql(updateMutation, {
+              projectId,
+              itemId,
+              fieldId: statusFieldId,
+              optionId: targetStatus.id
+            });
+            
+            console.log(`Updated item #${item.number} to status: ${targetStatus.name}`);
 
   create-project-board:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     steps:
-      - name: Create LazySSH project board
+      - name: Create LazySSH project board (v2)
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { owner, repo } = context.repo;
+            const { owner } = context.repo;
+            
+            // Note: Creating a new Project v2 requires organization-level permissions
+            // This will only work if the repository is under an organization
+            // For personal repos, projects need to be created manually
+            
+            const createMutation = `
+              mutation($ownerId: ID!, $title: String!) {
+                createProjectV2(input: {
+                  ownerId: $ownerId
+                  title: $title
+                }) {
+                  projectV2 {
+                    id
+                    title
+                  }
+                }
+              }
+            `;
+            
+            // First, get the owner ID (user or organization)
+            const ownerQuery = `
+              query($login: String!) {
+                user(login: $login) {
+                  id
+                }
+                organization(login: $login) {
+                  id
+                }
+              }
+            `;
+            
+            const ownerResult = await github.graphql(ownerQuery, { login: owner });
+            const ownerId = ownerResult.user?.id || ownerResult.organization?.id;
+            
+            if (!ownerId) {
+              throw new Error(`Could not find user or organization: ${owner}`);
+            }
             
             try {
-              // Check if project already exists
-              const { data: projects } = await github.rest.projects.listForRepo({
-                owner,
-                repo
+              const result = await github.graphql(createMutation, {
+                ownerId,
+                title: process.env.PROJECT_NAME
               });
               
-              const existingProject = projects.find(p => p.name === 'LazySSH Development');
+              const projectId = result.createProjectV2.projectV2.id;
+              console.log(`Created project: ${result.createProjectV2.projectV2.title}`);
               
-              if (existingProject) {
-                console.log('LazySSH Development project board already exists');
-                return;
-              }
+              // Add Status field with predefined options
+              const addFieldMutation = `
+                mutation($projectId: ID!, $name: String!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
+                  createProjectV2Field(input: {
+                    projectId: $projectId
+                    dataType: SINGLE_SELECT
+                    name: $name
+                    singleSelectOptions: $options
+                  }) {
+                    projectV2Field {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                        options {
+                          id
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
               
-              // Create new project
-              const { data: project } = await github.rest.projects.createForRepo({
-                owner,
-                repo,
-                name: 'LazySSH Development',
-                body: 'Development workflow for LazySSH - SSH toolkit for managing connections and tunnels'
-              });
-              
-              console.log(`Created project: ${project.name}`);
-              
-              // Create columns
-              const columns = [
-                { name: '📥 Triage', position: 1 },
-                { name: '📋 Backlog', position: 2 },
-                { name: '🔨 In Progress', position: 3 },
-                { name: '👀 Review/Testing', position: 4 },
-                { name: '🚀 Ready to Merge', position: 5 },
-                { name: '✅ Done', position: 6 }
+              const statusOptions = [
+                { name: "📥 Triage", color: "GRAY" },
+                { name: "📋 Backlog", color: "BLUE" },
+                { name: "🔨 In Progress", color: "YELLOW" },
+                { name: "👀 Review/Testing", color: "ORANGE" },
+                { name: "🚀 Ready to Merge", color: "GREEN" },
+                { name: "✅ Done", color: "PURPLE" }
               ];
               
-              for (const column of columns) {
-                await github.rest.projects.createColumn({
-                  project_id: project.id,
-                  name: column.name
-                });
-                console.log(`Created column: ${column.name}`);
-              }
+              await github.graphql(addFieldMutation, {
+                projectId,
+                name: "Status",
+                options: statusOptions
+              });
+              
+              console.log('Created Status field with predefined options');
               
             } catch (error) {
-              console.error('Error creating project board:', error);
+              if (error.message.includes('already exists')) {
+                console.log('LazySSH Development project already exists');
+              } else {
+                console.error('Error creating project:', error.message);
+                console.log('Note: Creating projects requires organization permissions or manual creation for personal repos');
+              }
             }
 
   sync-existing-items:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.sync_all == 'true'
     steps:
       - name: Sync existing issues and PRs to project board
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
+            const projectNumber = context.payload.inputs?.project_number || 1;
             
-            try {
-              // Get the main project
-              const { data: projects } = await github.rest.projects.listForRepo({
-                owner,
-                repo
-              });
-              
-              const mainProject = projects.find(p => 
-                p.name.toLowerCase().includes('development') ||
-                p.name.toLowerCase().includes('lazyssh')
-              );
-              
-              if (!mainProject) {
-                console.log('No suitable project board found');
-                return;
-              }
-              
-              // Get project columns
-              const { data: columns } = await github.rest.projects.listColumns({
-                project_id: mainProject.id
-              });
-              
-              const triageColumn = columns.find(c => c.name.toLowerCase().includes('triage'));
-              const backlogColumn = columns.find(c => c.name.toLowerCase().includes('backlog'));
-              const doneColumn = columns.find(c => c.name.toLowerCase().includes('done'));
-              
-              // Get open issues
-              const { data: openIssues } = await github.rest.issues.listForRepo({
-                owner,
-                repo,
-                state: 'open',
-                per_page: 50
-              });
-              
-              for (const issue of openIssues) {
-                const labels = issue.labels?.map(label => label.name) || [];
-                let targetColumn = backlogColumn;
-                
-                if (labels.includes('needs-triage')) {
-                  targetColumn = triageColumn;
-                }
-                
-                // Check if already in project
-                let alreadyInProject = false;
-                for (const column of columns) {
-                  try {
-                    const { data: cards } = await github.rest.projects.listCards({
-                      column_id: column.id
-                    });
-                    
-                    if (cards.some(card => card.content_url && card.content_url.includes(`/issues/${issue.number}`))) {
-                      alreadyInProject = true;
-                      break;
+            // Get project info
+            const projectQuery = `
+              query($owner: String!, $number: Int!) {
+                user(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
                     }
-                  } catch (error) {
-                    // Continue checking other columns
+                    items(first: 100) {
+                      nodes {
+                        content {
+                          ... on Issue {
+                            number
+                          }
+                          ... on PullRequest {
+                            number
+                          }
+                        }
+                      }
+                    }
                   }
                 }
-                
-                if (!alreadyInProject && targetColumn) {
-                  try {
-                    await github.rest.projects.createCard({
-                      column_id: targetColumn.id,
-                      content_id: issue.id,
-                      content_type: 'Issue'
-                    });
-                    console.log(`Added issue #${issue.number} to ${targetColumn.name}`);
-                  } catch (error) {
-                    console.log(`Error adding issue #${issue.number}: ${error.message}`);
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                    items(first: 100) {
+                      nodes {
+                        content {
+                          ... on Issue {
+                            number
+                          }
+                          ... on PullRequest {
+                            number
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
+            `;
+            
+            const projectResult = await github.graphql(projectQuery, {
+              owner,
+              number: parseInt(projectNumber)
+            });
+            
+            const project = projectResult.user?.projectV2 || projectResult.organization?.projectV2;
+            if (!project) {
+              console.log(`Project #${projectNumber} not found`);
+              return;
+            }
+            
+            const existingItems = new Set(
+              project.items.nodes
+                .map(item => item.content?.number)
+                .filter(Boolean)
+            );
+            
+            const statusField = project.fields.nodes.find(field => 
+              field.name.toLowerCase() === 'status'
+            );
+            
+            const triageOption = statusField?.options.find(opt => 
+              opt.name.toLowerCase().includes('triage')
+            );
+            const backlogOption = statusField?.options.find(opt => 
+              opt.name.toLowerCase().includes('backlog')
+            );
+            
+            // Get all open issues and PRs
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+            
+            for (const issue of issues) {
+              if (existingItems.has(issue.number)) {
+                console.log(`Item #${issue.number} already in project`);
+                continue;
+              }
               
-            } catch (error) {
-              console.error('Error syncing existing items:', error);
+              try {
+                // Add to project
+                const addMutation = `
+                  mutation($projectId: ID!, $contentId: ID!) {
+                    addProjectV2ItemById(input: {
+                      projectId: $projectId
+                      contentId: $contentId
+                    }) {
+                      item {
+                        id
+                      }
+                    }
+                  }
+                `;
+                
+                const addResult = await github.graphql(addMutation, {
+                  projectId: project.id,
+                  contentId: issue.node_id
+                });
+                
+                // Set initial status
+                const labels = issue.labels?.map(label => label.name) || [];
+                const targetOption = labels.includes('needs-triage') ? triageOption : backlogOption;
+                
+                if (targetOption && statusField) {
+                  const updateMutation = `
+                    mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                      updateProjectV2ItemFieldValue(input: {
+                        projectId: $projectId
+                        itemId: $itemId
+                        fieldId: $fieldId
+                        value: {
+                          singleSelectOptionId: $optionId
+                        }
+                      }) {
+                        projectV2Item {
+                          id
+                        }
+                      }
+                    }
+                  `;
+                  
+                  await github.graphql(updateMutation, {
+                    projectId: project.id,
+                    itemId: addResult.addProjectV2ItemById.item.id,
+                    fieldId: statusField.id,
+                    optionId: targetOption.id
+                  });
+                }
+                
+                console.log(`Added ${issue.pull_request ? 'PR' : 'issue'} #${issue.number} to project`);
+                
+              } catch (error) {
+                console.log(`Error adding item #${issue.number}: ${error.message}`);
+              }
             } 

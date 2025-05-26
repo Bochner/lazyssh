@@ -1,6 +1,54 @@
 # LazySSH Project Management Automation
 
-This document outlines the advanced GitHub automation features implemented for the LazySSH repository to streamline project management, enhance security, and improve development workflow.
+> **🚀 UPDATED**: This workflow has been migrated from the deprecated GitHub Projects Classic API to the new **GitHub Projects v2 API** using GraphQL.
+
+## 🚀 Projects v2 Migration
+
+### What's New
+
+- **Projects v2 Support**: Uses the modern GitHub Projects API with GraphQL
+- **Better Performance**: More efficient queries and operations
+- **Enhanced Features**: Support for custom fields and better status management
+- **Fixed Issues**: Resolved the boolean default value linting error
+
+### Prerequisites for Projects v2
+
+#### 1. Create a GitHub Project v2
+
+Since the workflow now uses Projects v2, you need to create a new project:
+
+1. Go to your GitHub profile or organization
+2. Click on **Projects** tab
+3. Click **New project**
+4. Choose **Board** layout
+5. Name it "LazySSH Development" (or update `PROJECT_NAME` in the workflow)
+
+#### 2. Add Status Field
+
+The workflow expects a **Status** field with these options:
+- 📥 Triage
+- 📋 Backlog  
+- 🔨 In Progress
+- 👀 Review/Testing
+- 🚀 Ready to Merge
+- ✅ Done
+
+You can create this manually or run the workflow with `workflow_dispatch` to auto-create it.
+
+### Migration from Projects Classic
+
+If you're migrating from the old workflow:
+
+1. **Create a new Project v2** (Projects Classic is deprecated)
+2. **Set up the Status field** as described above
+3. **Run sync workflow** to import existing issues/PRs
+4. **Archive old Project Classic board** once migration is complete
+
+### Limitations
+
+- Projects v2 API is different from Classic - cards become "items" with field values
+- Maximum 100 items per query (pagination needed for larger projects)
+- GraphQL queries are more complex but more powerful
 
 ## 🚀 Features Implemented
 
@@ -38,22 +86,64 @@ Intelligent milestone management:
 
 **Triggers**: Issue/PR events, weekly schedule, manual dispatch
 
-### 4. Project Board Automation
+### 4. Project Board Automation (Projects v2)
 **File**: `.github/workflows/project-board-automation.yml`
 
-GitHub Project Board management:
-- **Automatic Movement**: Items move between columns based on status
-- **Board Creation**: Can create standardized project board structure
-- **Status Mapping**: Opens → Triage/Backlog, Assigned → In Progress, etc.
+GitHub Project Board management using the modern Projects v2 API:
+- **Automatic Movement**: Items move between status columns based on events
+- **GraphQL Integration**: Uses GitHub's GraphQL API for better performance
+- **Status Field Management**: Creates and manages custom Status fields
 - **Review Integration**: PR reviews trigger board movements
+- **Manual Actions**: Support for manual workflow dispatch with options
 
-**Columns Structure**:
+**Status Column Structure**:
 - 📥 Triage
 - 📋 Backlog  
 - 🔨 In Progress
 - 👀 Review/Testing
 - 🚀 Ready to Merge
 - ✅ Done
+
+**Automatic Triggers**:
+
+#### Issues
+- **Opened**: Adds to Triage (if has `needs-triage` label) or Backlog
+- **Closed**: Moves to Done
+- **Reopened**: Moves to Backlog
+- **Labeled**: 
+  - `work-in-progress` → In Progress
+  - `ready-for-review` → Review/Testing
+  - `needs-triage` → Triage
+- **Assigned**: Moves to In Progress
+
+#### Pull Requests
+- **Opened**: Adds to Backlog or Review/Testing (if `ready-for-review` label)
+- **Closed**: Moves to Done
+- **Reopened**: Moves to Review/Testing
+- **Ready for Review**: Moves to Review/Testing
+- **Converted to Draft**: Moves to In Progress
+
+#### PR Reviews
+- **Approved**: Moves to Ready to Merge (if no change requests)
+- **Changes Requested**: Moves to In Progress
+
+**Manual Actions**:
+```yaml
+# Sync all open issues/PRs to project
+sync_all: true
+
+# Process specific items
+issue_number: "123"
+pr_number: "456"
+
+# Use specific project number
+project_number: "1"
+```
+
+**Configuration**:
+- Project Name: "LazySSH Development" (configurable via `PROJECT_NAME` env var)
+- Automatic project detection by repository owner
+- Smart status field mapping using keyword detection
 
 ### 5. Branch Protection Enforcement
 **File**: `.github/workflows/branch-protection.yml`
@@ -201,10 +291,58 @@ All workflows support manual triggering via GitHub Actions UI:
 3. **Project board not updating**: Ensure project board exists and is accessible
 4. **Milestones not creating**: Check for duplicate names and permissions
 
+### Projects v2 Specific Issues
+
+1. **"Project not found"**
+   - Ensure project number is correct
+   - Check project is owned by repository owner
+   - Verify project is public/accessible
+
+2. **"No Status field found"**
+   - Create a Status field manually
+   - Ensure field name contains "status", "column", or "state"
+
+3. **"Permission denied"**
+   - Check `GITHUB_TOKEN` permissions
+   - For org repos, ensure workflow has project access
+
+### Debug Steps for Projects v2
+1. Check workflow logs in Actions tab
+2. Verify project number and ownership
+3. Confirm Status field exists and has proper options
+4. Test with manual workflow dispatch first
+
 ### Debug Information
 - All workflows log detailed information to Actions console
 - Check individual job outputs for specific error messages
 - Verify GitHub token permissions for repository operations
+
+## 🧪 Testing Projects v2 Automation
+
+To test the workflow:
+
+1. **Create a test issue** with `needs-triage` label
+2. **Assign the issue** to someone
+3. **Add `work-in-progress` label**
+4. **Close the issue**
+
+Each action should move the item through the appropriate status columns.
+
+## 📚 API References
+
+- [GitHub Projects v2 API](https://docs.github.com/en/graphql/reference/objects#projectv2)
+- [GitHub GraphQL API](https://docs.github.com/en/graphql)
+- [GitHub Actions github-script](https://github.com/actions/github-script)
+
+## 🔄 Projects v2 Migration Checklist
+
+- [ ] Create new GitHub Project v2
+- [ ] Set up Status field with proper options
+- [ ] Update workflow file (already done)
+- [ ] Test with sample issue/PR
+- [ ] Run sync workflow for existing items
+- [ ] Archive old Projects Classic board
+- [ ] Update documentation references 
 
 ## 📈 Future Enhancements
 
