@@ -23,7 +23,7 @@ on:
         required: false
         type: string
       project_number:
-        description: 'Project number to use (defaults to first available)'
+        description: 'Project number to use (check URL for actual number)'
         required: false
         type: string
       discover_projects:
@@ -35,11 +35,68 @@ on:
         description: 'Debug specific project access (provide project number)'
         required: false
         type: string
+      setup_mode:
+        description: 'Run in setup mode to help create project'
+        required: false
+        default: false
+        type: boolean
 
 env:
   PROJECT_NAME: "LazySSH Development"
 
 jobs:
+  setup-guide:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.setup_mode == 'true'
+    steps:
+      - name: Project Setup Guide
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner } = context.repo;
+            
+            console.log('🚀 LazySSH Project Board Setup Guide');
+            console.log('===================================');
+            console.log('');
+            console.log('Since GitHub Actions cannot create Projects V2 for personal accounts,');
+            console.log('you need to create the project manually. Here\'s how:');
+            console.log('');
+            console.log('📋 STEP 1: Create New Project');
+            console.log('1. Go to: https://github.com/users/' + owner + '/projects');
+            console.log('2. Click "New project"');
+            console.log('3. Choose "Table" view');
+            console.log('4. Name it "LazySSH Development"');
+            console.log('5. Click "Create"');
+            console.log('');
+            console.log('🔧 STEP 2: Configure Status Field');
+            console.log('1. In your new project, click the "+" next to existing columns');
+            console.log('2. Select "New field"');
+            console.log('3. Choose "Single select" field type');
+            console.log('4. Name it "Status"');
+            console.log('5. Add these options (copy exactly):');
+            console.log('   📥 Triage');
+            console.log('   📋 Backlog');
+            console.log('   🔨 In Progress');
+            console.log('   👀 Review/Testing');
+            console.log('   🚀 Ready to Merge');
+            console.log('   ✅ Done');
+            console.log('6. Save the field');
+            console.log('');
+            console.log('📍 STEP 3: Get Project Number');
+            console.log('1. Look at your project URL');
+            console.log('2. It will be like: https://github.com/users/' + owner + '/projects/X');
+            console.log('3. The X is your project number');
+            console.log('');
+            console.log('🔄 STEP 4: Test the Automation');
+            console.log('1. Come back to this workflow');
+            console.log('2. Click "Run workflow"');
+            console.log('3. Set project_number to your actual project number');
+            console.log('4. Enable "Sync all open issues and PRs"');
+            console.log('5. Run the workflow');
+            console.log('');
+            console.log('💡 Pro tip: Set discover_projects=true to see all your projects');
+
   discover-projects:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && (github.event.inputs.discover_projects == 'true' || github.event.inputs.debug_project != '')
@@ -49,13 +106,21 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            // Check what scopes the token has
+            console.log('🔐 Checking GitHub Token Permissions');
+            console.log('====================================');
             try {
               const response = await github.request('GET /user');
-              console.log('Token user info:', response.data.login);
-              console.log('Token type:', response.headers['x-oauth-scopes'] || 'Unknown');
+              console.log('✅ Token is valid');
+              console.log('🔑 Authenticated as:', response.data.login);
+              console.log('📋 Token scopes:', response.headers['x-oauth-scopes'] || 'Standard GITHUB_TOKEN');
+              console.log('');
+              console.log('ℹ️  Note: GITHUB_TOKEN has limited project access for personal repos.');
+              console.log('   Projects V2 access may be restricted depending on repository settings.');
             } catch (error) {
-              console.log('Error checking token:', error.message);
+              console.log('❌ Token check failed:', error.message);
+              console.log('');
+              console.log('This might be normal - GITHUB_TOKEN has limited permissions.');
+              console.log('The workflow will still attempt to find and access projects.');
             }
 
       - name: List all available projects (Enhanced Debug)
@@ -66,7 +131,8 @@ jobs:
             const { owner } = context.repo;
             const debugProjectNumber = context.payload.inputs?.debug_project;
             
-            console.log(`=== DEBUGGING PROJECT ACCESS FOR ${owner} ===`);
+            console.log(`🔍 PROJECT DISCOVERY FOR ${owner}`);
+            console.log('=======================================');
             console.log(`Target project number: ${debugProjectNumber || 'all'}`);
             console.log('');
             
@@ -114,28 +180,49 @@ jobs:
                 console.log(`   Name: ${userResult.user.name || 'N/A'}`);
                 console.log(`   Total projects: ${userResult.user.projectsV2.totalCount}`);
                 console.log('');
-                console.log('📋 Available Projects:');
-                console.log('=====================');
                 
                 if (userResult.user.projectsV2.nodes.length === 0) {
-                  console.log('❌ No projects found via API');
-                  console.log('   This might be due to:');
-                  console.log('   - Token permissions (need read:project scope)');
-                  console.log('   - Project visibility settings');
-                  console.log('   - API lag (try again in a few minutes)');
+                  console.log('📋 NO PROJECTS FOUND');
+                  console.log('====================');
+                  console.log('❌ No Project V2 boards found for this account.');
+                  console.log('');
+                  console.log('🔧 SOLUTIONS:');
+                  console.log('1. Create a new project at: https://github.com/users/' + owner + '/projects');
+                  console.log('2. Make sure to create a "Project V2" (table view), not a classic project');
+                  console.log('3. Run this workflow with setup_mode=true for detailed instructions');
+                  console.log('');
+                  console.log('📚 Why no projects?');
+                  console.log('- You haven\'t created any Project V2 boards yet');
+                  console.log('- Projects are private and token lacks read:project scope');
+                  console.log('- Only Project V2 (beta) projects work with this automation');
                 } else {
-                  userResult.user.projectsV2.nodes.forEach(project => {
+                  console.log('📋 AVAILABLE PROJECTS');
+                  console.log('=====================');
+                  
+                  userResult.user.projectsV2.nodes.forEach((project, index) => {
                     const isTarget = debugProjectNumber && project.number.toString() === debugProjectNumber;
-                    console.log(`${isTarget ? '🎯' : '📌'} #${project.number}: ${project.title}`);
+                    console.log(`${isTarget ? '🎯' : '📌'} Project #${project.number}: ${project.title}`);
                     console.log(`   URL: ${project.url}`);
                     console.log(`   ID: ${project.id}`);
-                    console.log(`   Public: ${project.public}`);
-                    console.log(`   Closed: ${project.closed}`);
-                    console.log(`   Created: ${project.createdAt}`);
-                    console.log(`   Updated: ${project.updatedAt}`);
-                    console.log(`   Owner: ${project.owner.login}`);
+                    console.log(`   Public: ${project.public ? 'Yes' : 'No'}`);
+                    console.log(`   Status: ${project.closed ? 'Closed' : 'Open'}`);
+                    console.log(`   Created: ${new Date(project.createdAt).toLocaleDateString()}`);
+                    console.log(`   Updated: ${new Date(project.updatedAt).toLocaleDateString()}`);
                     console.log('');
                   });
+                  
+                  // Find LazySSH project
+                  const lazysshProject = userResult.user.projectsV2.nodes.find(
+                    p => p.title.toLowerCase().includes('lazyssh') || 
+                         p.title.toLowerCase().includes('development')
+                  );
+                  
+                  if (lazysshProject) {
+                    console.log(`🎯 RECOMMENDED PROJECT: #${lazysshProject.number}`);
+                    console.log(`   Use project_number: ${lazysshProject.number}`);
+                  } else {
+                    console.log('💡 RECOMMENDATION: Create a new project named "LazySSH Development"');
+                  }
                   
                   // If debugging a specific project, try to access it directly
                   if (debugProjectNumber) {
@@ -144,9 +231,11 @@ jobs:
                     );
                     
                     if (targetProject) {
-                      console.log(`✅ Found target project #${debugProjectNumber} in list`);
+                      console.log('');
+                      console.log(`🔍 DETAILED ANALYSIS: Project #${debugProjectNumber}`);
+                      console.log('========================================');
                       
-                      // Try to query it directly
+                      // Try to query it directly for fields
                       try {
                         const directQuery = `
                           query($owner: String!, $number: Int!) {
@@ -184,9 +273,13 @@ jobs:
                         });
                         
                         if (directResult.user?.projectV2) {
-                          console.log(`✅ Successfully queried project #${debugProjectNumber} directly`);
-                          console.log(`   Fields found: ${directResult.user.projectV2.fields.nodes.length}`);
-                          directResult.user.projectV2.fields.nodes.forEach(field => {
+                          const project = directResult.user.projectV2;
+                          console.log(`✅ Successfully accessed project #${debugProjectNumber}`);
+                          console.log(`   Title: ${project.title}`);
+                          console.log(`   Fields: ${project.fields.nodes.length}`);
+                          console.log('');
+                          console.log('🔧 PROJECT FIELDS:');
+                          project.fields.nodes.forEach(field => {
                             console.log(`   - ${field.name} (${field.dataType})`);
                             if (field.options) {
                               field.options.forEach(option => {
@@ -194,11 +287,25 @@ jobs:
                               });
                             }
                           });
+                          
+                          // Check for Status field
+                          const statusField = project.fields.nodes.find(field => 
+                            field.name.toLowerCase() === 'status'
+                          );
+                          
+                          if (statusField) {
+                            console.log('');
+                            console.log('✅ Status field found - this project is ready for automation!');
+                          } else {
+                            console.log('');
+                            console.log('⚠️  No Status field found. You need to add one with these options:');
+                            console.log('   📥 Triage, 📋 Backlog, 🔨 In Progress, 👀 Review/Testing, 🚀 Ready to Merge, ✅ Done');
+                          }
                         } else {
-                          console.log(`❌ Direct query failed for project #${debugProjectNumber}`);
+                          console.log(`❌ Could not access project details for #${debugProjectNumber}`);
                         }
                       } catch (directError) {
-                        console.log(`❌ Direct query error: ${directError.message}`);
+                        console.log(`❌ Error accessing project #${debugProjectNumber}: ${directError.message}`);
                       }
                     } else {
                       console.log(`❌ Project #${debugProjectNumber} not found in projects list`);
@@ -207,7 +314,20 @@ jobs:
                 }
               }
             } catch (error) {
-              console.log(`❌ Error querying user: ${error.message}`);
+              console.log(`❌ Error querying user projects: ${error.message}`);
+              if (error.message.includes('Resource not accessible')) {
+                console.log('');
+                console.log('🔐 TOKEN PERMISSION ISSUE');
+                console.log('========================');
+                console.log('This error suggests the GitHub token lacks project access.');
+                console.log('For personal repositories, this is often expected.');
+                console.log('');
+                console.log('Try these solutions:');
+                console.log('1. Make sure your project is public');
+                console.log('2. Check repository settings > Actions > General');
+                console.log('3. Ensure "Read and write permissions" are enabled');
+                console.log('4. Create the project manually and make it public');
+              }
             }
             
             // If not a user, try as organization
@@ -260,20 +380,25 @@ jobs:
             }
             
             if (!isUser && !isOrg) {
-              console.log(`❌ Could not find user or organization: ${owner}`);
+              console.log(`❌ Could not identify account type for: ${owner}`);
             }
             
             console.log('');
-            console.log('🔧 TROUBLESHOOTING TIPS:');
-            console.log('========================');
-            console.log('1. Check that your project is public or the token has proper permissions');
-            console.log('2. Verify the project URL and number match');
-            console.log('3. Try running this workflow again in a few minutes (API lag)');
-            console.log('4. Check if the project is a "Project (classic)" vs "Project (beta/v2)"');
-            console.log('5. Only Project V2 (beta) projects work with this automation');
+            console.log('🔧 NEXT STEPS');
+            console.log('=============');
+            if (userResult?.user?.projectsV2?.nodes?.length > 0) {
+              const firstProject = userResult.user.projectsV2.nodes[0];
+              console.log(`1. Use project_number: ${firstProject.number} in workflow inputs`);
+              console.log('2. Run workflow with sync_all=true to add existing issues');
+            } else {
+              console.log('1. Run this workflow with setup_mode=true for creation guide');
+              console.log('2. Create project manually at: https://github.com/users/' + owner + '/projects');
+              console.log('3. Return here with the project number');
+            }
 
   update-project-board:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || (github.event.inputs.setup_mode != 'true' && github.event.inputs.discover_projects != 'true' && github.event.inputs.debug_project == '')
     steps:
       - name: Get Project ID
         id: get-project
@@ -281,7 +406,12 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const projectNumber = context.payload.inputs?.project_number || 1;
+            const projectNumber = context.payload.inputs?.project_number;
+            
+            // If no project number specified, try to find LazySSH project or default to 1
+            let targetProjectNumber = projectNumber ? parseInt(projectNumber) : null;
+            
+            console.log(`🔍 Looking for project number: ${targetProjectNumber || 'auto-detect'}`);
             
             // First, check if owner is a user or organization
             let ownerResult = { user: null, organization: null };
@@ -294,7 +424,13 @@ jobs:
                 query($owner: String!) {
                   user(login: $owner) {
                     id
-                    __typename
+                    projectsV2(first: 10) {
+                      nodes {
+                        id
+                        title
+                        number
+                      }
+                    }
                   }
                 }
               `;
@@ -304,9 +440,25 @@ jobs:
               if (userResult.user) {
                 ownerResult.user = userResult.user;
                 isUser = true;
+                
+                // If no project number specified, try to find LazySSH project
+                if (!targetProjectNumber) {
+                  const lazysshProject = userResult.user.projectsV2.nodes.find(
+                    p => p.title.toLowerCase().includes('lazyssh') || 
+                         p.title.toLowerCase().includes('development')
+                  );
+                  
+                  if (lazysshProject) {
+                    targetProjectNumber = lazysshProject.number;
+                    console.log(`✅ Auto-detected LazySSH project: #${targetProjectNumber}`);
+                  } else if (userResult.user.projectsV2.nodes.length > 0) {
+                    targetProjectNumber = userResult.user.projectsV2.nodes[0].number;
+                    console.log(`⚠️  Using first available project: #${targetProjectNumber}`);
+                  }
+                }
               }
             } catch (error) {
-              console.log(`Not a user account: ${error.message}`);
+              console.log(`Not a user account or access denied: ${error.message}`);
             }
             
             // If not a user, try as organization
@@ -316,7 +468,13 @@ jobs:
                   query($owner: String!) {
                     organization(login: $owner) {
                       id
-                      __typename
+                      projectsV2(first: 10) {
+                        nodes {
+                          id
+                          title
+                          number
+                        }
+                      }
                     }
                   }
                 `;
@@ -326,12 +484,44 @@ jobs:
                 if (orgResult.organization) {
                   ownerResult.organization = orgResult.organization;
                   isOrg = true;
+                  
+                  // Auto-detect logic for org
+                  if (!targetProjectNumber) {
+                    const lazysshProject = orgResult.organization.projectsV2.nodes.find(
+                      p => p.title.toLowerCase().includes('lazyssh')
+                    );
+                    
+                    if (lazysshProject) {
+                      targetProjectNumber = lazysshProject.number;
+                      console.log(`✅ Auto-detected LazySSH project: #${targetProjectNumber}`);
+                    } else if (orgResult.organization.projectsV2.nodes.length > 0) {
+                      targetProjectNumber = orgResult.organization.projectsV2.nodes[0].number;
+                      console.log(`⚠️  Using first available project: #${targetProjectNumber}`);
+                    }
+                  }
                 }
               } catch (error) {
                 console.log(`Not an organization account: ${error.message}`);
               }
             }
             
+            if (!targetProjectNumber) {
+              console.log('❌ NO PROJECT FOUND');
+              console.log('===================');
+              console.log('Could not find any projects to use.');
+              console.log('');
+              console.log('🔧 TO FIX THIS:');
+              console.log('1. Run workflow with setup_mode=true for setup guide');
+              console.log('2. Or run with discover_projects=true to see available projects');
+              console.log('3. Create a project at: https://github.com/users/' + context.repo.owner + '/projects');
+              console.log('4. Come back with the project number');
+              
+              core.setOutput('project-found', 'false');
+              core.setOutput('error-message', 'No projects found. Run with setup_mode=true for help.');
+              return;
+            }
+            
+            console.log(`🔄 Syncing to project #${targetProjectNumber}`);
             console.log(`Owner ${context.repo.owner} is: ${isUser ? 'User' : 'Organization'}`);
             
             // Query project based on owner type
@@ -368,11 +558,17 @@ jobs:
               try {
                 const result = await github.graphql(userQuery, {
                   owner: context.repo.owner,
-                  number: parseInt(projectNumber)
+                  number: targetProjectNumber
                 });
                 project = result.user?.projectV2;
               } catch (error) {
-                console.log(`Error querying user project: ${error.message}`);
+                console.log(`❌ Error querying project: ${error.message}`);
+                if (error.message.includes('Could not resolve to a ProjectV2')) {
+                  console.log('');
+                  console.log('Project not found. Try running with discover_projects=true');
+                  console.log('or create the project first with setup_mode=true');
+                }
+                return;
               }
             }
             
@@ -407,35 +603,34 @@ jobs:
               try {
                 const result = await github.graphql(orgQuery, {
                   owner: context.repo.owner,
-                  number: parseInt(projectNumber)
+                  number: targetProjectNumber
                 });
                 project = result.organization?.projectV2;
               } catch (error) {
-                console.log(`Error querying organization project: ${error.message}`);
+                console.log(`❌ Error querying organization project: ${error.message}`);
+                return;
               }
             }
             
             if (!project) {
-              console.log(`Project #${projectNumber} not found for ${context.repo.owner}`);
-              console.log('Available projects can be viewed at: https://github.com/users/' + context.repo.owner + '/projects');
               console.log('');
-              console.log('To fix this issue:');
-              console.log('1. Go to https://github.com/users/' + context.repo.owner + '/projects');
-              console.log('2. Create a new project (Project V2) named "LazySSH Development"');
-              console.log('3. Add a "Status" field with these options:');
-              console.log('   - 📥 Triage');
-              console.log('   - 📋 Backlog'); 
-              console.log('   - 🔨 In Progress');
-              console.log('   - 👀 Review/Testing');
-              console.log('   - 🚀 Ready to Merge');
-              console.log('   - ✅ Done');
-              console.log('4. Note the project number from the URL (e.g., if URL is /users/username/projects/3, the number is 3)');
-              console.log('5. Update the workflow_dispatch input or create the project as #1');
+              console.log('📋 QUICK SETUP REMINDER');
+              console.log('=======================');
+              console.log('If you need to create a project:');
+              console.log('1. Go to: https://github.com/users/' + context.repo.owner + '/projects');
+              console.log('2. Click "New project" → "Table" view');
+              console.log('3. Name it "LazySSH Development"');
+              console.log('4. Add Status field with proper options');
+              console.log('5. Return with the project number');
+              console.log('');
+              console.log('🎯 Once setup, re-run workflow with sync_all=true to populate!');
+
               core.setOutput('project-found', 'false');
+              core.setOutput('error-message', `Project #${targetProjectNumber} not found`);
               return;
             }
             
-            console.log(`Found project: ${project.title}`);
+            console.log(`✅ Found project: ${project.title}`);
             
             // Find the Status field
             const statusField = project.fields.nodes.find(field => 
@@ -445,13 +640,25 @@ jobs:
             );
             
             if (!statusField) {
-              console.log('No Status field found in project');
+              console.log('⚠️  No Status field found in project');
+              console.log('');
+              console.log('🔧 TO ADD STATUS FIELD:');
+              console.log('1. Go to your project');
+              console.log('2. Click "+" next to columns');
+              console.log('3. Select "New field" → "Single select"');
+              console.log('4. Name it "Status"');
+              console.log('5. Add options: 📥 Triage, 📋 Backlog, 🔨 In Progress, 👀 Review/Testing, 🚀 Ready to Merge, ✅ Done');
+              
               core.setOutput('project-found', 'false');
+              core.setOutput('error-message', 'No Status field found. Please add one.');
               return;
             }
             
+            console.log(`✅ Found Status field with ${statusField.options?.length || 0} options`);
+            
             core.setOutput('project-found', 'true');
             core.setOutput('project-id', project.id);
+            core.setOutput('project-number', targetProjectNumber);
             core.setOutput('status-field-id', statusField.id);
             core.setOutput('status-options', JSON.stringify(statusField.options || []));
             
@@ -568,7 +775,7 @@ jobs:
             });
             
             const itemId = addResult.addProjectV2ItemById.item.id;
-            console.log(`Added item #${itemNumber} to project`);
+            console.log(`✅ Added item #${itemNumber} to project`);
             core.setOutput('item-id', itemId);
             
             return { itemId };
@@ -768,166 +975,42 @@ jobs:
               optionId: targetStatus.id
             });
             
-            console.log(`Updated item #${item.number} to status: ${targetStatus.name}`);
+            console.log(`✅ Updated item #${item.number} to status: ${targetStatus.name}`);
 
-  create-project-board:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.sync_all != 'true'
-    steps:
-      - name: Create LazySSH project board (v2)
+      - name: Project setup reminder
+        if: steps.get-project.outputs.project-found != 'true'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { owner } = context.repo;
+            const errorMessage = steps['get-project'].outputs['error-message'] || 'Project not found';
+            const projectNumber = steps['get-project'].outputs['project-number'] || 'unknown';
             
-            // Note: Creating a new Project v2 requires appropriate permissions
-            // For personal repos, projects need to be created manually through the GitHub UI
-            
-            const createMutation = `
-              mutation($ownerId: ID!, $title: String!) {
-                createProjectV2(input: {
-                  ownerId: $ownerId
-                  title: $title
-                }) {
-                  projectV2 {
-                    id
-                    title
-                  }
-                }
-              }
-            `;
-            
-            // First, check if owner is a user or organization and get the ID
-            let ownerId = null;
-            let isUser = false;
-            
-            // Try to fetch as user first
-            try {
-              const userQuery = `
-                query($login: String!) {
-                  user(login: $login) {
-                    id
-                    __typename
-                  }
-                }
-              `;
-              const userResult = await github.graphql(userQuery, { login: owner });
-              
-              if (userResult.user) {
-                ownerId = userResult.user.id;
-                isUser = true;
-                console.log(`Found user account: ${owner}`);
-              }
-            } catch (error) {
-              console.log(`Not a user account: ${error.message}`);
-            }
-            
-            // If not a user, try as organization
-            if (!ownerId) {
-              try {
-                const orgQuery = `
-                  query($login: String!) {
-                    organization(login: $login) {
-                      id
-                      __typename
-                    }
-                  }
-                `;
-                const orgResult = await github.graphql(orgQuery, { login: owner });
-                
-                if (orgResult.organization) {
-                  ownerId = orgResult.organization.id;
-                  isUser = false;
-                  console.log(`Found organization account: ${owner}`);
-                }
-              } catch (error) {
-                console.log(`Not an organization account: ${error.message}`);
-              }
-            }
-            
-            if (!ownerId) {
-              console.log(`Could not find user or organization: ${owner}`);
-              console.log('Please create the project manually at: https://github.com/users/' + owner + '/projects');
-              return;
-            }
-            
-            try {
-              const result = await github.graphql(createMutation, {
-                ownerId,
-                title: process.env.PROJECT_NAME
-              });
-              
-              const projectId = result.createProjectV2.projectV2.id;
-              console.log(`Created project: ${result.createProjectV2.projectV2.title}`);
-              
-              // Add Status field with predefined options
-              const addFieldMutation = `
-                mutation($projectId: ID!, $name: String!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
-                  createProjectV2Field(input: {
-                    projectId: $projectId
-                    dataType: SINGLE_SELECT
-                    name: $name
-                    singleSelectOptions: $options
-                  }) {
-                    projectV2Field {
-                      ... on ProjectV2SingleSelectField {
-                        id
-                        name
-                        options {
-                          id
-                          name
-                        }
-                      }
-                    }
-                  }
-                }
-              `;
-              
-              const statusOptions = [
-                { name: "📥 Triage", color: "GRAY" },
-                { name: "📋 Backlog", color: "BLUE" },
-                { name: "🔨 In Progress", color: "YELLOW" },
-                { name: "👀 Review/Testing", color: "ORANGE" },
-                { name: "🚀 Ready to Merge", color: "GREEN" },
-                { name: "✅ Done", color: "PURPLE" }
-              ];
-              
-              await github.graphql(addFieldMutation, {
-                projectId,
-                name: "Status",
-                options: statusOptions
-              });
-              
-              console.log('Created Status field with predefined options');
-              
-            } catch (error) {
-              if (error.message.includes('already exists')) {
-                console.log('LazySSH Development project already exists');
-              } else {
-                console.error('Error creating project:', error.message);
-                console.log('');
-                console.log('❌ MANUAL PROJECT CREATION REQUIRED ❌');
-                console.log('');
-                console.log('GitHub Actions cannot create projects for personal accounts.');
-                console.log('Please create the project manually:');
-                console.log('');
-                console.log('1. Go to: https://github.com/users/' + owner + '/projects');
-                console.log('2. Click "New project"');
-                console.log('3. Choose "Table" view');
-                console.log('4. Name it "LazySSH Development"');
-                console.log('5. Add a "Status" field (Single select) with these options:');
-                console.log('   - 📥 Triage');
-                console.log('   - 📋 Backlog');
-                console.log('   - 🔨 In Progress');
-                console.log('   - 👀 Review/Testing');
-                console.log('   - 🚀 Ready to Merge');
-                console.log('   - ✅ Done');
-                console.log('6. Note the project number from the URL');
-                console.log('7. Re-run this workflow with sync_all=true and the correct project_number');
-                console.log('');
-              }
-            }
+            console.log('⚠️  PROJECT SETUP REQUIRED');
+            console.log('==========================');
+            console.log(`Error: ${errorMessage}`);
+            console.log('');
+            console.log('🔧 QUICK FIX OPTIONS:');
+            console.log('');
+            console.log('Option 1 - Get Setup Help:');
+            console.log('  1. Go to Actions tab');
+            console.log('  2. Click "Run workflow" on this automation');
+            console.log('  3. Enable "Run in setup mode"');
+            console.log('  4. Click "Run workflow"');
+            console.log('');
+            console.log('Option 2 - See Available Projects:');
+            console.log('  1. Click "Run workflow" on this automation');
+            console.log('  2. Enable "List all available projects"');
+            console.log('  3. Click "Run workflow"');
+            console.log('');
+            console.log('Option 3 - Create Project Manually:');
+            console.log('  1. Go to: https://github.com/users/' + context.repo.owner + '/projects');
+            console.log('  2. Click "New project" → "Table" view');
+            console.log('  3. Name it "LazySSH Development"');
+            console.log('  4. Add Status field with proper options');
+            console.log('  5. Return with the project number');
+            console.log('');
+            console.log('🎯 Once setup, re-run workflow with sync_all=true to populate!');
 
   sync-existing-items:
     runs-on: ubuntu-latest
@@ -939,7 +1022,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
-            const projectNumber = context.payload.inputs?.project_number || 1;
+            const projectNumber = context.payload.inputs?.project_number;
+            
+            // Use the same project discovery logic as the main job
+            let targetProjectNumber = projectNumber ? parseInt(projectNumber) : null;
             
             // First, check if owner is a user or organization
             let ownerResult = { user: null, organization: null };
@@ -952,7 +1038,13 @@ jobs:
                 query($owner: String!) {
                   user(login: $owner) {
                     id
-                    __typename
+                    projectsV2(first: 10) {
+                      nodes {
+                        id
+                        title
+                        number
+                      }
+                    }
                   }
                 }
               `;
@@ -960,6 +1052,22 @@ jobs:
               if (userResult.user) {
                 ownerResult.user = userResult.user;
                 isUser = true;
+                
+                // Auto-detect LazySSH project if not specified
+                if (!targetProjectNumber) {
+                  const lazysshProject = userResult.user.projectsV2.nodes.find(
+                    p => p.title.toLowerCase().includes('lazyssh') || 
+                         p.title.toLowerCase().includes('development')
+                  );
+                  
+                  if (lazysshProject) {
+                    targetProjectNumber = lazysshProject.number;
+                    console.log(`✅ Auto-detected LazySSH project: #${targetProjectNumber}`);
+                  } else if (userResult.user.projectsV2.nodes.length > 0) {
+                    targetProjectNumber = userResult.user.projectsV2.nodes[0].number;
+                    console.log(`⚠️  Using first available project: #${targetProjectNumber}`);
+                  }
+                }
               }
             } catch (error) {
               console.log(`Not a user account: ${error.message}`);
@@ -972,7 +1080,13 @@ jobs:
                   query($owner: String!) {
                     organization(login: $owner) {
                       id
-                      __typename
+                      projectsV2(first: 10) {
+                        nodes {
+                          id
+                          title
+                          number
+                        }
+                      }
                     }
                   }
                 `;
@@ -980,12 +1094,24 @@ jobs:
                 if (orgResult.organization) {
                   ownerResult.organization = orgResult.organization;
                   isOrg = true;
+                  
+                  // Auto-detect for org
+                  if (!targetProjectNumber && orgResult.organization.projectsV2.nodes.length > 0) {
+                    targetProjectNumber = orgResult.organization.projectsV2.nodes[0].number;
+                  }
                 }
               } catch (error) {
                 console.log(`Not an organization account: ${error.message}`);
               }
             }
             
+            if (!targetProjectNumber) {
+              console.log('❌ No project number available for sync');
+              console.log('Please run with discover_projects=true to see available projects');
+              return;
+            }
+            
+            console.log(`🔄 Syncing to project #${targetProjectNumber}`);
             console.log(`Owner ${owner} is: ${isUser ? 'User' : 'Organization'}`);
             
             // Get project info based on owner type
@@ -1029,11 +1155,17 @@ jobs:
               try {
                 const result = await github.graphql(userProjectQuery, {
                   owner,
-                  number: parseInt(projectNumber)
+                  number: targetProjectNumber
                 });
                 project = result.user?.projectV2;
               } catch (error) {
-                console.log(`Error querying user project: ${error.message}`);
+                console.log(`❌ Error querying project: ${error.message}`);
+                if (error.message.includes('Could not resolve to a ProjectV2')) {
+                  console.log('');
+                  console.log('Project not found. Try running with discover_projects=true');
+                  console.log('or create the project first with setup_mode=true');
+                }
+                return;
               }
             }
             
@@ -1075,22 +1207,22 @@ jobs:
               try {
                 const result = await github.graphql(orgProjectQuery, {
                   owner,
-                  number: parseInt(projectNumber)
+                  number: targetProjectNumber
                 });
                 project = result.organization?.projectV2;
               } catch (error) {
-                console.log(`Error querying organization project: ${error.message}`);
+                console.log(`❌ Error querying organization project: ${error.message}`);
+                return;
               }
             }
             
             if (!project) {
-              console.log(`Project #${projectNumber} not found for ${owner}`);
-              console.log('Available projects can be viewed at: https://github.com/users/' + owner + '/projects');
-              console.log('');
-              console.log('Please create the project first or use the correct project number.');
-              console.log('See the create-project-board job output for instructions.');
+              console.log('❌ Project not accessible');
+              console.log('Run with discover_projects=true to see available projects');
               return;
             }
+            
+            console.log(`✅ Found project for sync`);
             
             const existingItems = new Set(
               project.items.nodes
@@ -1109,6 +1241,8 @@ jobs:
               opt.name.toLowerCase().includes('backlog')
             );
             
+            console.log(`📊 Project has ${existingItems.size} existing items`);
+            
             // Get all open issues and PRs
             const { data: issues } = await github.rest.issues.listForRepo({
               owner,
@@ -1117,9 +1251,15 @@ jobs:
               per_page: 100
             });
             
+            console.log(`📋 Found ${issues.length} open issues/PRs to sync`);
+            
+            let addedCount = 0;
+            let skippedCount = 0;
+            
             for (const issue of issues) {
               if (existingItems.has(issue.number)) {
-                console.log(`Item #${issue.number} already in project`);
+                console.log(`⏭️  Item #${issue.number} already in project`);
+                skippedCount++;
                 continue;
               }
               
@@ -1173,9 +1313,17 @@ jobs:
                   });
                 }
                 
-                console.log(`Added ${issue.pull_request ? 'PR' : 'issue'} #${issue.number} to project`);
+                console.log(`✅ Added ${issue.pull_request ? 'PR' : 'issue'} #${issue.number} to project`);
+                addedCount++;
                 
               } catch (error) {
-                console.log(`Error adding item #${issue.number}: ${error.message}`);
+                console.log(`❌ Error adding item #${issue.number}: ${error.message}`);
               }
-            } 
+            }
+            
+            console.log('');
+            console.log(`🎉 SYNC COMPLETE`);
+            console.log(`===============`);
+            console.log(`✅ Added: ${addedCount} items`);
+            console.log(`⏭️  Skipped: ${skippedCount} items (already in project)`);
+            console.log(`📊 Total: ${addedCount + skippedCount} items processed`); 
