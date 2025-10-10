@@ -313,7 +313,7 @@ docs:
 
 clean:
 	@echo "$(BLUE)Cleaning up build artifacts and virtual environment...$(NC)"
-	rm -rf build/ dist/ *.egg-info/ __pycache__/ .pytest_cache/ .coverage htmlcov/ .mypy_cache/ .venv-verify/ $(VENV_DIR)/
+	rm -rf build/ dist/ *.egg-info/ __pycache__/ .pytest_cache/ .coverage htmlcov/ .mypy_cache/ .pre-commit-venv/ .venv-verify/ $(VENV_DIR)/
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
 	find . -type f -name "*.pyo" -delete

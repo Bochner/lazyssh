@@ -6,6 +6,7 @@
 # runs all checks with auto-fix, and reports results with actionable feedback.
 
 set -e  # Exit on error
+set -o pipefail  # Ensure pipeline failures are caught
 
 # Colors for output
 RED='\033[0;31m'
@@ -190,7 +191,7 @@ cleanup_and_exit() {
     find . -type d -name "*.egg" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
-    find . -type d -name ".coverage" -exec rm -rf {} + 2>/dev/null || true
+    find . -type f -name ".coverage" -exec rm -f {} + 2>/dev/null || true
     find . -type d -name "htmlcov" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name "dist" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name "build" -exec rm -rf {} + 2>/dev/null || true
@@ -336,7 +337,7 @@ if [ $SKIP_TESTS -eq 0 ]; then
     print_section "Testing"
     
     print_info "Running pytest..."
-    if [ -d "tests" ] && [ "$(find tests -name "test_*.py" | wc -l)" -gt 0 ]; then
+    if [ -d "tests" ] && [ "$(find tests -name "test_*.py" | wc -l || echo 0)" -gt 0 ]; then
         if pytest -xvs tests 2>&1 | tee /tmp/pytest.log; then
             print_success "All tests passed"
         else
@@ -390,7 +391,7 @@ print_section "Additional Checks"
 # Check: Python version requirement in pyproject.toml
 print_info "Checking Python version requirement in pyproject.toml..."
 if [ -f "pyproject.toml" ]; then
-    PYPROJECT_PYTHON_REQ=$(grep -E "requires-python|python_requires" pyproject.toml)
+    PYPROJECT_PYTHON_REQ=$(grep -E "requires-python|python_requires" pyproject.toml || true)
     [ $VERBOSE -eq 1 ] && echo "  $PYPROJECT_PYTHON_REQ"
     
     if ! grep -q ">=3.11" pyproject.toml; then
@@ -402,11 +403,11 @@ fi
 
 # Check: Verify using pathlib instead of os.path
 print_info "Checking for os.path usage (should use pathlib)..."
-OSPATH_COUNT=$(grep -r "os\.path\." --include="*.py" src 2>/dev/null | wc -l | tr -d ' ')
+OSPATH_COUNT=$(grep -r "os\.path\." --include="*.py" src 2>/dev/null | wc -l | tr -d ' ' || true)
 if [ "$OSPATH_COUNT" -gt 0 ]; then
     print_warning "Found $OSPATH_COUNT instances of os.path usage (consider using pathlib)"
     if [ $VERBOSE -eq 1 ]; then
-        grep -r "os\.path\." --include="*.py" src | head -10
+        grep -r "os\.path\." --include="*.py" src | head -10 || true
     fi
 else
     print_success "No os.path usage found (using pathlib)"
@@ -414,8 +415,8 @@ fi
 
 # Check: Version consistency
 print_info "Checking version consistency..."
-PYPROJECT_VERSION=$(grep -m 1 'version = ' pyproject.toml | cut -d '"' -f 2)
-INIT_VERSION=$(grep '__version__' src/lazyssh/__init__.py | cut -d '"' -f 2)
+PYPROJECT_VERSION=$(grep -m 1 'version = ' pyproject.toml | cut -d '"' -f 2 || true)
+INIT_VERSION=$(grep '__version__' src/lazyssh/__init__.py | cut -d '"' -f 2 || true)
 
 if [ "$PYPROJECT_VERSION" = "$INIT_VERSION" ]; then
     print_success "Version is consistent across files: $PYPROJECT_VERSION"
