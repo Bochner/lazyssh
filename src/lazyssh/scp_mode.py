@@ -167,9 +167,9 @@ class SCPModeCompleter(Completer):
                     try:
                         # List directories in the current directory
                         for d in os.listdir("."):
-                            full_path = Path(".") / d
-                            if full_path.is_dir():
-                                result_path = str(full_path)
+                            path_obj = Path(".") / d
+                            if path_obj.is_dir():
+                                result_path = str(path_obj)
                                 yield Completion(result_path, start_position=0)
                     except Exception:
                         # Silently fail for completions
@@ -190,11 +190,11 @@ class SCPModeCompleter(Completer):
 
                         # List directories in the local directory
                         for d in os.listdir(base_dir or "."):
-                            full_path = Path(base_dir) / d
+                            path_obj = Path(base_dir) / d
                             if (
                                 not dirname_part or d.startswith(dirname_part)
-                            ) and full_path.is_dir():
-                                result_path = str(full_path) if base_dir else d
+                            ) and path_obj.is_dir():
+                                result_path = str(path_obj) if base_dir else d
                                 yield Completion(result_path, start_position=-len(partial_path))
                     except Exception:
                         # Silently fail for completions
@@ -215,9 +215,11 @@ class SCPModeCompleter(Completer):
 
                     # List directories in the local directory
                     for d in os.listdir(base_dir or "."):
-                        full_path = Path(base_dir) / d
-                        if (not dirname_part or d.startswith(dirname_part)) and full_path.is_dir():
-                            result_path = str(full_path) if base_dir else d
+                        dir_path_obj = Path(base_dir) / d
+                        if (
+                            not dirname_part or d.startswith(dirname_part)
+                        ) and dir_path_obj.is_dir():
+                            result_path = str(dir_path_obj) if base_dir else d
                             yield Completion(result_path, start_position=-len(partial_path))
                 except Exception:
                     # Silently fail for completions
@@ -246,8 +248,8 @@ class SCPModeCompleter(Completer):
                     for f in files:
                         if not filename_part or f.startswith(filename_part):
                             # Check if it's a directory and append / if it is
-                            full_path = Path(base_dir) / f
-                            if full_path.is_dir():
+                            file_path_obj = Path(base_dir) / f
+                            if file_path_obj.is_dir():
                                 f = f + "/"
                             yield Completion(f, start_position=-len(filename_part))
                 except (FileNotFoundError, PermissionError):
@@ -272,9 +274,11 @@ class SCPModeCompleter(Completer):
 
                     # List directories in the local directory
                     for d in os.listdir(base_dir or "."):
-                        full_path = Path(base_dir) / d
-                        if (not dirname_part or d.startswith(dirname_part)) and full_path.is_dir():
-                            result_path = str(full_path) if base_dir else d
+                        lcd_path_obj = Path(base_dir) / d
+                        if (
+                            not dirname_part or d.startswith(dirname_part)
+                        ) and lcd_path_obj.is_dir():
+                            result_path = str(lcd_path_obj) if base_dir else d
                             yield Completion(result_path, start_position=-len(partial_path))
                 except Exception:
                     # Silently fail for completions

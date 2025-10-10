@@ -126,6 +126,7 @@ temp/
 # Virtual environment
 .pre-commit-venv/
 .venv/
+.venv-verify/
 venv/
 
 # Build artifacts
