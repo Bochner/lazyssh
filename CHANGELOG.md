@@ -5,6 +5,42 @@ All notable changes to LazySSH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2025-10-10
+
+### Added
+- Comprehensive pre-commit check script with auto-fix capabilities
+  - Added automatic code formatting and quality checks
+  - Implemented security scanning with bandit and safety
+  - Added command-line options: `--no-fix`, `--dry-run`, `--skip-tests`, `--skip-build`, `--verbose`
+  - Enhanced error reporting with actionable feedback
+  - Added support for isolated virtual environment (`.pre-commit-venv`) for pre-commit hooks
+- Overhauled Makefile with comprehensive development commands
+  - Added 25+ new make targets for development workflow
+  - Implemented color-coded output for better readability
+  - Added virtual environment management commands (`venv-info`)
+  - Added dependency management commands (`deps-check`, `deps-update`)
+  - Added code quality commands (`fmt`, `fix`, `lint`, `check`, `verify`)
+  - Added testing commands with coverage support
+  - Added build and release automation
+  - Enhanced documentation with detailed help text
+- Updated `.gitignore` to exclude pre-commit virtual environment
+
+### Changed
+- Improved pre-commit checks robustness
+  - Added `set -o pipefail` to ensure pipeline failures are caught
+  - Enhanced error handling for grep commands with `|| true`
+  - Improved coverage file cleanup
+  - Better handling of empty output in word count operations
+- Updated development documentation with comprehensive guide for new Makefile and pre-commit system
+- Improved variable naming consistency in `scp_mode.py`
+
+### Removed
+- Removed obsolete project management files
+  - Deleted `.github/PROJECT_MANAGEMENT.md`
+  - Deleted `.github/workflows/streamlined-project-management.yml`
+  - Deleted `PROJECT_BOARD_SETUP.md`
+  - Deleted `docs/project-management.md`
+
 ## [1.3.0] - 2025-03-29
 
 ### Added
