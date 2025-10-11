@@ -5,6 +5,74 @@ All notable changes to LazySSH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.3.3] - 2025-10-11
+
+### Added
+- Terminal method can now be changed at runtime without restarting LazySSH
+  - Added `terminal <method>` command in command mode to set terminal method (auto, native, terminator)
+  - Added "Change terminal method" menu option in menu mode (option 8)
+  - Terminal method now displayed in SSH connections status table
+- State management for terminal method preference in SSHManager class
+- New `open` command for opening terminal sessions, creating symmetry with the `close` command
+
+### Changed
+- **BREAKING:** Native terminal mode now uses subprocess instead of os.execvp()
+  - Users can now exit SSH sessions (with `exit` or Ctrl+D) and return to LazySSH
+  - LazySSH process remains running while native terminal is open
+  - SSH connection remains active after closing terminal session
+  - This allows managing multiple sessions and switching between connections
+- **BREAKING:** Split `terminal` command functionality into two separate commands:
+  - `open <ssh_id>` - Opens a terminal session (replaces `terminal <ssh_id>`)
+  - `terminal <method>` - Changes terminal method only (auto, native, terminator)
+  - This provides clearer command separation and better user experience
+- `open_terminal_native()` now returns boolean (True/False) instead of None
+- `open_terminal()` now returns boolean indicating success/failure
+- Updated help text and documentation to reflect new command structure
+- Tab completion now context-aware: `terminal` suggests methods only, `open` suggests connections only
+
+### Migration Notes
+- **IMPORTANT:** The `terminal <ssh_id>` command for opening terminals has been replaced with `open <ssh_id>`
+  - Old: `terminal myserver` → New: `open myserver`
+  - If you use the old syntax, LazySSH will show a helpful error message guiding you to use `open`
+  - The `terminal` command now only changes terminal methods: `terminal native`, `terminal auto`, `terminal terminator`
+- Users who relied on native mode exiting LazySSH will now return to LazySSH instead
+- To exit LazySSH completely, use the exit menu option or command
+- All existing functionality remains compatible except for the command name change above
+
+## [1.3.2] - 2025-10-11
+
+### Added
+- Native Python terminal mode as fallback when external terminal emulator is not available
+  - Uses Python's subprocess with PTY allocation for SSH sessions
+  - No external terminal emulator required for basic terminal functionality
+  - Works across all platforms (Linux, macOS, Windows)
+- Windows platform support
+  - Cross-platform executable detection using Python's `shutil.which()`
+  - LazySSH now runs natively on Windows without crashes
+- Terminal method configuration via `LAZYSSH_TERMINAL_METHOD` environment variable
+  - Supported values: `auto`, `terminator`, `native`
+  - Default is `auto` (tries available methods in order)
+- Automatic terminal method detection and selection
+- Enhanced logging for terminal method selection and fallback behavior
+
+### Changed
+- Terminator is now a truly optional dependency
+  - Application no longer exits if Terminator is not installed
+  - Displays warning message for missing optional dependencies
+  - Falls back to native terminal mode automatically
+- Improved dependency checking to distinguish required vs optional dependencies
+  - SSH is required (openssh-client)
+  - Terminator is optional (falls back to native mode)
+- Replaced subprocess calls to `which` command with `shutil.which()` for cross-platform compatibility
+- Updated executable detection in both `__init__.py` and `ssh.py`
+
+### Fixed
+- Fixed critical bug where missing Terminator prevented application startup
+- Fixed Windows compatibility issue with executable detection
+- Improved error handling for terminal opening failures
+
 ## [1.3.1] - 2025-10-10
 
 ### Added

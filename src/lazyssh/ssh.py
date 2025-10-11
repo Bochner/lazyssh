@@ -6,6 +6,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Confirm
 
+from .config import get_terminal_method
 from .logging_module import SSH_LOGGER, log_ssh_connection, log_tunnel_creation
 from .models import SSHConnection
 from .ui import display_error, display_info, display_success, display_warning
@@ -21,9 +22,12 @@ class SSHManager:
         # Set the base path for control sockets
         self.control_path_base = "/tmp/"
 
+        # Initialize terminal method from configuration
+        self.terminal_method = get_terminal_method()
+
         # Log initialization
         if SSH_LOGGER:
-            SSH_LOGGER.debug("SSHManager initialized")
+            SSH_LOGGER.debug(f"SSHManager initialized with terminal method: {self.terminal_method}")
 
         # We don't need to create or chmod the /tmp directory as it already exists
         # with the appropriate permissions
@@ -265,13 +269,19 @@ class SSHManager:
                 SSH_LOGGER.exception(f"Unexpected error closing tunnel: {str(e)}")
             return False
 
-    def open_terminal(self, socket_path: str) -> None:
-        """Open a terminal for an SSH connection using terminator"""
+    def open_terminal_native(self, socket_path: str) -> bool:
+        """
+        Open a terminal for an SSH connection using native Python subprocess.
+        This runs SSH as a subprocess, allowing LazySSH to continue running.
+
+        Returns:
+            True if terminal session completed successfully, False otherwise.
+        """
         if socket_path not in self.connections:
             display_error(f"SSH connection not found for socket: {socket_path}")
             if SSH_LOGGER:
                 SSH_LOGGER.error(f"Terminal open failed: connection not found for {socket_path}")
-            return
+            return False
 
         conn = self.connections[socket_path]
         try:
@@ -282,16 +292,78 @@ class SSHManager:
                     SSH_LOGGER.error(
                         f"Cannot open terminal: connection not active for {socket_path}"
                     )
-                return
+                return False
 
-            # Check if terminator is available using shutil.which() for cross-platform compatibility
+            # Build SSH command with explicit TTY allocation
+            ssh_args = ["ssh", "-tt", "-S", socket_path, f"{conn.username}@{conn.host}"]
+
+            # Add specified shell if provided
+            if conn.shell:
+                ssh_args.append(conn.shell)
+
+            # Display the command that will be executed
+            display_info("Opening terminal (native):")
+            display_info(" ".join(ssh_args))
+            if SSH_LOGGER:
+                SSH_LOGGER.info(
+                    f"Opening native terminal for {conn.username}@{conn.host} using socket {socket_path}"
+                )
+
+            # Run SSH as subprocess and wait for it to complete
+            # User can exit with 'exit' or Ctrl+D to return to LazySSH
+            result = subprocess.run(ssh_args)
+
+            if result.returncode == 0:
+                display_success("Terminal session ended")
+                if SSH_LOGGER:
+                    SSH_LOGGER.info(f"Native terminal session completed for {socket_path}")
+                return True
+            else:
+                display_warning(f"Terminal session ended with exit code {result.returncode}")
+                if SSH_LOGGER:
+                    SSH_LOGGER.warning(
+                        f"Native terminal session ended with exit code {result.returncode} for {socket_path}"
+                    )
+                return False
+
+        except Exception as e:
+            display_error(f"Error opening native terminal: {str(e)}")
+            display_info("You can manually connect using:")
+            display_info(f"ssh -S {socket_path} {conn.username}@{conn.host}")
+            if SSH_LOGGER:
+                SSH_LOGGER.exception(f"Unexpected error opening native terminal: {str(e)}")
+            return False
+
+    def open_terminal_terminator(self, socket_path: str) -> bool:
+        """
+        Open a terminal for an SSH connection using Terminator.
+
+        Returns:
+            True if terminal was opened successfully, False otherwise.
+        """
+        if socket_path not in self.connections:
+            display_error(f"SSH connection not found for socket: {socket_path}")
+            if SSH_LOGGER:
+                SSH_LOGGER.error(f"Terminal open failed: connection not found for {socket_path}")
+            return False
+
+        conn = self.connections[socket_path]
+        try:
+            # First verify the SSH connection is still active
+            if not self.check_connection(socket_path):
+                display_error("SSH connection is not active")
+                if SSH_LOGGER:
+                    SSH_LOGGER.error(
+                        f"Cannot open terminal: connection not active for {socket_path}"
+                    )
+                return False
+
+            # Check if terminator is available
             terminator_path = shutil.which("terminator")
             if not terminator_path:
-                display_error("Terminator is required but not installed")
-                display_info("Please install Terminator using your package manager")
                 if SSH_LOGGER:
-                    SSH_LOGGER.error("Terminator not found but required for terminal")
-                return
+                    SSH_LOGGER.debug("Terminator not found in PATH")
+                return False
 
             # Build SSH command with explicit TTY allocation
             ssh_cmd = f"ssh -tt -S {socket_path} {conn.username}@{conn.host}"
@@ -301,11 +373,11 @@ class SSHManager:
                 ssh_cmd += f" {conn.shell}"
 
             # Display the commands that will be executed
-            display_info("Opening terminal with command:")
+            display_info("Opening terminal (terminator):")
             display_info(f"{terminator_path} -e '{ssh_cmd}'")
             if SSH_LOGGER:
                 SSH_LOGGER.info(
-                    f"Opening terminal for {conn.username}@{conn.host} using socket {socket_path}"
+                    f"Opening Terminator terminal for {conn.username}@{conn.host} using socket {socket_path}"
                 )
 
             # Run terminator
@@ -319,12 +391,85 @@ class SSHManager:
             if process.poll() is None:
                 # Still running, which is good
                 display_success(f"Terminal opened for {conn.host}")
+                return True
             else:
                 # Check if there was an error
                 _, stderr = process.communicate()
-                display_error(f"Terminal failed to start: {stderr.decode().strip()}")
+                display_error(f"Terminator failed to start: {stderr.decode().strip()}")
                 if SSH_LOGGER:
-                    SSH_LOGGER.error(f"Terminal failed to start: {stderr.decode().strip()}")
+                    SSH_LOGGER.error(f"Terminator failed to start: {stderr.decode().strip()}")
+                return False
+
+        except Exception as e:
+            display_error(f"Error opening Terminator terminal: {str(e)}")
+            if SSH_LOGGER:
+                SSH_LOGGER.exception(f"Unexpected error opening Terminator terminal: {str(e)}")
+            return False
+
+    def open_terminal(self, socket_path: str) -> bool:
+        """
+        Open a terminal for an SSH connection.
+
+        Automatically selects the appropriate terminal method based on configuration
+        and availability. Methods are tried in order:
+        - If method is 'terminator': try Terminator only
+        - If method is 'native': use native terminal only
+        - If method is 'auto' (default): try Terminator, fallback to native
+
+        Returns:
+            True if terminal was opened successfully, False otherwise.
+        """
+        if socket_path not in self.connections:
+            display_error(f"SSH connection not found for socket: {socket_path}")
+            if SSH_LOGGER:
+                SSH_LOGGER.error(f"Terminal open failed: connection not found for {socket_path}")
+            return False
+
+        conn = self.connections[socket_path]
+
+        # First verify the SSH connection is still active
+        if not self.check_connection(socket_path):
+            display_error("SSH connection is not active")
+            if SSH_LOGGER:
+                SSH_LOGGER.error(f"Cannot open terminal: connection not active for {socket_path}")
+            return False
+
+        # Use the current terminal method from instance state
+        terminal_method = self.terminal_method
+
+        if SSH_LOGGER:
+            SSH_LOGGER.debug(f"Terminal method configured: {terminal_method}")
+
+        try:
+            if terminal_method == "terminator":
+                # User explicitly requested Terminator
+                if not self.open_terminal_terminator(socket_path):
+                    display_error("Terminator is not available")
+                    display_info("Please install Terminator or set LAZYSSH_TERMINAL_METHOD=native")
+                    return False
+                return True
+            elif terminal_method == "native":
+                # User explicitly requested native terminal
+                return self.open_terminal_native(socket_path)
+            else:  # "auto"
+                # Try Terminator first, fallback to native
+                if shutil.which("terminator"):
+                    if SSH_LOGGER:
+                        SSH_LOGGER.debug("Attempting to use Terminator (auto mode)")
+                    if not self.open_terminal_terminator(socket_path):
+                        # Terminator failed, fallback to native
+                        if SSH_LOGGER:
+                            SSH_LOGGER.debug("Terminator failed, falling back to native terminal")
+                        display_warning("Terminator failed, falling back to native terminal")
+                        return self.open_terminal_native(socket_path)
+                    return True
+                else:
+                    # Terminator not available, use native
+                    if SSH_LOGGER:
+                        SSH_LOGGER.debug(
+                            "Terminator not available, using native terminal (auto mode)"
+                        )
+                    return self.open_terminal_native(socket_path)
 
         except Exception as e:
             display_error(f"Error opening terminal: {str(e)}")
@@ -332,6 +477,7 @@ class SSHManager:
             display_info(f"ssh -S {socket_path} {conn.username}@{conn.host}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error opening terminal: {str(e)}")
+            return False
 
     def close_connection(self, socket_path: str) -> bool:
         """Close an SSH connection"""
@@ -401,3 +547,35 @@ class SSHManager:
         if SSH_LOGGER:
             SSH_LOGGER.debug(f"Listing {len(self.connections)} connections")
         return self.connections.copy()
+
+    def set_terminal_method(self, method: str) -> bool:
+        """
+        Change the terminal method at runtime.
+
+        Args:
+            method: Terminal method to set ('auto', 'native', or 'terminator')
+
+        Returns:
+            True if method was set successfully, False if invalid method
+        """
+        if method not in ["auto", "native", "terminator"]:
+            display_error(f"Invalid terminal method: {method}")
+            display_info("Valid methods: auto, native, terminator")
+            return False
+
+        self.terminal_method = method  # type: ignore
+        display_success(f"Terminal method set to: {method}")
+
+        if SSH_LOGGER:
+            SSH_LOGGER.info(f"Terminal method changed to: {method}")
+
+        return True
+
+    def get_current_terminal_method(self) -> str:
+        """
+        Get the current terminal method.
+
+        Returns:
+            Current terminal method ('auto', 'native', or 'terminator')
+        """
+        return self.terminal_method

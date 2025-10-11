@@ -99,13 +99,13 @@ list
 list
 ```
 
-### `terminal`
+### `open`
 
-Opens a terminal for an existing SSH connection.
+Opens a terminal session for an existing SSH connection.
 
 **Syntax:**
 ```
-terminal <connection_name>
+open <connection_name>
 ```
 
 **Parameters:**
@@ -113,8 +113,34 @@ terminal <connection_name>
 
 **Example:**
 ```bash
-terminal myserver
+open myserver
 ```
+
+**Note:** This command creates a symmetric pair with the `close` command.
+
+### `terminal`
+
+Changes the terminal method used for opening terminal sessions.
+
+**Syntax:**
+```
+terminal <method>
+```
+
+**Parameters:**
+- `method`: Terminal method to use (`auto`, `native`, or `terminator`)
+  - `auto`: Try terminator first, fallback to native (default)
+  - `native`: Use native terminal (subprocess, allows returning to LazySSH)
+  - `terminator`: Use terminator terminal emulator only
+
+**Examples:**
+```bash
+terminal native
+terminal auto
+terminal terminator
+```
+
+**Note:** This setting persists for the current session only and doesn't affect already-open terminals.
 
 ### `close`
 
@@ -453,7 +479,8 @@ LazySSH features intelligent tab completion in both command and SCP modes:
 ### Command Mode Tab Completion
 
 - **Command Names**: Press Tab to see available commands
-- **Connection Names**: Automatically suggests connection names for commands that need them
+- **Connection Names**: Automatically suggests connection names for commands like `open`, `close`, `scp`, and `tunc`
+- **Terminal Methods**: Suggests `auto`, `native`, and `terminator` for the `terminal` command
 - **Command Parameters**: Suggests relevant parameters for commands
 - **File Paths**: Offers file path completion for commands requiring files
 

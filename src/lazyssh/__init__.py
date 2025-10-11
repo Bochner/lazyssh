@@ -5,7 +5,7 @@ This package provides tools for managing SSH connections, creating tunnels,
 and opening terminal sessions through an interactive command-line interface.
 """
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 __author__ = "Bochner"
 __email__ = ""
 __license__ = "MIT"
@@ -33,37 +33,45 @@ from .logging_module import (  # noqa: F401
 )
 
 
-def check_dependencies() -> list[str]:
+def check_dependencies() -> tuple[list[str], list[str]]:
     """
-    Check for required external dependencies.
+    Check for required and optional external dependencies.
 
     Returns:
-        A list of missing dependencies, empty if all are installed.
+        A tuple of (required_missing, optional_missing) where each is a list of missing dependencies.
     """
-    missing_deps = []
+    required_missing = []
+    optional_missing = []
 
-    # Check for SSH client
+    # Check for SSH client (required)
     ssh_path = _check_executable("ssh")
     if not ssh_path:
-        missing_deps.append("OpenSSH Client (ssh)")
+        required_missing.append("OpenSSH Client (ssh)")
         if APP_LOGGER:
             APP_LOGGER.error("OpenSSH Client (ssh) not found but required")
 
-    # Check for terminator (recommended but not strictly required)
+    # Check for terminator (optional)
     terminator_path = _check_executable("terminator")
     if not terminator_path:
-        missing_deps.append("Terminator terminal emulator (optional)")
+        optional_missing.append("Terminator terminal emulator (optional)")
         if APP_LOGGER:
-            APP_LOGGER.warning("Terminator terminal emulator not found (recommended but optional)")
+            APP_LOGGER.warning("Terminator terminal emulator not found (optional)")
 
-    if missing_deps:
+    if required_missing or optional_missing:
         if APP_LOGGER:
-            APP_LOGGER.debug(f"Dependencies check: Missing: {', '.join(missing_deps)}")
+            if required_missing:
+                APP_LOGGER.debug(
+                    f"Dependencies check: Missing required: {', '.join(required_missing)}"
+                )
+            if optional_missing:
+                APP_LOGGER.debug(
+                    f"Dependencies check: Missing optional: {', '.join(optional_missing)}"
+                )
     else:
         if APP_LOGGER:
-            APP_LOGGER.debug("Dependencies check: All required dependencies found")
+            APP_LOGGER.debug("Dependencies check: All dependencies found")
 
-    return missing_deps
+    return (required_missing, optional_missing)
 
 
 def _check_executable(name: str) -> str | None:

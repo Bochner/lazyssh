@@ -31,22 +31,36 @@ The system SHALL use Python's built-in `shutil.which()` function to locate execu
 
 ### Requirement: Platform-Agnostic Dependency Checking
 
-The dependency checking mechanism SHALL work consistently across all supported platforms (Windows, Linux, macOS) without platform-specific code paths visible to the caller.
+The dependency checking system SHALL differentiate between required and optional dependencies, returning separate classifications for each.
 
-#### Scenario: SSH dependency check on Windows
-- **WHEN** checking for SSH client on Windows
-- **THEN** the system SHALL successfully locate the SSH executable if installed
-- **AND** report missing dependency if not installed
+#### Scenario: SSH dependency check returns as required
+- **WHEN** checking for SSH client dependency
+- **THEN** it SHALL be classified as a required dependency
+- **AND** missing SSH SHALL prevent application startup
 
-#### Scenario: SSH dependency check on Unix/Linux/macOS
-- **WHEN** checking for SSH client on Unix, Linux, or macOS
-- **THEN** the system SHALL successfully locate the SSH executable if installed
-- **AND** report missing dependency if not installed
+#### Scenario: Terminator dependency check returns as optional
+- **WHEN** checking for Terminator terminal emulator
+- **THEN** it SHALL be classified as an optional dependency
+- **AND** missing Terminator SHALL NOT prevent application startup
+- **AND** a warning message SHALL be displayed about the missing optional dependency
 
-#### Scenario: Optional dependency handling
-- **WHEN** checking for optional dependencies (e.g., terminator)
-- **THEN** the system SHALL gracefully handle absence on any platform
-- **AND** log appropriate warnings without preventing application startup
+#### Scenario: Application startup with missing required dependencies
+- **WHEN** the application starts and required dependencies are missing
+- **THEN** the application SHALL display an error message listing the missing required dependencies
+- **AND** the application SHALL exit with a non-zero exit code
+- **AND** the application SHALL NOT start
+
+#### Scenario: Application startup with missing optional dependencies
+- **WHEN** the application starts and only optional dependencies are missing
+- **THEN** the application SHALL display a warning message about the missing optional dependencies
+- **AND** the application SHALL continue to start normally
+- **AND** functionality requiring the optional dependency SHALL degrade gracefully
+
+#### Scenario: Dependency check returns separate lists
+- **WHEN** `check_dependencies()` is called
+- **THEN** it SHALL return a tuple of `(required_missing, optional_missing)`
+- **AND** `required_missing` SHALL contain only required dependencies that are not available
+- **AND** `optional_missing` SHALL contain only optional dependencies that are not available
 
 ### Requirement: Error Handling for Executable Detection
 
