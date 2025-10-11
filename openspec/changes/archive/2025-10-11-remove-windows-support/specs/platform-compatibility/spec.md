@@ -1,8 +1,13 @@
-# platform-compatibility Specification
+## REMOVED Requirements
 
-## Purpose
-TBD - created by archiving change add-windows-platform-support. Update Purpose after archive.
-## Requirements
+### Requirement: Cross-Platform Executable Detection
+
+**Reason**: Windows platform support is being removed due to incompatibility with SSH master mode (`-M` flag) which relies on Unix domain sockets. Windows OpenSSH does not support this functionality.
+
+**Migration**: Windows users should use Windows Subsystem for Linux (WSL) to run LazySSH with full functionality.
+
+## MODIFIED Requirements
+
 ### Requirement: Platform-Agnostic Dependency Checking
 
 The dependency checking system SHALL differentiate between required and optional dependencies, returning separate classifications for each on supported Unix-like platforms.
