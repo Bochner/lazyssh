@@ -1,4 +1,3 @@
-import os
 import shutil
 import subprocess
 import time
@@ -22,7 +21,7 @@ class SSHManager:
 
         # Set the base path for control sockets
         self.control_path_base = "/tmp/"
-        
+
         # Initialize terminal method from configuration
         self.terminal_method = get_terminal_method()
 
@@ -274,7 +273,7 @@ class SSHManager:
         """
         Open a terminal for an SSH connection using native Python subprocess.
         This runs SSH as a subprocess, allowing LazySSH to continue running.
-        
+
         Returns:
             True if terminal session completed successfully, False otherwise.
         """
@@ -338,7 +337,7 @@ class SSHManager:
     def open_terminal_terminator(self, socket_path: str) -> bool:
         """
         Open a terminal for an SSH connection using Terminator.
-        
+
         Returns:
             True if terminal was opened successfully, False otherwise.
         """
@@ -410,13 +409,13 @@ class SSHManager:
     def open_terminal(self, socket_path: str) -> bool:
         """
         Open a terminal for an SSH connection.
-        
+
         Automatically selects the appropriate terminal method based on configuration
         and availability. Methods are tried in order:
         - If method is 'terminator': try Terminator only
         - If method is 'native': use native terminal only
         - If method is 'auto' (default): try Terminator, fallback to native
-        
+
         Returns:
             True if terminal was opened successfully, False otherwise.
         """
@@ -427,19 +426,17 @@ class SSHManager:
             return False
 
         conn = self.connections[socket_path]
-        
+
         # First verify the SSH connection is still active
         if not self.check_connection(socket_path):
             display_error("SSH connection is not active")
             if SSH_LOGGER:
-                SSH_LOGGER.error(
-                    f"Cannot open terminal: connection not active for {socket_path}"
-                )
+                SSH_LOGGER.error(f"Cannot open terminal: connection not active for {socket_path}")
             return False
 
         # Use the current terminal method from instance state
         terminal_method = self.terminal_method
-        
+
         if SSH_LOGGER:
             SSH_LOGGER.debug(f"Terminal method configured: {terminal_method}")
 
@@ -469,7 +466,9 @@ class SSHManager:
                 else:
                     # Terminator not available, use native
                     if SSH_LOGGER:
-                        SSH_LOGGER.debug("Terminator not available, using native terminal (auto mode)")
+                        SSH_LOGGER.debug(
+                            "Terminator not available, using native terminal (auto mode)"
+                        )
                     return self.open_terminal_native(socket_path)
 
         except Exception as e:
@@ -548,36 +547,34 @@ class SSHManager:
         if SSH_LOGGER:
             SSH_LOGGER.debug(f"Listing {len(self.connections)} connections")
         return self.connections.copy()
-    
+
     def set_terminal_method(self, method: str) -> bool:
         """
         Change the terminal method at runtime.
-        
+
         Args:
             method: Terminal method to set ('auto', 'native', or 'terminator')
-        
+
         Returns:
             True if method was set successfully, False if invalid method
         """
-        from .config import TerminalMethod
-        
         if method not in ["auto", "native", "terminator"]:
             display_error(f"Invalid terminal method: {method}")
             display_info("Valid methods: auto, native, terminator")
             return False
-        
+
         self.terminal_method = method  # type: ignore
         display_success(f"Terminal method set to: {method}")
-        
+
         if SSH_LOGGER:
             SSH_LOGGER.info(f"Terminal method changed to: {method}")
-        
+
         return True
-    
+
     def get_current_terminal_method(self) -> str:
         """
         Get the current terminal method.
-        
+
         Returns:
             Current terminal method ('auto', 'native', or 'terminator')
         """

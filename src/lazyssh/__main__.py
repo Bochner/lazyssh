@@ -297,15 +297,15 @@ def change_terminal_method_menu() -> bool:
     display_info("1. auto       - Try terminator first, fallback to native (default)")
     display_info("2. native     - Use native terminal (subprocess, allows returning to LazySSH)")
     display_info("3. terminator - Use terminator terminal emulator only")
-    
+
     choice = get_user_input("Choose terminal method (1-3)")
-    
+
     method_map = {
         "1": "auto",
         "2": "native",
         "3": "terminator",
     }
-    
+
     if choice in method_map:
         return ssh_manager.set_terminal_method(method_map[choice])
     else:
@@ -579,14 +579,14 @@ def main(prompt: bool, debug: bool) -> None:
 
         # Check dependencies
         required_missing, optional_missing = check_dependencies()
-        
+
         # Display warnings for optional missing dependencies
         if optional_missing:
             display_warning("Missing optional dependencies:")
             for dep in optional_missing:
                 display_warning(f"  - {dep}")
             display_info("Native terminal method will be used as fallback.")
-        
+
         # Exit only if required dependencies are missing
         if required_missing:
             display_error("Missing required dependencies:")

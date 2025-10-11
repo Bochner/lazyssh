@@ -48,7 +48,7 @@ lazyssh> lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy 
 lazyssh> tunc myserver l 8080 localhost 80
 
 # Open a terminal
-lazyssh> term myserver
+lazyssh> open myserver
 
 # Transfer files (SCP mode)
 lazyssh> scp myserver

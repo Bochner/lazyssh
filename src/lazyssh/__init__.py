@@ -5,7 +5,7 @@ This package provides tools for managing SSH connections, creating tunnels,
 and opening terminal sessions through an interactive command-line interface.
 """
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 __author__ = "Bochner"
 __email__ = ""
 __license__ = "MIT"
@@ -60,9 +60,13 @@ def check_dependencies() -> tuple[list[str], list[str]]:
     if required_missing or optional_missing:
         if APP_LOGGER:
             if required_missing:
-                APP_LOGGER.debug(f"Dependencies check: Missing required: {', '.join(required_missing)}")
+                APP_LOGGER.debug(
+                    f"Dependencies check: Missing required: {', '.join(required_missing)}"
+                )
             if optional_missing:
-                APP_LOGGER.debug(f"Dependencies check: Missing optional: {', '.join(optional_missing)}")
+                APP_LOGGER.debug(
+                    f"Dependencies check: Missing optional: {', '.join(optional_missing)}"
+                )
     else:
         if APP_LOGGER:
             APP_LOGGER.debug("Dependencies check: All dependencies found")

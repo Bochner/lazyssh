@@ -88,7 +88,9 @@ def display_warning(message: str) -> None:
     console.print(f"[yellow]Warning:[/yellow] {message}")
 
 
-def display_ssh_status(connections: dict[str, SSHConnection], terminal_method: str = "auto") -> None:
+def display_ssh_status(
+    connections: dict[str, SSHConnection], terminal_method: str = "auto"
+) -> None:
     table = Table(title="Active SSH Connections", border_style="blue")
     table.add_column("Name", style="cyan", justify="center")
     table.add_column("Host", style="magenta", justify="center")

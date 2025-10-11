@@ -135,10 +135,10 @@ This shows all active connections with details including:
 
 ```bash
 # Open a terminal for the connection named "myserver"
-term myserver
+open myserver
 ```
 
-This launches a Terminator terminal window connected to your server.
+This launches a terminal window connected to your server using the configured terminal method.
 
 ### 4. Creating Tunnels
 

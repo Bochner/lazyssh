@@ -10,17 +10,17 @@ TerminalMethod = Literal["auto", "terminator", "native"]
 def get_terminal_method() -> TerminalMethod:
     """
     Get the configured terminal method from environment variable.
-    
+
     Returns:
         The configured terminal method, defaults to 'auto'.
         Valid values: 'auto', 'terminator', 'native'
     """
     method = os.environ.get("LAZYSSH_TERMINAL_METHOD", "auto").lower()
-    
+
     if method not in ["auto", "terminator", "native"]:
         # Invalid value, default to auto
         return "auto"
-    
+
     return method  # type: ignore
 
 
