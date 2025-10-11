@@ -933,23 +933,24 @@ class CommandMode:
             display_info("Example: open ubuntu")
             return False
 
-        arg = args[0].lower()
-
-        # Check if user provided a terminal method name (common mistake)
-        if arg in ["auto", "native", "terminator"]:
-            display_error(f"To change terminal method, use: terminal {arg}")
-            display_info("The 'open' command is for opening terminal sessions.")
-            if CMD_LOGGER:
-                CMD_LOGGER.warning(
-                    f"User tried to change terminal method using wrong command: open {arg}"
-                )
-            return False
-
         # Treat it as an SSH connection name
         conn_name = args[0]
         socket_path = f"/tmp/{conn_name}"
 
+        # First check if the connection exists
         if socket_path not in self.ssh_manager.connections:
+            # If not found, check if user provided a terminal method name (common mistake)
+            arg = args[0].lower()
+            if arg in ["auto", "native", "terminator"]:
+                display_error(f"To change terminal method, use: terminal {arg}")
+                display_info("The 'open' command is for opening terminal sessions.")
+                if CMD_LOGGER:
+                    CMD_LOGGER.warning(
+                        f"User tried to change terminal method using wrong command: open {arg}"
+                    )
+                return False
+
+            # Connection not found and not a terminal method name
             display_error(f"SSH connection '{conn_name}' not found")
             if CMD_LOGGER:
                 CMD_LOGGER.error(f"Connection not found for open command: {conn_name}")
