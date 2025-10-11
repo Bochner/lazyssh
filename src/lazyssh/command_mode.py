@@ -896,7 +896,8 @@ class CommandMode:
             display_info("Example: terminal native")
             return False
 
-        arg = args[0].lower()
+        raw_arg = args[0]
+        arg = raw_arg.lower()
 
         # Check if the argument is a terminal method
         if arg in ["auto", "native", "terminator"]:
@@ -910,12 +911,14 @@ class CommandMode:
                 return False
 
         # Check if user provided an SSH connection name (common mistake)
-        socket_path = f"/tmp/{arg}"
+        socket_path = f"/tmp/{raw_arg}"
         if socket_path in self.ssh_manager.connections:
-            display_error(f"To open a terminal, use: open {arg}")
+            display_error(f"To open a terminal, use: open {raw_arg}")
             display_info("The 'terminal' command is only for changing terminal methods.")
             if CMD_LOGGER:
-                CMD_LOGGER.warning(f"User tried to open terminal using old syntax: terminal {arg}")
+                CMD_LOGGER.warning(
+                    f"User tried to open terminal using old syntax: terminal {raw_arg}"
+                )
             return False
 
         # Invalid terminal method
