@@ -160,9 +160,9 @@ LazySSH is a comprehensive SSH toolkit for managing connections, tunnels, and re
 ## Important Constraints
 
 **Platform Requirements:**
-- Linux/Unix systems (POSIX-compliant)
-- macOS supported
-- Windows not officially supported (WSL may work)
+- Linux/Unix systems (POSIX-compliant) - Full support
+- macOS - Full support
+- Windows - Full support (requires OpenSSH for Windows)
 
 **Python Version:**
 - Minimum: Python 3.11
@@ -187,8 +187,9 @@ LazySSH is a comprehensive SSH toolkit for managing connections, tunnels, and re
 
 **System Commands:**
 - `ssh` - Core SSH operations
-- `which` - Executable checking
 - `terminator` - Terminal emulator for session opening (optional)
+
+**Note:** Executable detection is handled by Python's built-in `shutil.which()` for cross-platform compatibility.
 
 **SSH Configuration:**
 - Uses user's `~/.ssh/config` if present
