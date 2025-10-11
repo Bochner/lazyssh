@@ -76,7 +76,10 @@ For detailed documentation, please see the [docs directory](docs/):
 
 - Python 3.11+
 - OpenSSH client
-- Terminator terminal emulator (optional, for terminal integration)
+
+### Optional Dependencies
+
+- **Terminator terminal emulator** - For opening terminals in external windows. If not installed, LazySSH will use a native Python terminal that runs in the current terminal window.
 
 ### Platform Support
 
@@ -84,6 +87,37 @@ LazySSH is compatible with:
 - **Linux** - Full support
 - **macOS** - Full support
 - **Windows** - Full support (requires OpenSSH for Windows)
+
+## Terminal Methods
+
+LazySSH supports two methods for opening SSH terminal sessions:
+
+### Native Terminal (Default)
+The native terminal method uses Python's built-in capabilities to drop you directly into an SSH session in your current terminal window. This requires no external dependencies and works out of the box.
+
+### Terminator Terminal
+If you have Terminator installed, LazySSH can open SSH sessions in new Terminator windows. This is useful if you want to keep multiple terminals open simultaneously.
+
+### Configuration
+
+You can control which terminal method to use with the `LAZYSSH_TERMINAL_METHOD` environment variable:
+
+```bash
+# Automatically select best available method (default)
+# Tries Terminator first, falls back to native
+export LAZYSSH_TERMINAL_METHOD=auto
+
+# Force native terminal (runs in current window)
+export LAZYSSH_TERMINAL_METHOD=native
+
+# Force Terminator (requires Terminator to be installed)
+export LAZYSSH_TERMINAL_METHOD=terminator
+```
+
+**Default behavior (auto):**
+- If Terminator is installed: Opens terminals in new Terminator windows
+- If Terminator is not installed: Uses native terminal in current window
+- Falls back gracefully if the preferred method fails
 
 ## License
 

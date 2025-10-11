@@ -32,10 +32,25 @@ This guide provides solutions to common issues you might encounter when using La
 
 ### Missing Dependencies
 
-**Issue**: Error about missing dependencies when starting LazySSH.
+**Issue**: Error about missing **required** dependencies when starting LazySSH.
 
 **Solution**:
-- Install the required Terminator terminal emulator:
+- Ensure OpenSSH client is installed:
+  ```bash
+  # Ubuntu/Debian
+  sudo apt install openssh-client
+  
+  # Fedora
+  sudo dnf install openssh-clients
+  
+  # macOS (usually pre-installed)
+  # Check with: ssh -V
+  ```
+
+**Optional Dependency Warning**:
+- If you see a warning about Terminator being missing, this is **not an error**
+- LazySSH will work fine using the native terminal method
+- To install Terminator (optional):
   ```bash
   # Ubuntu/Debian
   sudo apt install terminator
@@ -43,8 +58,8 @@ This guide provides solutions to common issues you might encounter when using La
   # Fedora
   sudo dnf install terminator
   
-  # RHEL/CentOS
-  sudo yum install terminator
+  # macOS
+  brew install terminator
   ```
 
 ### Version Compatibility
@@ -84,8 +99,9 @@ This guide provides solutions to common issues you might encounter when using La
 **Issue**: Terminal emulator (Terminator) not available on Windows.
 
 **Solution**:
-- Terminator is Linux/Unix-specific. On Windows, LazySSH will use the default terminal emulator or Windows Terminal if available.
-- You can still create connections and use all other features except terminal integration.
+- Terminator is Linux/Unix-specific and not available on Windows
+- LazySSH will automatically use the native terminal method on Windows
+- All features including terminal integration work normally using the native method
 
 **Issue**: Socket path issues on Windows.
 
@@ -95,14 +111,19 @@ This guide provides solutions to common issues you might encounter when using La
 
 ### macOS
 
-**Issue**: Terminator not available on macOS.
+**Note**: Terminator is optional on macOS. LazySSH will automatically use the native terminal method if Terminator is not installed.
 
-**Solution**:
+**If you prefer Terminator**:
 - Install Terminator via Homebrew:
   ```bash
   brew install terminator
   ```
-- Or use iTerm2 or Terminal.app as alternatives.
+- LazySSH will automatically detect and use it
+
+**Native terminal works with**:
+- Terminal.app (built-in)
+- iTerm2
+- Any other terminal emulator you're using
 
 ### Linux
 
@@ -157,34 +178,74 @@ This guide provides solutions to common issues you might encounter when using La
 
 ## Terminal Emulator Issues
 
-### Terminator Not Found
+### Terminator Not Found (Not an Error)
 
-**Issue**: "Terminator not found" or similar error.
+**Note**: As of recent versions, Terminator is **optional**. LazySSH will automatically use a native Python terminal if Terminator is not installed.
 
-**Solution**:
+**What Happens**:
+- When you start LazySSH, you'll see a warning: "Terminator terminal emulator not found (optional)"
+- LazySSH will continue to start normally and use the native terminal method
+- When you open a terminal, it will open in your current terminal window instead of a new Terminator window
+
+**If You Want to Use Terminator**:
 - Install Terminator:
   ```bash
+  # Ubuntu/Debian
   sudo apt install terminator
+  
+  # Fedora
+  sudo dnf install terminator
+  
+  # macOS
+  brew install terminator
   ```
-- Or configure LazySSH to use a different terminal:
-  ```bash
-  export LAZYSSH_TERMINAL=gnome-terminal
-  ```
+
+### Choosing Terminal Method
+
+**Configure which terminal method to use**:
+
+```bash
+# Default: Automatically select best available (tries Terminator first, falls back to native)
+export LAZYSSH_TERMINAL_METHOD=auto
+
+# Force native terminal (runs in current window, no external dependencies)
+export LAZYSSH_TERMINAL_METHOD=native
+
+# Force Terminator (requires Terminator to be installed)
+export LAZYSSH_TERMINAL_METHOD=terminator
+```
 
 ### Terminal Doesn't Open
 
 **Issue**: Terminal fails to open after connecting.
 
 **Solutions**:
-1. Check if the terminal emulator is working:
+1. If using Terminator, check if it's installed and working:
    ```bash
    terminator --version
    ```
-2. Try setting a different terminal emulator:
+2. Switch to native terminal if Terminator has issues:
    ```bash
-   export LAZYSSH_TERMINAL=xterm
+   export LAZYSSH_TERMINAL_METHOD=native
    ```
-3. Manually open a terminal using the displayed command
+3. If using native terminal, check if SSH client is working:
+   ```bash
+   ssh -V
+   ```
+4. Manually open a terminal using the displayed command
+
+### Native Terminal Replaces LazySSH Process
+
+**Expected Behavior**: When using the native terminal method, opening a terminal will replace the LazySSH process with the SSH session.
+
+**What This Means**:
+- You'll be dropped directly into the SSH session
+- When you exit the SSH session, LazySSH will also exit
+- This is intentional and matches the behavior of running `ssh` directly
+
+**If You Want to Keep LazySSH Running**:
+- Use Terminator instead: `export LAZYSSH_TERMINAL_METHOD=terminator`
+- Or create multiple connections before opening terminals
 
 ## Tunneling Troubles
 

@@ -543,10 +543,19 @@ def main(prompt: bool, debug: bool) -> None:
         display_banner()
 
         # Check dependencies
-        missing_deps = check_dependencies()
-        if missing_deps:
+        required_missing, optional_missing = check_dependencies()
+        
+        # Display warnings for optional missing dependencies
+        if optional_missing:
+            display_warning("Missing optional dependencies:")
+            for dep in optional_missing:
+                display_warning(f"  - {dep}")
+            display_info("Native terminal method will be used as fallback.")
+        
+        # Exit only if required dependencies are missing
+        if required_missing:
             display_error("Missing required dependencies:")
-            for dep in missing_deps:
+            for dep in required_missing:
                 display_error(f"  - {dep}")
             display_info("Please install the required dependencies and try again.")
             sys.exit(1)
