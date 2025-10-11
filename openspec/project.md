@@ -162,7 +162,7 @@ LazySSH is a comprehensive SSH toolkit for managing connections, tunnels, and re
 **Platform Requirements:**
 - Linux/Unix systems (POSIX-compliant) - Full support
 - macOS - Full support
-- Windows - Full support (requires OpenSSH for Windows)
+- Windows - Not supported natively; Windows users should use Windows Subsystem for Linux (WSL)
 
 **Python Version:**
 - Minimum: Python 3.11

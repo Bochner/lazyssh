@@ -84,30 +84,16 @@ This guide provides solutions to common issues you might encounter when using La
 
 ### Windows
 
-**Issue**: LazySSH crashes immediately on Windows.
+**Important**: LazySSH does not support native Windows due to incompatibility with SSH control sockets (master mode `-M` flag). Windows OpenSSH does not support Unix domain sockets which are essential for LazySSH's persistent connection functionality.
 
-**Solution**:
-- Ensure OpenSSH for Windows is installed:
-  ```powershell
-  # Check if OpenSSH is installed
-  Get-WindowsCapability -Online | Where-Object Name -like 'OpenSSH.Client*'
-  
-  # Install if not present
-  Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
-  ```
+**Solution**: Windows users should use [Windows Subsystem for Linux (WSL)](https://docs.microsoft.com/en-us/windows/wsl/install) to run LazySSH with full functionality.
 
-**Issue**: Terminal emulator (Terminator) not available on Windows.
-
-**Solution**:
-- Terminator is Linux/Unix-specific and not available on Windows
-- LazySSH will automatically use the native terminal method on Windows
-- All features including terminal integration work normally using the native method
-
-**Issue**: Socket path issues on Windows.
-
-**Solution**:
-- Windows uses named pipes instead of Unix sockets for SSH control sockets.
-- If you encounter socket-related errors, try using shorter connection names with the `-socket` parameter.
+**Setting up LazySSH on Windows with WSL**:
+1. Install WSL: `wsl --install` (in PowerShell as Administrator)
+2. Restart your computer if required
+3. Open WSL (Ubuntu or your preferred distribution)
+4. Install LazySSH in WSL: `pip install lazyssh`
+5. Use LazySSH normally within WSL
 
 ### macOS
 

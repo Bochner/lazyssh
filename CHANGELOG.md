@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.3.4] - 2025-10-11
+
+### Changed
+- **BREAKING:** Removed native Windows support
+  - Windows OpenSSH does not support SSH control sockets (master mode `-M` flag) which is essential for LazySSH's persistent connection functionality
+  - Windows users should use Windows Subsystem for Linux (WSL) to run LazySSH with full functionality
+  - Documentation updated to reflect WSL requirement for Windows users
+  - Platform support now officially limited to Linux and macOS
+
+### Fixed
+- Fixed SCP mode connection when no arguments provided
+  - Running `scp` without arguments now correctly enters SCP mode after connection selection
+  - Previously, socket path was not set after interactive connection selection, causing immediate exit
+  - Existing behavior when connection is provided as argument remains unchanged
+
+
 ## [1.3.3] - 2025-10-11
 
 ### Added

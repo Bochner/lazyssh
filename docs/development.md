@@ -22,6 +22,7 @@ This guide provides information for developers who want to contribute to LazySSH
 - Pip
 - OpenSSH client
 - Terminator terminal emulator (optional but recommended)
+- **Platform**: Linux or macOS (Windows users should use WSL)
 
 ### Clone and Setup
 
@@ -32,7 +33,7 @@ cd lazyssh
 
 # Create a virtual environment (recommended)
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # Install in development mode with all development dependencies
 make dev-install

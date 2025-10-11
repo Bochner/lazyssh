@@ -466,6 +466,8 @@ class SCPMode:
         if not self.connection_name:
             if not self._select_connection():
                 return
+            # Set socket path after successful connection selection
+            self.socket_path = f"/tmp/{self.connection_name}"
 
         # Connect to the selected SSH session if not already connected
         if not self.conn:

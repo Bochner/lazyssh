@@ -86,7 +86,8 @@ For detailed documentation, please see the [docs directory](docs/):
 LazySSH is compatible with:
 - **Linux** - Full support
 - **macOS** - Full support
-- **Windows** - Full support (requires OpenSSH for Windows)
+
+**Windows Users:** Windows OpenSSH does not support SSH master mode (`-M` flag) which is required for LazySSH's persistent connection functionality. Windows users should use [Windows Subsystem for Linux (WSL)](https://docs.microsoft.com/en-us/windows/wsl/install) to run LazySSH with full functionality.
 
 ## Terminal Methods
 
