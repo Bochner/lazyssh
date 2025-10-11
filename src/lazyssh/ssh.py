@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -283,10 +284,9 @@ class SSHManager:
                     )
                 return
 
-            # Check if terminator is available
-            try:
-                terminator_path = subprocess.check_output(["which", "terminator"]).decode().strip()
-            except subprocess.CalledProcessError:
+            # Check if terminator is available using shutil.which() for cross-platform compatibility
+            terminator_path = shutil.which("terminator")
+            if not terminator_path:
                 display_error("Terminator is required but not installed")
                 display_info("Please install Terminator using your package manager")
                 if SSH_LOGGER:

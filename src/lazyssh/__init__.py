@@ -5,13 +5,13 @@ This package provides tools for managing SSH connections, creating tunnels,
 and opening terminal sessions through an interactive command-line interface.
 """
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 __author__ = "Bochner"
 __email__ = ""
 __license__ = "MIT"
 
 import os
-import subprocess
+import shutil
 from pathlib import Path
 
 # Include logging module in the package exports
@@ -76,11 +76,11 @@ def _check_executable(name: str) -> str | None:
     Returns:
         The path to the executable if found, None otherwise
     """
-    try:
-        path = subprocess.check_output(["which", name], text=True).strip()
+    # Use shutil.which() for cross-platform compatibility
+    path = shutil.which(name)
+    if path:
+        # Additional validation: verify the path is a file and executable
         path_obj = Path(path)
         if path_obj.is_file() and os.access(path, os.X_OK):
             return path
-        return None
-    except subprocess.CalledProcessError:
-        return None
+    return None

@@ -5,6 +5,7 @@ This guide provides solutions to common issues you might encounter when using La
 ## Table of Contents
 
 - [Installation Issues](#installation-issues)
+- [Platform-Specific Notes](#platform-specific-notes)
 - [Connection Problems](#connection-problems)
 - [Terminal Emulator Issues](#terminal-emulator-issues)
 - [Tunneling Troubles](#tunneling-troubles)
@@ -63,6 +64,49 @@ This guide provides solutions to common issues you might encounter when using La
   # Upgrading pip
   python3 -m pip install --upgrade pip
   ```
+
+## Platform-Specific Notes
+
+### Windows
+
+**Issue**: LazySSH crashes immediately on Windows.
+
+**Solution**:
+- Ensure OpenSSH for Windows is installed:
+  ```powershell
+  # Check if OpenSSH is installed
+  Get-WindowsCapability -Online | Where-Object Name -like 'OpenSSH.Client*'
+  
+  # Install if not present
+  Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
+  ```
+
+**Issue**: Terminal emulator (Terminator) not available on Windows.
+
+**Solution**:
+- Terminator is Linux/Unix-specific. On Windows, LazySSH will use the default terminal emulator or Windows Terminal if available.
+- You can still create connections and use all other features except terminal integration.
+
+**Issue**: Socket path issues on Windows.
+
+**Solution**:
+- Windows uses named pipes instead of Unix sockets for SSH control sockets.
+- If you encounter socket-related errors, try using shorter connection names with the `-socket` parameter.
+
+### macOS
+
+**Issue**: Terminator not available on macOS.
+
+**Solution**:
+- Install Terminator via Homebrew:
+  ```bash
+  brew install terminator
+  ```
+- Or use iTerm2 or Terminal.app as alternatives.
+
+### Linux
+
+**Note**: LazySSH was originally designed for Linux and has full support for all features.
 
 ## Connection Problems
 

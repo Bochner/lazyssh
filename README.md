@@ -76,7 +76,14 @@ For detailed documentation, please see the [docs directory](docs/):
 
 - Python 3.11+
 - OpenSSH client
-- Terminator terminal emulator
+- Terminator terminal emulator (optional, for terminal integration)
+
+### Platform Support
+
+LazySSH is compatible with:
+- **Linux** - Full support
+- **macOS** - Full support
+- **Windows** - Full support (requires OpenSSH for Windows)
 
 ## License
 
