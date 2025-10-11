@@ -93,15 +93,26 @@ LazySSH is compatible with:
 LazySSH supports two methods for opening SSH terminal sessions:
 
 ### Native Terminal (Default)
-The native terminal method uses Python's built-in capabilities to drop you directly into an SSH session in your current terminal window. This requires no external dependencies and works out of the box.
+The native terminal method runs SSH as a subprocess in your current terminal window. This requires no external dependencies and works out of the box. **Important:** You can exit the SSH session (using `exit` or `Ctrl+D`) and return to LazySSH without closing the SSH connection, allowing you to manage multiple sessions easily.
 
 ### Terminator Terminal
 If you have Terminator installed, LazySSH can open SSH sessions in new Terminator windows. This is useful if you want to keep multiple terminals open simultaneously.
 
 ### Configuration
 
-You can control which terminal method to use with the `LAZYSSH_TERMINAL_METHOD` environment variable:
+You can control which terminal method to use either at runtime or via environment variable:
 
+**Runtime configuration (recommended):**
+```bash
+# From command mode
+lazyssh> terminal native    # Set terminal method to native
+lazyssh> terminal auto      # Set terminal method to auto
+lazyssh> terminal terminator  # Set terminal method to terminator
+
+# From menu mode: Select "8. Change terminal method"
+```
+
+**Environment variable:**
 ```bash
 # Automatically select best available method (default)
 # Tries Terminator first, falls back to native
@@ -118,6 +129,11 @@ export LAZYSSH_TERMINAL_METHOD=terminator
 - If Terminator is installed: Opens terminals in new Terminator windows
 - If Terminator is not installed: Uses native terminal in current window
 - Falls back gracefully if the preferred method fails
+
+**New in this version:**
+- Native terminal now allows returning to LazySSH after exiting the SSH session
+- Terminal method can be changed at runtime without restarting LazySSH
+- Terminal method is displayed in the SSH connections status table
 
 ## License
 

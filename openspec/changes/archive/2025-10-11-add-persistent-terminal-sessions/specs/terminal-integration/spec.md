@@ -1,8 +1,7 @@
-# terminal-integration Specification
+# Terminal Integration Spec Deltas
 
-## Purpose
-TBD - created by archiving change fix-terminal-dependency. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Native Python Terminal Support
 
 The system SHALL provide a native Python-based terminal method that allows users to open SSH terminal sessions without requiring external terminal emulator dependencies, and SHALL allow users to return to LazySSH after closing the terminal session.
@@ -135,6 +134,8 @@ The system SHALL maintain backward compatibility with existing Terminator termin
 - **AND** SSH socket paths SHALL be honored
 - **AND** custom shell specifications SHALL be preserved
 - **AND** SSH connection options SHALL be passed correctly
+
+## ADDED Requirements
 
 ### Requirement: Runtime Terminal Method Management
 

@@ -40,7 +40,7 @@ def show_status() -> None:
     detailed information about any tunnels associated with them.
     """
     if ssh_manager.connections:
-        display_ssh_status(ssh_manager.connections)
+        display_ssh_status(ssh_manager.connections, ssh_manager.get_current_terminal_method())
         for socket_path, conn in ssh_manager.connections.items():
             if conn.tunnels:  # Only show tunnels table if there are tunnels
                 display_tunnels(socket_path, conn)
@@ -74,6 +74,8 @@ def handle_menu_action(choice: str) -> bool | Literal["mode"]:
         return "mode"  # Special return value to trigger mode switch
     elif choice == "7":
         success = scp_mode_menu()
+    elif choice == "8":
+        success = change_terminal_method_menu()
     return success
 
 
@@ -93,7 +95,8 @@ def main_menu() -> str:
         "5": "Close connection",
         "6": "Switch to command mode",
         "7": "Enter SCP mode",
-        "8": "Exit",
+        "8": "Change terminal method",
+        "9": "Exit",
     }
     display_menu(options)
     choice = get_user_input("Choose an option")
@@ -278,6 +281,38 @@ def terminal_menu() -> bool:
     return False
 
 
+def change_terminal_method_menu() -> bool:
+    """
+    Interactive menu for changing the terminal method.
+
+    Allows the user to select a terminal method (auto, native, or terminator)
+    to be used for all terminal sessions.
+
+    Returns:
+        True if the terminal method was successfully changed, False otherwise.
+    """
+    display_info("\nChange Terminal Method")
+    display_info("Current terminal method: " + ssh_manager.get_current_terminal_method())
+    display_info("\nAvailable methods:")
+    display_info("1. auto       - Try terminator first, fallback to native (default)")
+    display_info("2. native     - Use native terminal (subprocess, allows returning to LazySSH)")
+    display_info("3. terminator - Use terminator terminal emulator only")
+    
+    choice = get_user_input("Choose terminal method (1-3)")
+    
+    method_map = {
+        "1": "auto",
+        "2": "native",
+        "3": "terminator",
+    }
+    
+    if choice in method_map:
+        return ssh_manager.set_terminal_method(method_map[choice])
+    else:
+        display_error("Invalid choice")
+        return False
+
+
 def close_connection_menu() -> bool:
     """
     Interactive menu for closing an SSH connection.
@@ -436,7 +471,7 @@ def prompt_mode_main() -> Literal["mode"] | None:
     while True:
         try:
             choice = main_menu()
-            if choice == "8":
+            if choice == "9":
                 if check_active_connections():
                     safe_exit()
                 return None
@@ -445,7 +480,7 @@ def prompt_mode_main() -> Literal["mode"] | None:
             if result == "mode":
                 return "mode"  # Return to trigger mode switch
         except KeyboardInterrupt:
-            display_warning("\nUse option 8 to safely exit LazySSH.")
+            display_warning("\nUse option 9 to safely exit LazySSH.")
         except Exception as e:
             display_error(f"Error: {str(e)}")
 

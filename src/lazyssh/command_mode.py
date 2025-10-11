@@ -177,12 +177,29 @@ class LazySSHCompleter(Completer):
                         if not word_before_cursor or tunnel.id.startswith(word_before_cursor):
                             yield Completion(tunnel.id, start_position=-len(word_before_cursor))
 
-        elif command == "terminal" or command == "close":
-            # For terminal and close commands, we only expect one argument: the SSH connection name
+        elif command == "terminal":
+            # For terminal command, suggest either SSH connection names or terminal methods
+            arg_position = len(words) - 1
+
+            # Only show completions if we're at the exact position to enter the argument
+            if (len(words) == 1 and text.endswith(" ")) or (
+                len(words) == 2 and not text.endswith(" ")
+            ):
+                # Show terminal method options
+                for method in ["auto", "native", "terminator"]:
+                    if not word_before_cursor or method.startswith(word_before_cursor):
+                        yield Completion(method, start_position=-len(word_before_cursor))
+                
+                # Show available connections
+                for conn_name in self.command_mode._get_connection_completions():
+                    if not word_before_cursor or conn_name.startswith(word_before_cursor):
+                        yield Completion(conn_name, start_position=-len(word_before_cursor))
+
+        elif command == "close":
+            # For close command, we only expect one argument: the SSH connection name
             arg_position = len(words) - 1
 
             # Only show completions if we're at the exact position to enter the connection name
-            # and not if we've already typed something after the command
             if (len(words) == 1 and text.endswith(" ")) or (
                 len(words) == 2 and not text.endswith(" ")
             ):
@@ -274,7 +291,7 @@ class CommandMode:
     def show_status(self) -> None:
         """Display current connections and tunnels"""
         if self.ssh_manager.connections:
-            display_ssh_status(self.ssh_manager.connections)
+            display_ssh_status(self.ssh_manager.connections, self.ssh_manager.get_current_terminal_method())
             for socket_path, conn in self.ssh_manager.connections.items():
                 if conn.tunnels:
                     display_tunnels(socket_path, conn)
@@ -612,8 +629,9 @@ class CommandMode:
             display_info("  [dim]Example:[/dim] [green]tund 1[/green]\n")
 
             display_info("[magenta bold]Terminal:[/magenta bold]")
-            display_info("  [cyan]terminal[/cyan] [yellow]<ssh_id>[/yellow]")
-            display_info("  [dim]Example:[/dim] [green]terminal ubuntu[/green]\n")
+            display_info("  [cyan]terminal[/cyan] [yellow]<ssh_id|method>[/yellow]")
+            display_info("  [dim]Example:[/dim] [green]terminal ubuntu[/green]  [dim]# Open terminal[/dim]")
+            display_info("  [dim]Example:[/dim] [green]terminal native[/green]  [dim]# Set terminal method[/dim]\n")
 
             display_info("[magenta bold]File Transfer:[/magenta bold]")
             display_info("  [cyan]scp[/cyan] [[yellow]<ssh_id>[/yellow]]")
@@ -694,12 +712,19 @@ class CommandMode:
             display_info("\n[magenta bold]Example:[/magenta bold]")
             display_info("  [green]tund 1[/green]")
         elif cmd == "terminal":
-            display_info("[bold cyan]\nOpen a terminal for an SSH connection:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]terminal[/cyan] [yellow]<ssh_id>[/yellow]")
+            display_info("[bold cyan]\nOpen a terminal or change terminal method:[/bold cyan]")
+            display_info("[yellow]Usage:[/yellow] [cyan]terminal[/cyan] [yellow]<ssh_id|method>[/yellow]")
             display_info("[magenta bold]Parameters:[/magenta bold]")
-            display_info("  [cyan]ssh_id[/cyan] : The identifier of the SSH connection")
-            display_info("\n[magenta bold]Example:[/magenta bold]")
-            display_info("  [green]terminal ubuntu[/green]")
+            display_info("  [cyan]ssh_id[/cyan] : The identifier of the SSH connection to open a terminal for")
+            display_info("  [cyan]method[/cyan] : Terminal method to set (auto, native, terminator)")
+            display_info("\n[magenta bold]Terminal methods:[/magenta bold]")
+            display_info("  [cyan]auto[/cyan]       : Try terminator first, fallback to native (default)")
+            display_info("  [cyan]native[/cyan]     : Use native terminal (subprocess, allows returning to LazySSH)")
+            display_info("  [cyan]terminator[/cyan] : Use terminator terminal emulator only")
+            display_info("\n[magenta bold]Examples:[/magenta bold]")
+            display_info("  [green]terminal ubuntu[/green]  [dim]# Open terminal for connection 'ubuntu'[/dim]")
+            display_info("  [green]terminal native[/green]  [dim]# Set terminal method to native[/dim]")
+            display_info("  [green]terminal auto[/green]    [dim]# Set terminal method to auto[/dim]")
         elif cmd == "mode":
             display_info("[bold cyan]\nSwitch between command and interactive modes:[/bold cyan]")
             display_info("[yellow]Usage:[/yellow] [cyan]mode[/cyan]")
@@ -820,12 +845,28 @@ class CommandMode:
         return True
 
     def cmd_terminal(self, args: list[str]) -> bool:
-        """Handle terminal command for opening a terminal"""
+        """Handle terminal command for opening a terminal or changing terminal method"""
         if len(args) != 1:
-            display_error("Usage: terminal <ssh_id>")
-            display_info("Example: terminal ubuntu")
+            display_error("Usage: terminal <ssh_id|method>")
+            display_info("  terminal <ssh_id>  : Open a terminal for the connection")
+            display_info("  terminal <method>  : Change terminal method (auto, native, terminator)")
+            display_info("Example: terminal ubuntu  OR  terminal native")
             return False
 
+        arg = args[0].lower()
+        
+        # Check if the argument is a terminal method
+        if arg in ["auto", "native", "terminator"]:
+            if self.ssh_manager.set_terminal_method(arg):
+                if CMD_LOGGER:
+                    CMD_LOGGER.info(f"Terminal method changed to: {arg}")
+                return True
+            else:
+                if CMD_LOGGER:
+                    CMD_LOGGER.error(f"Failed to set terminal method: {arg}")
+                return False
+        
+        # Otherwise, treat it as an SSH connection name
         conn_name = args[0]
         socket_path = f"/tmp/{conn_name}"
 
@@ -838,14 +879,6 @@ class CommandMode:
         try:
             conn = self.ssh_manager.connections[socket_path]
 
-            # Build the SSH command for display
-            ssh_cmd = f"ssh -tt -S {socket_path} {conn.username}@{conn.host}"
-            if conn.shell:
-                ssh_cmd += f" {conn.shell}"
-
-            # Display the command that will be executed
-            display_info("Opening terminal with command:")
-            display_info(ssh_cmd)
             if CMD_LOGGER:
                 CMD_LOGGER.info(f"Opening terminal for connection: {conn_name}")
 

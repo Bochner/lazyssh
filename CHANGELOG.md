@@ -5,6 +5,30 @@ All notable changes to LazySSH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Terminal method can now be changed at runtime without restarting LazySSH
+  - Added `terminal <method>` command in command mode to set terminal method (auto, native, terminator)
+  - Added "Change terminal method" menu option in menu mode (option 8)
+  - Terminal method now displayed in SSH connections status table
+- State management for terminal method preference in SSHManager class
+
+### Changed
+- **BREAKING:** Native terminal mode now uses subprocess instead of os.execvp()
+  - Users can now exit SSH sessions (with `exit` or Ctrl+D) and return to LazySSH
+  - LazySSH process remains running while native terminal is open
+  - SSH connection remains active after closing terminal session
+  - This allows managing multiple sessions and switching between connections
+- `open_terminal_native()` now returns boolean (True/False) instead of None
+- `open_terminal()` now returns boolean indicating success/failure
+- Updated `terminal` command help text to document both opening terminals and changing methods
+
+### Migration Notes
+- Users who relied on native mode exiting LazySSH will now return to LazySSH instead
+- To exit LazySSH completely, use the exit menu option or command
+- All existing functionality remains compatible
+
 ## [1.3.1] - 2025-10-10
 
 ### Added
