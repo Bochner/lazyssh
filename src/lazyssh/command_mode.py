@@ -14,6 +14,7 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
+from . import logging_module
 from .logging_module import (  # noqa: F401
     APP_LOGGER,
     CMD_LOGGER,
@@ -1013,8 +1014,6 @@ class CommandMode:
 
     def cmd_debug(self, args: list[str]) -> bool:
         """Enable or disable debug logging"""
-        from .logging_module import DEBUG_MODE
-
         if args and args[0].lower() in ("off", "disable", "false", "0"):
             # Explicitly disable
             set_debug_mode(False)
@@ -1029,7 +1028,7 @@ class CommandMode:
                 CMD_LOGGER.info("Debug logging enabled")
         else:
             # Toggle current state
-            new_mode = not DEBUG_MODE
+            new_mode = not logging_module.DEBUG_MODE
             set_debug_mode(new_mode)
             status = "enabled" if new_mode else "disabled"
             display_info(f"Debug logging {status}")

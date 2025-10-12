@@ -511,9 +511,65 @@ class SCPMode:
 
         return True
 
+    def _normalize_cache_path(self, path: str) -> str:
+        """
+        Normalize a remote path to an absolute path for use as a cache key.
+        This ensures cache keys are consistent regardless of how paths are specified.
+        
+        Note: This method performs local path normalization only (no SSH calls)
+        to keep completion performance fast.
+        """
+        if not path:
+            return self.current_remote_dir or "~"
+        
+        # If already absolute, normalize and return
+        if path.startswith("/"):
+            # Normalize the path (remove redundant slashes, resolve ./ and ../)
+            parts = []
+            for part in path.split("/"):
+                if part == "" or part == ".":
+                    continue
+                elif part == "..":
+                    if parts:
+                        parts.pop()
+                else:
+                    parts.append(part)
+            return "/" + "/".join(parts) if parts else "/"
+        
+        # If starts with ~, keep as-is (normalized to home directory conceptually)
+        # We can't expand it without an SSH call, so we use it as a consistent key
+        if path.startswith("~"):
+            return path
+        
+        # Relative path - resolve against current remote directory
+        if self.current_remote_dir:
+            # Join with current directory and normalize
+            if self.current_remote_dir.endswith("/"):
+                full_path = f"{self.current_remote_dir}{path}"
+            else:
+                full_path = f"{self.current_remote_dir}/{path}"
+            
+            # Normalize the combined path
+            if full_path.startswith("/"):
+                parts = []
+                for part in full_path.split("/"):
+                    if part == "" or part == ".":
+                        continue
+                    elif part == "..":
+                        if parts:
+                            parts.pop()
+                    else:
+                        parts.append(part)
+                return "/" + "/".join(parts) if parts else "/"
+            return full_path
+        
+        return path
+
     def _get_cached_result(self, path: str, command_type: str) -> list[str] | None:
         """Get cached directory listing if available and not expired"""
-        cache_key = f"{path}:{command_type}"
+        # Normalize path to ensure consistent cache keys
+        normalized_path = self._normalize_cache_path(path)
+        cache_key = f"{normalized_path}:{command_type}"
 
         if cache_key not in self.directory_cache:
             return None
@@ -534,7 +590,9 @@ class SCPMode:
 
     def _update_cache(self, path: str, command_type: str, data: list[str]) -> None:
         """Update cache with new directory listing"""
-        cache_key = f"{path}:{command_type}"
+        # Normalize path to ensure consistent cache keys
+        normalized_path = self._normalize_cache_path(path)
+        cache_key = f"{normalized_path}:{command_type}"
         self.directory_cache[cache_key] = {
             "data": data,
             "timestamp": datetime.now(),
@@ -551,13 +609,15 @@ class SCPMode:
                 SCP_LOGGER.debug(f"Clearing all cache ({len(self.directory_cache)} entries)")
             self.directory_cache.clear()
         else:
+            # Normalize path to ensure we invalidate the correct cache entries
+            normalized_path = self._normalize_cache_path(path)
             # Invalidate all cache entries for this path
-            keys_to_delete = [k for k in self.directory_cache.keys() if k.startswith(f"{path}:")]
+            keys_to_delete = [k for k in self.directory_cache.keys() if k.startswith(f"{normalized_path}:")]
             for key in keys_to_delete:
                 del self.directory_cache[key]
 
             if SCP_LOGGER and keys_to_delete:
-                SCP_LOGGER.debug(f"Invalidated {len(keys_to_delete)} cache entries for {path}")
+                SCP_LOGGER.debug(f"Invalidated {len(keys_to_delete)} cache entries for {normalized_path}")
 
     def _should_throttle_completion(self, explicit_tab: bool = False) -> bool:
         """Check if completion should be throttled"""
@@ -772,6 +832,9 @@ class SCPMode:
             # Use the filename from the local path
             filename = Path(local_path).name
             remote_path = f"{self.current_remote_dir}/{filename}"
+        else:
+            # Resolve relative paths to absolute paths
+            remote_path = self._resolve_remote_path(remote_path)
 
         try:
             # Execute the SCP command

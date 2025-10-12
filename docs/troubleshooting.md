@@ -281,7 +281,7 @@ The terminal method setting applies to new terminal sessions only. Already-open 
    curl localhost:8080
    ```
 5. Check server SSH config allows port forwarding:
-   ```
+   ```bash
    # In /etc/ssh/sshd_config
    AllowTcpForwarding yes
    ```
