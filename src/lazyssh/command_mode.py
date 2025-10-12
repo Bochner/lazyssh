@@ -487,14 +487,16 @@ class CommandMode:
             if socket_path in self.ssh_manager.connections:
                 display_warning(f"Socket name '{params['socket']}' is already in use.")
                 # Use Rich's Confirm.ask for a color-coded prompt (same as prompt mode)
-                from rich.prompt import Confirm
+                from rich.prompt import Confirm, Prompt
 
                 if not Confirm.ask("Do you want to use a different name?", default=True):
                     display_info("Proceeding with the existing socket name.")
                 else:
-                    new_socket = input("Enter a new socket name: ")
-                    if not new_socket:
-                        display_error("Socket name cannot be empty.")
+                    new_socket = Prompt.ask("Enter a new socket name")
+                    if not new_socket or not validate_config_name(new_socket):
+                        display_error(
+                            "Invalid socket name. Use alphanumeric characters, dashes, and underscores only"
+                        )
                         return False
                     params["socket"] = new_socket
                     socket_path = f"/tmp/{params['socket']}"
@@ -686,30 +688,32 @@ class CommandMode:
             )
             return False
 
-        # Validate SSH key if provided
+        # Validate and expand SSH key if provided
+        expanded_ssh_key = None
         if "ssh_key" in config_data and config_data["ssh_key"]:
             ssh_key_path = Path(config_data["ssh_key"]).expanduser()
             if not ssh_key_path.exists():
                 display_warning(f"SSH key file not found: {config_data['ssh_key']}")
                 display_info("Continuing with configuration (key might exist at connection time)")
+            expanded_ssh_key = str(ssh_key_path)
 
         # Create connection object from config
         try:
             socket_path = f"/tmp/{config_data['socket_name']}"
-            
+
             # Check if socket name is already in use
             if socket_path in self.ssh_manager.connections:
-                display_warning(
-                    f"Socket name '{config_data['socket_name']}' is already in use."
-                )
-                from rich.prompt import Confirm
+                display_warning(f"Socket name '{config_data['socket_name']}' is already in use.")
+                from rich.prompt import Confirm, Prompt
 
                 if not Confirm.ask("Do you want to use a different name?", default=True):
                     display_info("Connection aborted")
                     return False
-                new_socket = input("Enter a new socket name: ")
-                if not new_socket:
-                    display_error("Socket name cannot be empty")
+                new_socket = Prompt.ask("Enter a new socket name")
+                if not new_socket or not validate_config_name(new_socket):
+                    display_error(
+                        "Invalid socket name. Use alphanumeric characters, dashes, and underscores only"
+                    )
                     return False
                 config_data["socket_name"] = new_socket
                 socket_path = f"/tmp/{new_socket}"
@@ -720,7 +724,7 @@ class CommandMode:
                 username=config_data["username"],
                 socket_path=socket_path,
                 dynamic_port=config_data.get("proxy_port"),
-                identity_file=config_data.get("ssh_key"),
+                identity_file=expanded_ssh_key or config_data.get("ssh_key"),
                 shell=config_data.get("shell"),
                 no_term=config_data.get("no_term", False),
             )
@@ -779,7 +783,9 @@ class CommandMode:
                 display_info(f"  {i}. {conn_name} ({c.username}@{c.host}:{c.port})")
 
             try:
-                choice = int(input("Enter connection number: ")) - 1
+                from rich.prompt import IntPrompt
+
+                choice = IntPrompt.ask("Enter connection number", default=1) - 1
                 if 0 <= choice < len(conn_list):
                     socket_path, conn = conn_list[choice]
                 else:
@@ -909,7 +915,9 @@ class CommandMode:
             display_info("  [dim]Example:[/dim] [green]scp ubuntu[/green]\n")
 
             display_info("[magenta bold]Configuration Management:[/magenta bold]")
-            display_info("  [cyan]config[/cyan] / [cyan]configs[/cyan]              - Display saved configurations")
+            display_info(
+                "  [cyan]config[/cyan] / [cyan]configs[/cyan]              - Display saved configurations"
+            )
             display_info(
                 "  [cyan]connect[/cyan] [yellow]<config-name>[/yellow]          - Connect using saved configuration"
             )

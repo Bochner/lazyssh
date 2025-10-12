@@ -160,7 +160,9 @@ def save_config(name: str, connection_params: dict[str, Any]) -> bool:
         existing_configs[name] = connection_params
 
         # Write atomically (write to temp file, then rename)
-        temp_fd, temp_path = tempfile.mkstemp(dir="/tmp/lazyssh", prefix=".connections_", suffix=".tmp")
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir="/tmp/lazyssh", prefix=".connections_", suffix=".tmp"
+        )
         try:
             with os.fdopen(temp_fd, "wb") as f:
                 tomli_w.dump(existing_configs, f)
@@ -174,13 +176,21 @@ def save_config(name: str, connection_params: dict[str, Any]) -> bool:
             if APP_LOGGER:
                 APP_LOGGER.info(f"Configuration '{name}' saved to {file_path}")
             return True
-        except Exception as e:
+        except Exception:
             # Clean up temp file on error
             try:
                 os.unlink(temp_path)
-            except Exception:
-                pass
-            raise e
+            except Exception as cleanup_error:
+                if APP_LOGGER:
+                    APP_LOGGER.error(
+                        f"Failed to clean up temporary file {temp_path}: {cleanup_error}"
+                    )
+                else:
+                    print(
+                        f"Error: Failed to clean up temporary file {temp_path}: {cleanup_error}",
+                        flush=True,
+                    )
+            raise
 
     except Exception as e:
         if APP_LOGGER:
@@ -218,7 +228,9 @@ def delete_config(name: str) -> bool:
         del existing_configs[name]
 
         # Write atomically
-        temp_fd, temp_path = tempfile.mkstemp(dir="/tmp/lazyssh", prefix=".connections_", suffix=".tmp")
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir="/tmp/lazyssh", prefix=".connections_", suffix=".tmp"
+        )
         try:
             with os.fdopen(temp_fd, "wb") as f:
                 tomli_w.dump(existing_configs, f)
@@ -232,13 +244,21 @@ def delete_config(name: str) -> bool:
             if APP_LOGGER:
                 APP_LOGGER.info(f"Configuration '{name}' deleted from {file_path}")
             return True
-        except Exception as e:
+        except Exception:
             # Clean up temp file on error
             try:
                 os.unlink(temp_path)
-            except Exception:
-                pass
-            raise e
+            except Exception as cleanup_error:
+                if APP_LOGGER:
+                    APP_LOGGER.error(
+                        f"Failed to clean up temporary file {temp_path}: {cleanup_error}"
+                    )
+                else:
+                    print(
+                        f"Error: Failed to clean up temporary file {temp_path}: {cleanup_error}",
+                        flush=True,
+                    )
+            raise
 
     except Exception as e:
         if APP_LOGGER:
