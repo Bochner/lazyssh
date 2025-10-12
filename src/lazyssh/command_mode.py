@@ -16,6 +16,7 @@ from prompt_toolkit.styles import Style
 
 from . import logging_module
 from .config import (
+    backup_config,
     config_exists,
     delete_config,
     get_config,
@@ -302,6 +303,7 @@ class CommandMode:
             "connect": self.cmd_connect,  # Connect using saved config
             "save-config": self.cmd_save_config,  # Save connection configuration
             "delete-config": self.cmd_delete_config,  # Delete saved configuration
+            "backup-config": self.cmd_backup_config,  # Backup connections configuration file
             "list": self.cmd_list,
             "lazyssh": self.cmd_lazyssh,
             "help": self.cmd_help,
@@ -355,11 +357,18 @@ class CommandMode:
         return HTML("<prompt>lazyssh></prompt> ")
 
     def show_status(self) -> None:
-        """Display current connections and tunnels"""
+        """Display loaded configurations, current connections and tunnels"""
+        # Display loaded configurations (if any exist)
+        configs = load_configs()
+        if configs:
+            display_saved_configs(configs)
+
+        # Display active SSH connections
         if self.ssh_manager.connections:
             display_ssh_status(
                 self.ssh_manager.connections, self.ssh_manager.get_current_terminal_method()
             )
+            # Display tunnels for each connection
             for socket_path, conn in self.ssh_manager.connections.items():
                 if conn.tunnels:
                     display_tunnels(socket_path, conn)
@@ -383,6 +392,9 @@ class CommandMode:
 
             # Display the banner and help
             # self.show_available_commands()  # Remove this line to prevent auto-showing commands
+
+            # Display initial status (configs, connections, tunnels)
+            self.show_status()
 
             # Main loop
             while True:
@@ -499,6 +511,13 @@ class CommandMode:
                 )
                 if CMD_LOGGER:
                     CMD_LOGGER.error(f"Missing required parameters: {', '.join(missing)}")
+                return False
+
+            # Validate socket name before use
+            if not validate_config_name(params["socket"]):
+                display_error(
+                    "Invalid socket name. Use alphanumeric characters, dashes, and underscores only"
+                )
                 return False
 
             # Check if the socket name already exists
@@ -893,6 +912,21 @@ class CommandMode:
             display_error(f"Failed to delete configuration '{config_name}'")
             return False
 
+    def cmd_backup_config(self, args: list[str]) -> bool:
+        """Handle backup-config command for backing up the connections configuration file"""
+        success, message = backup_config()
+
+        if success:
+            display_success(message)
+            if CMD_LOGGER:
+                CMD_LOGGER.info("Configuration backup created successfully")
+            return True
+        else:
+            display_error(message)
+            if CMD_LOGGER:
+                CMD_LOGGER.warning(f"Configuration backup failed: {message}")
+            return False
+
     def cmd_help(self, args: list[str]) -> bool:
         """Handle help command"""
         if not args:
@@ -956,9 +990,13 @@ class CommandMode:
             display_info(
                 "  [cyan]delete-config[/cyan] [yellow]<config-name>[/yellow]   - Delete saved configuration"
             )
+            display_info(
+                "  [cyan]backup-config[/cyan]                    - Backup the connections configuration file"
+            )
             display_info("  [dim]Example:[/dim] [green]config[/green]")
             display_info("  [dim]Example:[/dim] [green]connect my-server[/green]")
-            display_info("  [dim]Example:[/dim] [green]save-config my-server[/green]\n")
+            display_info("  [dim]Example:[/dim] [green]save-config my-server[/green]")
+            display_info("  [dim]Example:[/dim] [green]backup-config[/green]\n")
 
             display_info("[magenta bold]System Commands:[/magenta bold]")
             display_info("  [cyan]list[/cyan]    - Show all connections and tunnels")

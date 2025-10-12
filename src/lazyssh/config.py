@@ -413,3 +413,68 @@ def get_config(name: str) -> dict[str, Any] | None:
     """
     configs = load_configs()
     return configs.get(name)
+
+
+def backup_config(config_path: str | None = None) -> tuple[bool, str]:
+    """
+    Create a backup of the connections configuration file.
+
+    Args:
+        config_path: Optional custom path to config file
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    file_path = get_config_file_path(config_path)
+    backup_path = Path(str(file_path) + ".backup")
+
+    # Check if original config exists
+    if not file_path.exists():
+        if APP_LOGGER:
+            APP_LOGGER.debug(f"No configuration file to backup: {file_path}")
+        return False, "No configuration file to backup"
+
+    try:
+        # Read the original file
+        with open(file_path, "rb") as f:
+            content = f.read()
+
+        # Ensure directory exists
+        if not ensure_config_directory():
+            return False, "Cannot create backup: directory creation failed"
+
+        # Write atomically (write to temp file, then rename)
+        temp_fd, temp_path = tempfile.mkstemp(dir="/tmp/lazyssh", prefix=".backup_", suffix=".tmp")
+        try:
+            with os.fdopen(temp_fd, "wb") as f:
+                f.write(content)
+
+            # Set permissions to 600 (owner read/write only)
+            os.chmod(temp_path, 0o600)
+
+            # Atomic move (overwrites existing backup if present)
+            os.replace(temp_path, backup_path)
+
+            if APP_LOGGER:
+                APP_LOGGER.info(f"Configuration backed up to {backup_path}")
+            return True, f"Configuration backed up to {backup_path}"
+
+        except Exception:
+            # Clean up temp file on error
+            try:
+                os.unlink(temp_path)
+            except Exception as cleanup_error:
+                if APP_LOGGER:
+                    APP_LOGGER.error(
+                        f"Failed to clean up temporary file {temp_path}: {cleanup_error}"
+                    )
+            raise
+
+    except PermissionError as e:
+        if APP_LOGGER:
+            APP_LOGGER.error(f"Permission denied creating backup: {e}")
+        return False, "Cannot create backup: permission denied"
+    except Exception as e:
+        if APP_LOGGER:
+            APP_LOGGER.error(f"Failed to create backup: {e}")
+        return False, f"Cannot create backup: {e}"

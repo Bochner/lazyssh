@@ -18,11 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Atomic file operations with proper error handling and 600 file permissions for security
   - Comment preservation in configuration file
   - Automatic config file initialization with helpful examples on first use
+- **Configuration Backup System**:
+  - `backup-config` command to create backup of connections.conf file
+  - Backups saved as `connections.conf.backup` with same security permissions (600)
+  - Graceful handling of missing config files and I/O errors
+  - Protection against accidental data loss before making changes
+- **Always-Visible Configuration Display**:
+  - Loaded configurations now displayed on startup (when configs exist)
+  - Configuration table shown after every command (like active SSH connections)
+  - Consistent display ordering: configs → connections → tunnels
+  - Better awareness of available saved connections at all times
 - **New Commands for Configuration Management**:
   - `config` / `configs` - Display all saved configurations in a formatted table
   - `connect <config-name>` - Connect using a saved configuration
   - `save-config <config-name>` - Save current connection as a named configuration
   - `delete-config <config-name>` - Delete a saved configuration
+  - `backup-config` - Create backup of configuration file
 - **Menu Mode Configuration Options**:
   - View saved configurations (option 9)
   - Connect from saved config with interactive selection (option 10)
@@ -36,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `connect` command suggests saved configuration names
   - `delete-config` command suggests saved configuration names
   - `save-config` command suggests active connection names
+  - `backup-config` command with tab completion support
   - Dynamic completion cache that updates when configs are modified
 - **Configuration Validation**:
   - Config name validation (alphanumeric, dash, underscore only)

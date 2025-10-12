@@ -240,6 +240,23 @@ delete-config prod-server
 **Description:**
 Removes a saved configuration from `/tmp/lazyssh/connections.conf`. You'll be asked to confirm before deletion.
 
+### `backup-config`
+
+Creates a backup of the connections configuration file.
+
+**Syntax:**
+```
+backup-config
+```
+
+**Example:**
+```bash
+backup-config
+```
+
+**Description:**
+Creates a backup copy of `/tmp/lazyssh/connections.conf` as `/tmp/lazyssh/connections.conf.backup`. This allows you to safely restore your saved configurations if needed. The backup file is created atomically with proper permissions (600, owner read/write only). If a previous backup exists, it will be overwritten without prompting.
+
 ### `scp`
 
 Enters SCP mode for file transfers with a specific connection.

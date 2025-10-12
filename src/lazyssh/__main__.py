@@ -42,11 +42,20 @@ ssh_manager = SSHManager()
 
 def show_status() -> None:
     """
-    Display current SSH connections and tunnels status.
+    Display loaded configurations, current SSH connections and tunnels status.
 
-    This function will print a table of active SSH connections and
-    detailed information about any tunnels associated with them.
+    This function will display saved configurations (if any), print a table of
+    active SSH connections and detailed information about any tunnels associated with them.
     """
+    from .config import load_configs
+    from .ui import display_saved_configs
+
+    # Display loaded configurations (if any exist)
+    configs = load_configs()
+    if configs:
+        display_saved_configs(configs)
+
+    # Display active SSH connections
     if ssh_manager.connections:
         display_ssh_status(ssh_manager.connections, ssh_manager.get_current_terminal_method())
         for socket_path, conn in ssh_manager.connections.items():
@@ -675,6 +684,11 @@ def connect_from_config_menu() -> bool:
                 new_socket = get_user_input("Enter a new socket name")
                 if not new_socket:
                     display_error("Socket name cannot be empty")
+                    return False
+                if not validate_config_name(new_socket):
+                    display_error(
+                        "Invalid socket name format. Use only letters, numbers, dashes, and underscores."
+                    )
                     return False
                 config_data["socket_name"] = new_socket
                 socket_path = f"/tmp/{new_socket}"

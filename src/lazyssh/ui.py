@@ -180,4 +180,6 @@ def display_saved_configs(configs: dict[str, dict[str, Any]]) -> None:
 
         table.add_row(name, host, username, port, ssh_key, shell, proxy_port, no_term)
 
+    console.print()  # Add blank line before table
     console.print(table)
+    console.print()  # Add blank line after table
