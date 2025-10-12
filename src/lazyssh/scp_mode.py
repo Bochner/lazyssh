@@ -515,17 +515,17 @@ class SCPMode:
         """
         Normalize a remote path to an absolute path for use as a cache key.
         This ensures cache keys are consistent regardless of how paths are specified.
-        
+
         Note: This method performs local path normalization only (no SSH calls)
         to keep completion performance fast.
         """
         if not path:
             return self.current_remote_dir or "~"
-        
+
         # If already absolute, normalize and return
         if path.startswith("/"):
             # Normalize the path (remove redundant slashes, resolve ./ and ../)
-            parts = []
+            parts: list[str] = []
             for part in path.split("/"):
                 if part == "" or part == ".":
                     continue
@@ -535,12 +535,12 @@ class SCPMode:
                 else:
                     parts.append(part)
             return "/" + "/".join(parts) if parts else "/"
-        
+
         # If starts with ~, keep as-is (normalized to home directory conceptually)
         # We can't expand it without an SSH call, so we use it as a consistent key
         if path.startswith("~"):
             return path
-        
+
         # Relative path - resolve against current remote directory
         if self.current_remote_dir:
             # Join with current directory and normalize
@@ -548,7 +548,7 @@ class SCPMode:
                 full_path = f"{self.current_remote_dir}{path}"
             else:
                 full_path = f"{self.current_remote_dir}/{path}"
-            
+
             # Normalize the combined path
             if full_path.startswith("/"):
                 parts = []
@@ -562,7 +562,7 @@ class SCPMode:
                         parts.append(part)
                 return "/" + "/".join(parts) if parts else "/"
             return full_path
-        
+
         return path
 
     def _get_cached_result(self, path: str, command_type: str) -> list[str] | None:
@@ -612,12 +612,16 @@ class SCPMode:
             # Normalize path to ensure we invalidate the correct cache entries
             normalized_path = self._normalize_cache_path(path)
             # Invalidate all cache entries for this path
-            keys_to_delete = [k for k in self.directory_cache.keys() if k.startswith(f"{normalized_path}:")]
+            keys_to_delete = [
+                k for k in self.directory_cache.keys() if k.startswith(f"{normalized_path}:")
+            ]
             for key in keys_to_delete:
                 del self.directory_cache[key]
 
             if SCP_LOGGER and keys_to_delete:
-                SCP_LOGGER.debug(f"Invalidated {len(keys_to_delete)} cache entries for {normalized_path}")
+                SCP_LOGGER.debug(
+                    f"Invalidated {len(keys_to_delete)} cache entries for {normalized_path}"
+                )
 
     def _should_throttle_completion(self, explicit_tab: bool = False) -> bool:
         """Check if completion should be throttled"""
