@@ -396,6 +396,7 @@ class SCPMode:
 
         # Initialize directories
         self.current_remote_dir = "~"  # Default to user's home dir
+        self.remote_home_dir: str | None = None  # Captured during connection
         self.local_download_dir: str | None = None  # Set dynamically on connection
         self.local_upload_dir: str | None = None  # Set dynamically on connection
 
@@ -479,7 +480,7 @@ class SCPMode:
                 display_error(f"Failed to create uploads directory: {conn_upload_dir}")
                 return False
 
-        # Get initial remote directory
+        # Get initial remote directory and store as home directory
         try:
             cmd = [
                 "ssh",
@@ -491,10 +492,14 @@ class SCPMode:
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
                 self.current_remote_dir = result.stdout.strip()
+                # Store the initial directory as the remote home directory for tilde expansion
+                self.remote_home_dir = self.current_remote_dir
             else:
                 self.current_remote_dir = "~"
+                self.remote_home_dir = None
         except Exception:
             self.current_remote_dir = "~"
+            self.remote_home_dir = None
 
         display_success(f"Connected to {self.conn.host} as {self.conn.username}")
         display_info(f"Local download directory: {self.local_download_dir}")
@@ -522,6 +527,24 @@ class SCPMode:
         if not path:
             return self.current_remote_dir or "~"
 
+        # If starts with ~, expand to stored home directory
+        if path.startswith("~"):
+            # If we have a stored remote home directory, expand the tilde
+            if self.remote_home_dir:
+                # Handle both "~" and "~/" prefixes
+                if path == "~":
+                    path = self.remote_home_dir
+                elif path.startswith("~/"):
+                    # Replace ~/ with the home directory
+                    path = self.remote_home_dir + path[1:]
+                # Note: paths like "~user" are not expanded (fall through to return path)
+                else:
+                    # Can't expand ~user without SSH call, return as-is
+                    return path
+            else:
+                # No stored home directory, return original path
+                return path
+
         # If already absolute, normalize and return
         if path.startswith("/"):
             # Normalize the path (remove redundant slashes, resolve ./ and ../)
@@ -535,11 +558,6 @@ class SCPMode:
                 else:
                     parts.append(part)
             return "/" + "/".join(parts) if parts else "/"
-
-        # If starts with ~, keep as-is (normalized to home directory conceptually)
-        # We can't expand it without an SSH call, so we use it as a consistent key
-        if path.startswith("~"):
-            return path
 
         # Relative path - resolve against current remote directory
         if self.current_remote_dir:
