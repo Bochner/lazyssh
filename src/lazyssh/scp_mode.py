@@ -264,7 +264,10 @@ class SCPModeCompleter(Completer):
 
                             cached = self.scp_mode._get_cached_result(base_dir, "find")
                             if cached:
-                                for d in cached:
+                                # Filter out the current directory name from cached results too
+                                current_dir_name = Path(base_dir).name
+                                filtered_cached = [d for d in cached if d != current_dir_name]
+                                for d in filtered_cached:
                                     if not word_before_cursor or d.startswith(word_before_cursor):
                                         yield Completion(d, start_position=-len(word_before_cursor))
                             return
@@ -293,6 +296,10 @@ class SCPModeCompleter(Completer):
                             if result and result.returncode == 0:
                                 dir_list = result.stdout.strip().split("\n")
                                 dir_list = [d for d in dir_list if d and d not in [".", ".."]]
+
+                                # Filter out the current directory name to avoid suggesting it
+                                current_dir_name = Path(base_dir).name
+                                dir_list = [d for d in dir_list if d != current_dir_name]
 
                                 # Update cache
                                 self.scp_mode._update_cache(base_dir, "find", dir_list)
@@ -1313,6 +1320,11 @@ class SCPMode:
             return False
 
         target_dir = self._resolve_remote_path(args[0])
+
+        # Check if we're already in the target directory
+        if target_dir == self.current_remote_dir:
+            display_info(f"Already in directory: {self.current_remote_dir}")
+            return True
 
         try:
             # Check if directory exists and is accessible
