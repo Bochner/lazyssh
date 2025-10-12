@@ -450,6 +450,29 @@ export LAZYSSH_TERMINAL_METHOD=terminator
 
 ## Advanced Features
 
+### Enhanced User Interface
+
+LazySSH now features a modern, consistent user interface with:
+
+**Visual Improvements:**
+- **Consistent styling** across all modes and commands
+- **Professional color schemes** with accessibility support
+- **Enhanced progress bars** for file transfers and operations
+- **Rich table formatting** for better data presentation
+- **Improved status indicators** with both color and text
+
+**Accessibility Features:**
+- **High contrast mode** for better visibility
+- **Colorblind-friendly themes** for inclusive design
+- **Clear status indicators** with visual symbols
+- **Terminal compatibility** with automatic fallbacks
+
+**Performance Optimizations:**
+- **Efficient rendering** with minimal overhead
+- **Live updating displays** for real-time monitoring
+- **Cached components** for repeated operations
+- **Optimized refresh rates** for smooth performance
+
 ### Dynamic SOCKS Proxy
 
 Route browser traffic through your SSH connection:
@@ -503,7 +526,7 @@ Press Tab to auto-complete:
 
 ### Help System
 
-Get help anytime:
+Get help anytime with enhanced markdown rendering:
 
 ```bash
 # Command mode help
@@ -514,6 +537,12 @@ lazyssh> help tunc
 scp myserver> help
 scp myserver> help mget
 ```
+
+The help system now features:
+- **Rich markdown rendering** for better formatting
+- **Consistent styling** across all help content
+- **Accessible color schemes** for better readability
+- **Interactive examples** with syntax highlighting
 
 ## Quick Reference
 

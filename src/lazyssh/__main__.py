@@ -18,6 +18,7 @@ from lazyssh.config import (
 from lazyssh.logging_module import APP_LOGGER, ensure_log_directory
 from lazyssh.ssh import SSHManager
 from lazyssh.ui import (
+    console,
     display_banner,
     display_error,
     display_info,
@@ -155,17 +156,17 @@ def main(debug: bool, config: str | None) -> None:
 
         # Display warnings for optional missing dependencies
         if optional_missing:
-            display_warning("Missing optional dependencies:")
+            console.print("\n[bold yellow]Missing optional dependencies:[/bold yellow]")
             for dep in optional_missing:
-                display_warning(f"  - {dep}")
-            display_info("Native terminal method will be used as fallback.")
+                console.print(f"  [dim]-[/dim] [yellow]{dep}[/yellow]")
+            console.print("[info]Native terminal method will be used as fallback.[/info]")
 
         # Exit only if required dependencies are missing
         if required_missing:
-            display_error("Missing required dependencies:")
+            console.print("\n[bold red]Missing required dependencies:[/bold red]")
             for dep in required_missing:
-                display_error(f"  - {dep}")
-            display_info("Please install the required dependencies and try again.")
+                console.print(f"  [dim]-[/dim] [red]{dep}[/red]")
+            console.print("[info]Please install the required dependencies and try again.[/info]")
             sys.exit(1)
 
         # Start in command mode (default interface)

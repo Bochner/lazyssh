@@ -34,6 +34,7 @@ from .models import SSHConnection
 from .scp_mode import SCPMode
 from .ssh import SSHManager
 from .ui import (
+    console,
     display_error,
     display_info,
     display_saved_configs,
@@ -832,7 +833,9 @@ class CommandMode:
             conn_list = list(self.ssh_manager.connections.items())
             for i, (sock_path, c) in enumerate(conn_list, 1):
                 conn_name = Path(sock_path).name
-                display_info(f"  {i}. {conn_name} ({c.username}@{c.host}:{c.port})")
+                console.print(
+                    f"  [info]{i}.[/info] [bold green]{conn_name}[/bold green] [dim]([/dim][bold cyan]{c.username}[/bold cyan][bold]@[/bold][bold magenta]{c.host}[/bold magenta][dim]:[/dim][yellow]{c.port}[/yellow][dim])[/dim]"
+                )
 
             try:
                 from rich.prompt import IntPrompt
@@ -1358,10 +1361,10 @@ class CommandMode:
                 return False
 
         # Start SCP mode
-        display_info("Entering SCP mode...")
+        console.print("\n[bold cyan]Entering SCP mode...[/bold cyan]")
         scp_mode = SCPMode(self.ssh_manager, selected_connection)
         scp_mode.run()
-        display_info("Exited SCP mode")
+        console.print("\n[bold green]Exited SCP mode[/bold green]")
         return True
 
     def cmd_debug(self, args: list[str]) -> bool:
@@ -1605,7 +1608,9 @@ class CommandMode:
             conn_list = list(self.ssh_manager.connections.items())
             for i, (socket_path, conn) in enumerate(conn_list, 1):
                 conn_name = Path(socket_path).name
-                display_info(f"  {i}. {conn_name} ({conn.username}@{conn.host}:{conn.port})")
+                console.print(
+                    f"  [info]{i}.[/info] [bold green]{conn_name}[/bold green] [dim]([/dim][bold cyan]{conn.username}[/bold cyan][bold]@[/bold][bold magenta]{conn.host}[/bold magenta][dim]:[/dim][yellow]{conn.port}[/yellow][dim])[/dim]"
+                )
 
             choice = IntPrompt.ask("Enter connection number", default=1) - 1
             if not (0 <= choice < len(conn_list)):

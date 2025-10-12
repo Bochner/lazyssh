@@ -11,6 +11,7 @@ This guide provides solutions to common issues you might encounter when using La
 - [Tunneling Problems](#tunneling-problems)
 - [SCP Mode Issues](#scp-mode-issues)
 - [Configuration Management Issues](#configuration-management-issues)
+- [UI and Display Issues](#ui-and-display-issues)
 - [Common Error Messages](#common-error-messages)
 
 ## Installation Issues
@@ -632,6 +633,154 @@ Config files are stored in `/tmp/lazyssh/` which is cleared on system reboot for
    chmod 600 /tmp/lazyssh/connections.conf
    ```
 3. **Security note**: Permanent storage increases risk. Ensure proper file permissions.
+
+## UI and Display Issues
+
+### Colors Not Displaying Correctly
+
+**Issue**: LazySSH interface appears in plain text without colors or styling.
+
+**Solutions**:
+
+1. **Check terminal color support**:
+   ```bash
+   # Test if your terminal supports colors
+   echo -e "\033[31mRed\033[0m \033[32mGreen\033[0m \033[34mBlue\033[0m"
+   ```
+
+2. **Enable color output**:
+   ```bash
+   # Force color output
+   export TERM=xterm-256color
+   export COLORTERM=truecolor
+   
+   # Restart LazySSH
+   lazyssh
+   ```
+
+3. **Check terminal emulator settings**:
+   - Ensure your terminal emulator supports 256 colors or truecolor
+   - Try a different terminal emulator (e.g., GNOME Terminal, Konsole, iTerm2)
+
+### High Contrast Mode
+
+**Issue**: Text is hard to read due to low contrast.
+
+**Solution**: LazySSH automatically detects terminal capabilities and provides high contrast themes when needed. If you still have issues:
+
+```bash
+# Force high contrast mode
+export LAZYSSH_HIGH_CONTRAST=true
+lazyssh
+```
+
+### Terminal Compatibility Issues
+
+**Issue**: LazySSH crashes or displays incorrectly in certain terminals.
+
+**Solutions**:
+
+1. **Use fallback mode**:
+   ```bash
+   # Disable Rich features for basic terminals
+   export LAZYSSH_NO_RICH=true
+   lazyssh
+   ```
+
+2. **Check terminal emulator**:
+   - Use a modern terminal emulator (Terminal.app, GNOME Terminal, Konsole)
+   - Avoid very old or minimal terminal emulators
+
+### Performance Issues
+
+**Issue**: LazySSH interface is slow or unresponsive.
+
+**Solutions**:
+
+1. **Reduce refresh rate**:
+   ```bash
+   # Lower refresh rate for live updates
+   export LAZYSSH_REFRESH_RATE=1
+   lazyssh
+   ```
+
+2. **Disable animations**:
+   ```bash
+   # Disable progress animations
+   export LAZYSSH_NO_ANIMATIONS=true
+   lazyssh
+   ```
+
+3. **Check system resources**:
+   - Ensure adequate RAM and CPU resources
+   - Close other resource-intensive applications
+
+### Layout Issues
+
+**Issue**: Tables, panels, or layouts appear misaligned or broken.
+
+**Solutions**:
+
+1. **Check terminal size**:
+   ```bash
+   # Ensure terminal is large enough (minimum 80x24)
+   echo $COLUMNS $LINES
+   ```
+
+2. **Resize terminal**:
+   - Make terminal window larger
+   - Use full-screen mode if available
+
+3. **Reset terminal**:
+   ```bash
+   # Clear terminal and restart
+   clear
+   lazyssh
+   ```
+
+### Accessibility Issues
+
+**Issue**: Interface is not accessible for users with visual impairments.
+
+**Solutions**:
+
+1. **Enable high contrast mode**:
+   ```bash
+   export LAZYSSH_HIGH_CONTRAST=true
+   lazyssh
+   ```
+
+2. **Use colorblind-friendly theme**:
+   ```bash
+   export LAZYSSH_COLORBLIND_MODE=true
+   lazyssh
+   ```
+
+3. **Screen reader compatibility**:
+   - LazySSH provides clear text prefixes for all status messages
+   - Use screen readers that support terminal applications
+
+### Markdown Rendering Issues
+
+**Issue**: Help content or documentation doesn't display correctly.
+
+**Solutions**:
+
+1. **Check Rich library installation**:
+   ```bash
+   pip show rich
+   ```
+
+2. **Reinstall Rich**:
+   ```bash
+   pip install --upgrade rich
+   ```
+
+3. **Use plain text mode**:
+   ```bash
+   export LAZYSSH_PLAIN_TEXT=true
+   lazyssh
+   ```
 
 ## Common Error Messages
 

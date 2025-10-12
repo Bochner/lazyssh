@@ -15,7 +15,6 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
-from rich.console import Console
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -25,7 +24,6 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 from rich.prompt import Confirm, IntPrompt
-from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
@@ -40,7 +38,14 @@ from .logging_module import (
 )
 from .models import SSHConnection
 from .ssh import SSHManager
-from .ui import display_error, display_info, display_success
+from .ui import (
+    console,
+    create_standard_table,
+    display_error,
+    display_info,
+    display_success,
+    get_console,
+)
 
 # Cache and throttling configuration
 CACHE_TTL_SECONDS = 30
@@ -367,7 +372,7 @@ class SCPMode:
     def __init__(self, ssh_manager: SSHManager, selected_connection: str | None = None):
         """Initialize SCP mode"""
         self.ssh_manager = ssh_manager
-        self.console = Console()
+        self.console = get_console()
 
         # State tracking
         self.socket_path: str | None = None
@@ -501,10 +506,18 @@ class SCPMode:
             self.current_remote_dir = "~"
             self.remote_home_dir = None
 
-        display_success(f"Connected to {self.conn.host} as {self.conn.username}")
-        display_info(f"Local download directory: {self.local_download_dir}")
-        display_info(f"Local upload directory: {self.local_upload_dir}")
-        display_info(f"Current remote directory: {self.current_remote_dir}")
+        console.print(
+            f"\n[bold green]Success:[/bold green] Connected to [bold magenta]{self.conn.host}[/bold magenta] as [bold cyan]{self.conn.username}[/bold cyan]"
+        )
+        console.print(
+            f"[info]Local download directory:[/info] [yellow]{self.local_download_dir}[/yellow]"
+        )
+        console.print(
+            f"[info]Local upload directory:[/info] [yellow]{self.local_upload_dir}[/yellow]"
+        )
+        console.print(
+            f"[info]Current remote directory:[/info] [yellow]{self.current_remote_dir}[/yellow]"
+        )
         if SCP_LOGGER:
             SCP_LOGGER.info(f"SCP mode connected to {self.conn.host} via {self.socket_path}")
 
@@ -753,10 +766,12 @@ class SCPMode:
             display_info("Create an SSH connection first using 'lazyssh' command")
             return False
 
-        display_info("Select an SSH connection for SCP mode:")
+        console.print("\n[bold cyan]Select an SSH connection for SCP mode:[/bold cyan]")
         for i, name in enumerate(connections, 1):
             conn = connection_map[name]
-            display_info(f"{i}. {name} ({conn.username}@{conn.host})")
+            console.print(
+                f"[info]{i}.[/info] [bold green]{name}[/bold green] [dim]([/dim][bold cyan]{conn.username}[/bold cyan][bold]@[/bold][bold magenta]{conn.host}[/bold magenta][dim])[/dim]"
+            )
 
         # Use Rich's prompt for the connection selection
         try:
@@ -869,17 +884,20 @@ class SCPMode:
             # Start timing the upload
             start_time = time.time()
 
-            # Create a progress bar
+            # Create a progress bar with enhanced styling
             with Progress(
-                TextColumn("[bold blue]{task.description}", justify="right"),
-                BarColumn(),
+                TextColumn("[info]{task.description}[/info]", justify="right"),
+                BarColumn(bar_width=None, style="info", complete_style="success"),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
-                TextColumn("[bold green]{task.completed:.2f}/{task.total:.2f} MB", justify="right"),
+                TextColumn(
+                    "[accent]{task.completed:.2f}/{task.total:.2f} MB[/accent]", justify="right"
+                ),
                 "•",
                 TransferSpeedColumn(),
                 "•",
                 TimeRemainingColumn(),
+                console=self.console,
             ) as progress:
                 # Convert bytes to MB for display
                 file_size_mb = file_size / (1024 * 1024)
@@ -998,17 +1016,20 @@ class SCPMode:
             # Start timing the download
             start_time = time.time()
 
-            # Create a progress bar
+            # Create a progress bar with enhanced styling
             with Progress(
-                TextColumn("[bold blue]{task.description}", justify="right"),
-                BarColumn(),
+                TextColumn("[info]{task.description}[/info]", justify="right"),
+                BarColumn(bar_width=None, style="info", complete_style="success"),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
-                TextColumn("[bold green]{task.completed:.2f}/{task.total:.2f} MB", justify="right"),
+                TextColumn(
+                    "[accent]{task.completed:.2f}/{task.total:.2f} MB[/accent]", justify="right"
+                ),
                 "•",
                 TransferSpeedColumn(),
                 "•",
                 TimeRemainingColumn(),
+                console=self.console,
             ) as progress:
                 # Convert bytes to MB for display
                 file_size_mb = file_size / (1024 * 1024)
@@ -1119,19 +1140,17 @@ class SCPMode:
 
             display_info(f"Contents of [bold blue]{path}[/]:")
 
-            # Create a Rich table
-            table = Table(
-                show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1)
-            )
+            # Create a Rich table with standardized styling
+            table = create_standard_table()
 
-            # Add columns
+            # Add columns with consistent styling
             table.add_column("Permissions", style="dim")
             table.add_column("Links", justify="right", style="dim")
-            table.add_column("Owner")
-            table.add_column("Group")
-            table.add_column("Size", justify="right")
-            table.add_column("Modified")
-            table.add_column("Name")
+            table.add_column("Owner", style="table.row")
+            table.add_column("Group", style="table.row")
+            table.add_column("Size", justify="right", style="accent")
+            table.add_column("Modified", style="info")
+            table.add_column("Name", style="table.row")
 
             # Parse ls output and add rows
             lines = output.split("\n")
@@ -1200,7 +1219,6 @@ class SCPMode:
                 table.add_row(perms, links, owner, group, human_size, date, name_text)
 
             # Display the table
-            console = Console()
             console.print(table)
 
             return True
@@ -1280,14 +1298,12 @@ class SCPMode:
             # Display matched files in a Rich table instead of simple list
             display_info(f"Found {len(matched_files)} matching files:")
 
-            # Create a Rich table for listing the files
-            table = Table(
-                show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1)
-            )
+            # Create a Rich table for listing the files with standardized styling
+            table = create_standard_table()
 
-            # Add columns
-            table.add_column("Filename", style="cyan")
-            table.add_column("Size", justify="right")
+            # Add columns with consistent styling
+            table.add_column("Filename", style="table.row")
+            table.add_column("Size", justify="right", style="accent")
 
             # Add files to table
             for filename in matched_files:
@@ -1310,7 +1326,6 @@ class SCPMode:
                     table.add_row(filename, "unknown size")
 
             # Display the table
-            console = Console()
             console.print(table)
 
             # Format total size in human-readable format
@@ -1340,8 +1355,8 @@ class SCPMode:
             start_time = time.time()
 
             with Progress(
-                TextColumn("[bold blue]{task.description}", justify="right"),
-                BarColumn(),
+                TextColumn("[info]{task.description}[/info]", justify="right"),
+                BarColumn(bar_width=None, style="info", complete_style="success"),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
                 DownloadColumn(),
@@ -1349,6 +1364,7 @@ class SCPMode:
                 TransferSpeedColumn(),
                 "•",
                 TimeRemainingColumn(),
+                console=self.console,
             ) as progress:
                 # Create a task for overall progress based on total bytes, not file count
                 overall_task = progress.add_task("Overall progress", total=total_size)
@@ -1696,16 +1712,14 @@ class SCPMode:
 
             display_info(f"Contents of [bold blue]{target_dir_path}[/]:")
 
-            # Create a Rich table
-            table = Table(
-                show_header=True, header_style="bold cyan", box=None, padding=(0, 1, 0, 1)
-            )
+            # Create a Rich table with standardized styling
+            table = create_standard_table()
 
-            # Add columns - removed Type column
+            # Add columns with consistent styling - removed Type column
             table.add_column("Permissions", style="dim")
-            table.add_column("Size", justify="right")
-            table.add_column("Modified")
-            table.add_column("Name")
+            table.add_column("Size", justify="right", style="accent")
+            table.add_column("Modified", style="info")
+            table.add_column("Name", style="table.row")
 
             # Get directory contents
             total_size = 0
@@ -1772,7 +1786,6 @@ class SCPMode:
                     table.add_row(perms, human_size, mtime, name_text)
 
             # Display the table
-            console = Console()
             console.print(table)
 
             # Show summary footer
@@ -1877,7 +1890,6 @@ class SCPMode:
                         node = parent_node.add(filename)
 
             # Display the tree
-            console = Console()
             console.print(tree)
             console.print(
                 f"\nTotal: [bold cyan]{file_count}[/] files, [bold cyan]{dir_count}[/] directories"
