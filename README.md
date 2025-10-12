@@ -10,13 +10,14 @@ LazySSH simplifies SSH connection management with an elegant CLI interface. It h
 
 ### Key Features
 
-- **Dual Interface Modes**: Interactive menu mode or command mode with smart tab completion
+- **Interactive Command Interface**: Smart command mode with tab completion and guided workflows
 - **Connection Management**: Handle multiple SSH connections with control sockets
 - **Saved Configurations**: Save and reuse connection configurations with TOML-based storage
 - **Tunneling**: Create forward and reverse tunnels with simple commands
 - **Dynamic Proxy**: Set up SOCKS proxy for secure browsing
 - **SCP Mode**: Transfer files securely with rich visualization and progress tracking
 - **Terminal Integration**: Open terminal sessions directly with runtime method switching
+- **Wizard Workflows**: Guided interactive workflows for complex operations
 - **Rich Visual Elements**: Color coding, progress bars, and tree visualizations
 
 ## Quick Start
@@ -37,7 +38,7 @@ pip install --user lazyssh
 ### Basic Usage
 
 ```bash
-# Start LazySSH in command mode (default)
+# Start LazySSH
 lazyssh
 
 # Create a new connection
@@ -54,6 +55,10 @@ lazyssh> open myserver
 
 # Transfer files (SCP mode)
 lazyssh> scp myserver
+
+# Use wizard for guided workflows
+lazyssh> wizard lazyssh
+lazyssh> wizard tunnel
 
 # In SCP mode: visualize remote directory tree
 scp myserver:/home/user> tree
@@ -111,8 +116,6 @@ You can control which terminal method to use either at runtime or via environmen
 lazyssh> terminal native      # Set terminal method to native
 lazyssh> terminal auto        # Set terminal method to auto
 lazyssh> terminal terminator  # Set terminal method to terminator
-
-# From menu mode: Select "8. Change terminal method"
 ```
 
 **Environment variable:**
