@@ -448,6 +448,8 @@ def backup_config(config_path: str | None = None) -> tuple[bool, str]:
         try:
             with os.fdopen(temp_fd, "wb") as f:
                 f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
 
             # Set permissions to 600 (owner read/write only)
             os.chmod(temp_path, 0o600)
