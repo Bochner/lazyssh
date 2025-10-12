@@ -1,37 +1,36 @@
 # LazySSH User Guide
 
-This guide provides a comprehensive overview of using LazySSH, a tool designed to simplify SSH connection management, tunneling, and file transfers.
+This guide provides a streamlined introduction to using LazySSH for SSH connection management, tunneling, and file transfers.
 
 ## Table of Contents
 
-- [Introduction](#introduction)
 - [Installation](#installation)
+- [Your First Connection](#your-first-connection)
+- [Core Workflows](#core-workflows)
 - [Interface Modes](#interface-modes)
-- [Basic Workflow](#basic-workflow)
-- [Advanced Usage](#advanced-usage)
-- [Environment Variables](#environment-variables)
-
-## Introduction
-
-LazySSH is designed to make managing SSH connections easier and more efficient. It leverages SSH control sockets to maintain persistent connections, enabling quick access to remote servers, simplified tunnel creation, and streamlined file transfers without repeatedly typing credentials.
+- [Terminal Methods](#terminal-methods)
+- [Advanced Features](#advanced-features)
 
 ## Installation
 
 ### Prerequisites
 
-Before installing LazySSH, ensure you have:
-
 - Python 3.11 or higher
 - OpenSSH client installed
-- Terminator terminal emulator
+
+**Optional:**
+- Terminator terminal emulator (for opening terminals in separate windows)
 
 ### Installation Methods
 
 #### Using pip (Recommended)
 
 ```bash
-# Install for all users (may require sudo)
+# Install globally
 pip install lazyssh
+
+# Or with pipx
+pipx install lazyssh
 
 # Or install for current user only
 pip install --user lazyssh
@@ -40,234 +39,316 @@ pip install --user lazyssh
 #### From Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/Bochner/lazyssh.git
 cd lazyssh
-
-# Install
-pip install .
-
-# Or for development mode
 pip install -e .
 ```
 
 ### Post-Installation
 
-If you installed with `pip install --user` and encounter "command not found" errors:
+If you installed with `--user` and encounter "command not found" errors:
 
 ```bash
-# Add to your PATH manually
 export PATH="$HOME/.local/bin:$PATH"
 
-# To make it permanent, add this line to your ~/.bashrc file
+# Make it permanent
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
+## Your First Connection
+
+Start LazySSH:
+
+```bash
+lazyssh
+```
+
+Create your first SSH connection:
+
+```bash
+lazyssh> lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver
+```
+
+The `-socket` parameter gives your connection a memorable name for future commands.
+
+View your active connections:
+
+```bash
+lazyssh> list
+```
+
+Open a terminal to your server:
+
+```bash
+lazyssh> open myserver
+```
+
+When you're done, close the connection:
+
+```bash
+lazyssh> close myserver
+```
+
+## Core Workflows
+
+### Managing Connections
+
+**Create with SSH key:**
+```bash
+lazyssh> lazyssh -ip server.com -port 22 -user admin -socket prod -ssh-key ~/.ssh/id_rsa
+```
+
+**Create with SOCKS proxy:**
+```bash
+# Default port (9050)
+lazyssh> lazyssh -ip server.com -port 22 -user admin -socket proxy -proxy
+
+# Custom port
+lazyssh> lazyssh -ip server.com -port 22 -user admin -socket proxy -proxy 8080
+```
+
+**List connections:**
+```bash
+lazyssh> list
+```
+
+**Close connection:**
+```bash
+lazyssh> close myserver
+```
+
+### Creating Tunnels
+
+**Forward tunnel** (access remote service locally):
+```bash
+# Syntax: tunc <connection> l <local_port> <remote_host> <remote_port>
+lazyssh> tunc myserver l 8080 localhost 80
+
+# Now access remote port 80 via http://localhost:8080
+```
+
+**Reverse tunnel** (expose local service remotely):
+```bash
+# Syntax: tunc <connection> r <remote_port> <local_host> <local_port>
+lazyssh> tunc myserver r 8080 localhost 3000
+
+# Remote users can now access your local port 3000 via remote:8080
+```
+
+**Delete tunnel:**
+```bash
+lazyssh> tund 1  # Use tunnel ID from 'list' command
+```
+
+### File Transfers (SCP Mode)
+
+Enter SCP mode for a connection:
+
+```bash
+lazyssh> scp myserver
+```
+
+Once in SCP mode:
+
+```bash
+# Navigate remote directories
+scp myserver:/home/user> cd /var/log
+scp myserver:/var/log> ls
+
+# Visualize directory structure
+scp myserver:/var/log> tree
+
+# Download a file
+scp myserver:/var/log> get app.log
+
+# Download multiple files
+scp myserver:/var/log> mget *.log
+
+# Upload a file
+scp myserver:/var/log> put local-file.txt
+
+# Change local directory
+scp myserver:/var/log> lcd ~/Downloads
+
+# Exit SCP mode
+scp myserver:/var/log> exit
+```
+
 ## Interface Modes
 
-LazySSH offers two interface modes to accommodate different user preferences.
+LazySSH offers two interface modes:
 
-### Command Mode
+### Command Mode (Default)
 
-Command mode is the default interface, providing a command-line experience with smart tab completion.
+Provides a command-line experience with smart tab completion:
 
 ```bash
 # Start in command mode
 lazyssh
+
+# Use commands directly
+lazyssh> list
+lazyssh> open myserver
 ```
 
-You'll be presented with a prompt: `lazyssh>`
+### Menu Mode
 
-### Prompt Mode
-
-Prompt mode offers a menu-driven interface ideal for beginners or those who prefer guided options.
+Offers a guided menu interface:
 
 ```bash
-# Start in prompt mode
+# Start in menu mode
 lazyssh --prompt
+
+# Or switch from command mode
+lazyssh> mode
 ```
 
-You'll see a numbered menu with options to:
-1. Create new SSH connection
-2. Destroy tunnel
-3. Create tunnel
-4. Open terminal
-5. Close connection
-6. Switch to command mode
-7. Exit
+Switch between modes anytime using the `mode` command.
 
-### Switching Between Modes
+## Terminal Methods
 
-- From command mode to prompt mode: Type `mode` and press Enter
-- From prompt mode to command mode: Select option 6
+LazySSH supports two methods for opening terminal sessions:
 
-## Basic Workflow
+### Native Terminal (Default)
+- Runs SSH in your current terminal window
+- No external dependencies required
+- Exit SSH session with `exit` or Ctrl+D to return to LazySSH
+- Best for quick access and managing multiple sessions
 
-### 1. Creating a Connection
+### Terminator Terminal
+- Opens SSH in new Terminator windows
+- Requires Terminator to be installed
+- Best for keeping many terminals open simultaneously
 
+### Switching Terminal Methods
+
+**Change at runtime:**
 ```bash
-# In command mode
-lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver
+# From command mode
+lazyssh> terminal native
+lazyssh> terminal terminator
+lazyssh> terminal auto  # Auto-select best available
 
-# With identity file (SSH key)
-lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -ssh-key ~/.ssh/id_rsa
+# From menu mode: Select "8. Change terminal method"
 ```
 
-The `-socket` parameter assigns a unique name to your connection, which you'll use to reference it in other commands.
-
-### 2. Listing Connections
-
+**Set via environment variable:**
 ```bash
-list
+# Auto-select (default: tries Terminator first, falls back to native)
+export LAZYSSH_TERMINAL_METHOD=auto
+
+# Force native terminal
+export LAZYSSH_TERMINAL_METHOD=native
+
+# Force Terminator
+export LAZYSSH_TERMINAL_METHOD=terminator
 ```
 
-This shows all active connections with details including:
-- Connection name
-- Host
-- Username
-- Port
-- Dynamic Port (if any)
-- Active Tunnels
-- Socket Path
-
-### 3. Opening a Terminal
-
-```bash
-# Open a terminal for the connection named "myserver"
-open myserver
-```
-
-This launches a terminal window connected to your server using the configured terminal method.
-
-### 4. Creating Tunnels
-
-#### Forward Tunnel
-
-```bash
-# Syntax: tunc <connection_name> l <local_port> <remote_host> <remote_port>
-tunc myserver l 8080 localhost 80
-```
-
-This forwards your local port 8080 to port 80 on the remote server, allowing you to access a remote web server via http://localhost:8080.
-
-#### Reverse Tunnel
-
-```bash
-# Syntax: tunc <connection_name> r <remote_port> <local_host> <local_port>
-tunc myserver r 8080 localhost 3000
-```
-
-This forwards remote port 8080 to your local port 3000, enabling someone on the remote server to access your local service.
-
-### 5. Deleting Tunnels
-
-```bash
-# Syntax: tund <tunnel_id>
-tund 1
-```
-
-The tunnel ID can be found in the output of the `list` command.
-
-### 6. File Transfers (SCP Mode)
-
-```bash
-# Enter SCP mode for a specific connection
-scp myserver
-```
-
-In SCP mode, you'll have access to commands for transferring files securely:
-- `get <remote_file> [<local_file>]` - Download a file
-- `put <local_file> [<remote_file>]` - Upload a file
-- `mget <pattern>` - Download multiple files
-- `ls [<path>]` - List remote files
-- `lls [<path>]` - List local files
-- `tree [<path>]` - Display remote directory structure in a tree view
-- `cd <path>` - Change remote directory
-- `lcd <path>` - Change local download directory
-- `pwd` - Show remote directory
-- `local [<path>]` - Set/show local download/upload directories
-- `exit` - Return to LazySSH
-
-### 7. Closing Connections
-
-```bash
-# Close a specific connection
-close myserver
-
-# Exit LazySSH (will prompt to close active connections)
-exit
-```
-
-## Advanced Usage
+## Advanced Features
 
 ### Dynamic SOCKS Proxy
 
-Create a SOCKS proxy for secure browsing through your SSH connection:
+Route browser traffic through your SSH connection:
 
 ```bash
-# With default port (9050)
-lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy
+# Create connection with SOCKS proxy
+lazyssh> lazyssh -ip server.com -port 22 -user admin -socket proxy -proxy 9050
 
-# With custom port
-lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy 8080
+# Configure your browser to use SOCKS proxy at localhost:9050
+# All traffic now tunneled through your SSH server
 ```
 
-Then configure your browser or applications to use the SOCKS proxy at `localhost:9050` (or your custom port).
-
-### SCP Mode Advanced Features
-
-#### Batch Downloads
+### Batch File Downloads
 
 Download multiple files matching a pattern:
 
-```
-scp myserver
-scp myserver> mget *.log
-```
-
-This will:
-1. Show you matching files with sizes
-2. Calculate total download size
-3. Ask for confirmation
-4. Download all matching files
-
-#### Directory Tree Visualization
-
-View the structure of remote directories in a hierarchical tree format:
-
-```
-scp myserver> tree /var/www
+```bash
+scp myserver> mget *.conf
+# Shows matching files, total size, and asks for confirmation
 ```
 
-This will display a color-coded tree of all files and directories, making it easy to understand complex directory structures at a glance.
+### Directory Tree Visualization
 
-#### Remote File Navigation
-
-```
-scp myserver> cd /var/log
-scp myserver> pwd
-scp myserver> ls
-```
-
-#### Setting Download Directory
-
-```
-scp myserver> local ~/Downloads
-scp myserver> lcd ~/Downloads/server-logs
-```
-
-## Environment Variables
-
-LazySSH can be customized using environment variables:
-
-- `LAZYSSH_SSH_PATH`: Path to the SSH executable (default: `/usr/bin/ssh`)
-- `LAZYSSH_TERMINAL`: Terminal emulator to use (default: `terminator`)
-- `LAZYSSH_CONTROL_PATH`: Base path for control sockets (default: `/tmp/`)
-
-Example:
+View remote directory structure visually:
 
 ```bash
-# Set a custom terminal
-export LAZYSSH_TERMINAL=gnome-terminal
-``` 
+scp myserver> tree /var/www
+# Displays color-coded hierarchical tree
+```
+
+### Multiple Connections
+
+Manage multiple servers simultaneously:
+
+```bash
+lazyssh> lazyssh -ip server1.com -port 22 -user admin -socket server1
+lazyssh> lazyssh -ip server2.com -port 22 -user admin -socket server2
+lazyssh> list  # See all active connections
+lazyssh> open server1
+# Exit SSH session to return to LazySSH
+lazyssh> open server2
+```
+
+### Tab Completion
+
+Press Tab to auto-complete:
+- Command names
+- Connection names
+- File paths (in SCP mode)
+- Command parameters
+
+### Help System
+
+Get help anytime:
+
+```bash
+# Command mode help
+lazyssh> help
+lazyssh> help tunc
+
+# SCP mode help
+scp myserver> help
+scp myserver> help mget
+```
+
+## Quick Reference
+
+### Essential Commands
+
+| Command | Description |
+|---------|-------------|
+| `lazyssh -ip <host> -port <port> -user <user> -socket <name>` | Create connection |
+| `list` | Show all connections and tunnels |
+| `open <name>` | Open terminal session |
+| `close <name>` | Close connection |
+| `tunc <name> l <local_port> <remote_host> <remote_port>` | Create forward tunnel |
+| `tunc <name> r <remote_port> <local_host> <local_port>` | Create reverse tunnel |
+| `tund <tunnel_id>` | Delete tunnel |
+| `scp <name>` | Enter SCP mode |
+| `terminal <method>` | Change terminal method |
+| `mode` | Switch interface mode |
+| `help` | Show help |
+| `exit` | Exit LazySSH |
+
+### SCP Mode Commands
+
+| Command | Description |
+|---------|-------------|
+| `get <file> [<local>]` | Download file |
+| `put <file> [<remote>]` | Upload file |
+| `mget <pattern>` | Download multiple files |
+| `ls [<path>]` | List remote files |
+| `tree [<path>]` | Show directory tree |
+| `cd <path>` | Change remote directory |
+| `lcd <path>` | Change local directory |
+| `pwd` | Show current remote directory |
+| `local [<path>]` | Set/show local directories |
+| `exit` | Return to LazySSH |
+
+For complete command reference, see [commands.md](commands.md).
+
+For specialized guides, see:
+- [SCP Mode Guide](scp-mode.md) - Detailed file transfer instructions
+- [Tunneling Guide](tunneling.md) - Advanced tunneling scenarios
+- [Troubleshooting](troubleshooting.md) - Solutions to common issues

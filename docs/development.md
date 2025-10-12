@@ -1,5 +1,7 @@
 # LazySSH Development Guide
 
+> **Note**: This guide is for contributors and developers. If you're looking to use LazySSH, see the [User Guide](user-guide.md) instead.
+
 This guide provides information for developers who want to contribute to LazySSH or understand its internal workings.
 
 ## Table of Contents

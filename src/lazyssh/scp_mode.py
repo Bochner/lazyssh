@@ -5,8 +5,9 @@ import shlex
 import subprocess
 import time
 from collections.abc import Iterable
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
@@ -34,11 +35,16 @@ from .logging_module import (
     format_size,
     log_file_transfer,
     log_scp_command,
+    set_debug_mode,
     update_transfer_stats,
 )
 from .models import SSHConnection
 from .ssh import SSHManager
 from .ui import display_error, display_info, display_success
+
+# Cache and throttling configuration
+CACHE_TTL_SECONDS = 30
+COMPLETION_THROTTLE_MS = 300
 
 
 class SCPModeCompleter(Completer):
@@ -73,6 +79,30 @@ class SCPModeCompleter(Completer):
                 # If we have an active connection, try to complete remote files
                 if self.scp_mode.conn and self.scp_mode.socket_path:
                     try:
+                        # Check throttling
+                        explicit_tab = (
+                            complete_event.completion_requested
+                            if hasattr(complete_event, "completion_requested")
+                            else False
+                        )
+                        if self.scp_mode._should_throttle_completion(explicit_tab):
+                            # Return cached results if available
+                            partial_path = words[1] if len(words) > 1 else ""
+                            if partial_path:
+                                base_dir = str(Path(partial_path).parent)
+                            else:
+                                base_dir = self.scp_mode.current_remote_dir
+
+                            if not base_dir:
+                                base_dir = self.scp_mode.current_remote_dir
+
+                            cached = self.scp_mode._get_cached_result(base_dir, "ls")
+                            if cached:
+                                for f in cached:
+                                    if not word_before_cursor or f.startswith(word_before_cursor):
+                                        yield Completion(f, start_position=-len(word_before_cursor))
+                            return
+
                         # Get partial path from what user typed so far
                         partial_path = words[1] if len(words) > 1 else ""
                         if partial_path:
@@ -83,12 +113,23 @@ class SCPModeCompleter(Completer):
                         if not base_dir:
                             base_dir = self.scp_mode.current_remote_dir
 
-                        # Get files in the directory
-                        result = self.scp_mode._execute_ssh_command(f"ls -a {base_dir}")
-                        if result and result.returncode == 0:
-                            file_list = result.stdout.strip().split("\n")
-                            file_list = [f for f in file_list if f and f not in [".", ".."]]
+                        # Check cache first
+                        file_list = self.scp_mode._get_cached_result(base_dir, "ls")
 
+                        if file_list is None:
+                            # Update completion time before query
+                            self.scp_mode._update_completion_time()
+
+                            # Get files in the directory
+                            result = self.scp_mode._execute_ssh_command(f"ls -a {base_dir}")
+                            if result and result.returncode == 0:
+                                file_list = result.stdout.strip().split("\n")
+                                file_list = [f for f in file_list if f and f not in [".", ".."]]
+
+                                # Update cache
+                                self.scp_mode._update_cache(base_dir, "ls", file_list)
+
+                        if file_list:
                             for f in file_list:
                                 if not word_before_cursor or f.startswith(word_before_cursor):
                                     yield Completion(f, start_position=-len(word_before_cursor))
@@ -129,6 +170,30 @@ class SCPModeCompleter(Completer):
                 # Complete remote directories
                 if self.scp_mode.conn and self.scp_mode.socket_path:
                     try:
+                        # Check throttling
+                        explicit_tab = (
+                            complete_event.completion_requested
+                            if hasattr(complete_event, "completion_requested")
+                            else False
+                        )
+                        if self.scp_mode._should_throttle_completion(explicit_tab):
+                            # Return cached results if available
+                            partial_path = words[1] if len(words) > 1 else ""
+                            if partial_path:
+                                base_dir = str(Path(partial_path).parent)
+                            else:
+                                base_dir = self.scp_mode.current_remote_dir
+
+                            if not base_dir:
+                                base_dir = self.scp_mode.current_remote_dir
+
+                            cached = self.scp_mode._get_cached_result(base_dir, "find")
+                            if cached:
+                                for d in cached:
+                                    if not word_before_cursor or d.startswith(word_before_cursor):
+                                        yield Completion(d, start_position=-len(word_before_cursor))
+                            return
+
                         # Get partial path from what user typed so far
                         partial_path = words[1] if len(words) > 1 else ""
                         if partial_path:
@@ -139,14 +204,25 @@ class SCPModeCompleter(Completer):
                         if not base_dir:
                             base_dir = self.scp_mode.current_remote_dir
 
-                        # Get directories in the base directory
-                        result = self.scp_mode._execute_ssh_command(
-                            f"find {base_dir} -maxdepth 1 -type d -printf '%f\\n'"
-                        )
-                        if result and result.returncode == 0:
-                            dir_list = result.stdout.strip().split("\n")
-                            dir_list = [d for d in dir_list if d and d not in [".", ".."]]
+                        # Check cache first
+                        dir_list = self.scp_mode._get_cached_result(base_dir, "find")
 
+                        if dir_list is None:
+                            # Update completion time before query
+                            self.scp_mode._update_completion_time()
+
+                            # Get directories in the base directory
+                            result = self.scp_mode._execute_ssh_command(
+                                f"find {base_dir} -maxdepth 1 -type d -printf '%f\\n'"
+                            )
+                            if result and result.returncode == 0:
+                                dir_list = result.stdout.strip().split("\n")
+                                dir_list = [d for d in dir_list if d and d not in [".", ".."]]
+
+                                # Update cache
+                                self.scp_mode._update_cache(base_dir, "find", dir_list)
+
+                        if dir_list:
                             for d in dir_list:
                                 if not word_before_cursor or d.startswith(word_before_cursor):
                                     yield Completion(d, start_position=-len(word_before_cursor))
@@ -320,8 +396,15 @@ class SCPMode:
 
         # Initialize directories
         self.current_remote_dir = "~"  # Default to user's home dir
+        self.remote_home_dir: str | None = None  # Captured during connection
         self.local_download_dir: str | None = None  # Set dynamically on connection
         self.local_upload_dir: str | None = None  # Set dynamically on connection
+
+        # Directory listing cache: path -> {data, timestamp, type}
+        self.directory_cache: dict[str, dict[str, Any]] = {}
+
+        # Completion throttling
+        self.last_completion_time: float = 0.0
 
         # Initialize prompt_toolkit components
         self.completer = SCPModeCompleter(self)
@@ -354,6 +437,7 @@ class SCPMode:
             "exit": self.cmd_exit,
             "tree": self.cmd_tree,
             "lcd": self.cmd_lcd,
+            "debug": self.cmd_debug,
         }
 
         # Try to connect to selected connection if provided
@@ -396,7 +480,7 @@ class SCPMode:
                 display_error(f"Failed to create uploads directory: {conn_upload_dir}")
                 return False
 
-        # Get initial remote directory
+        # Get initial remote directory and store as home directory
         try:
             cmd = [
                 "ssh",
@@ -408,10 +492,14 @@ class SCPMode:
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
                 self.current_remote_dir = result.stdout.strip()
+                # Store the initial directory as the remote home directory for tilde expansion
+                self.remote_home_dir = self.current_remote_dir
             else:
                 self.current_remote_dir = "~"
+                self.remote_home_dir = None
         except Exception:
             self.current_remote_dir = "~"
+            self.remote_home_dir = None
 
         display_success(f"Connected to {self.conn.host} as {self.conn.username}")
         display_info(f"Local download directory: {self.local_download_dir}")
@@ -427,6 +515,152 @@ class SCPMode:
             conn_log_dir.chmod(0o700)
 
         return True
+
+    def _normalize_cache_path(self, path: str) -> str:
+        """
+        Normalize a remote path to an absolute path for use as a cache key.
+        This ensures cache keys are consistent regardless of how paths are specified.
+
+        Note: This method performs local path normalization only (no SSH calls)
+        to keep completion performance fast.
+        """
+        if not path:
+            return self.current_remote_dir or "~"
+
+        # If starts with ~, expand to stored home directory
+        if path.startswith("~"):
+            # If we have a stored remote home directory, expand the tilde
+            if self.remote_home_dir:
+                # Handle both "~" and "~/" prefixes
+                if path == "~":
+                    path = self.remote_home_dir
+                elif path.startswith("~/"):
+                    # Replace ~/ with the home directory
+                    path = self.remote_home_dir + path[1:]
+                # Note: paths like "~user" are not expanded (fall through to return path)
+                else:
+                    # Can't expand ~user without SSH call, return as-is
+                    return path
+            else:
+                # No stored home directory, return original path
+                return path
+
+        # If already absolute, normalize and return
+        if path.startswith("/"):
+            # Normalize the path (remove redundant slashes, resolve ./ and ../)
+            parts: list[str] = []
+            for part in path.split("/"):
+                if part == "" or part == ".":
+                    continue
+                elif part == "..":
+                    if parts:
+                        parts.pop()
+                else:
+                    parts.append(part)
+            return "/" + "/".join(parts) if parts else "/"
+
+        # Relative path - resolve against current remote directory
+        if self.current_remote_dir:
+            # Join with current directory and normalize
+            if self.current_remote_dir.endswith("/"):
+                full_path = f"{self.current_remote_dir}{path}"
+            else:
+                full_path = f"{self.current_remote_dir}/{path}"
+
+            # Normalize the combined path
+            if full_path.startswith("/"):
+                parts = []
+                for part in full_path.split("/"):
+                    if part == "" or part == ".":
+                        continue
+                    elif part == "..":
+                        if parts:
+                            parts.pop()
+                    else:
+                        parts.append(part)
+                return "/" + "/".join(parts) if parts else "/"
+            return full_path
+
+        return path
+
+    def _get_cached_result(self, path: str, command_type: str) -> list[str] | None:
+        """Get cached directory listing if available and not expired"""
+        # Normalize path to ensure consistent cache keys
+        normalized_path = self._normalize_cache_path(path)
+        cache_key = f"{normalized_path}:{command_type}"
+
+        if cache_key not in self.directory_cache:
+            return None
+
+        cached = self.directory_cache[cache_key]
+        cache_time = cached["timestamp"]
+
+        # Check if cache is expired
+        if datetime.now() - cache_time > timedelta(seconds=CACHE_TTL_SECONDS):
+            if SCP_LOGGER:
+                SCP_LOGGER.debug(f"Cache expired for {cache_key}")
+            del self.directory_cache[cache_key]
+            return None
+
+        if SCP_LOGGER:
+            SCP_LOGGER.debug(f"Cache hit for {cache_key}")
+        return cast(list[str], cached["data"])
+
+    def _update_cache(self, path: str, command_type: str, data: list[str]) -> None:
+        """Update cache with new directory listing"""
+        # Normalize path to ensure consistent cache keys
+        normalized_path = self._normalize_cache_path(path)
+        cache_key = f"{normalized_path}:{command_type}"
+        self.directory_cache[cache_key] = {
+            "data": data,
+            "timestamp": datetime.now(),
+            "type": command_type,
+        }
+
+        if SCP_LOGGER:
+            SCP_LOGGER.debug(f"Cache updated for {cache_key} with {len(data)} entries")
+
+    def _invalidate_cache(self, path: str | None = None) -> None:
+        """Invalidate cache entries. If path is None, clear all cache."""
+        if path is None:
+            if SCP_LOGGER and self.directory_cache:
+                SCP_LOGGER.debug(f"Clearing all cache ({len(self.directory_cache)} entries)")
+            self.directory_cache.clear()
+        else:
+            # Normalize path to ensure we invalidate the correct cache entries
+            normalized_path = self._normalize_cache_path(path)
+            # Invalidate all cache entries for this path
+            keys_to_delete = [
+                k for k in self.directory_cache.keys() if k.startswith(f"{normalized_path}:")
+            ]
+            for key in keys_to_delete:
+                del self.directory_cache[key]
+
+            if SCP_LOGGER and keys_to_delete:
+                SCP_LOGGER.debug(
+                    f"Invalidated {len(keys_to_delete)} cache entries for {normalized_path}"
+                )
+
+    def _should_throttle_completion(self, explicit_tab: bool = False) -> bool:
+        """Check if completion should be throttled"""
+        if explicit_tab:
+            return False
+
+        current_time = time.time()
+        time_since_last = (current_time - self.last_completion_time) * 1000  # Convert to ms
+
+        if time_since_last < COMPLETION_THROTTLE_MS:
+            if SCP_LOGGER:
+                SCP_LOGGER.debug(
+                    f"Completion throttled ({time_since_last:.0f}ms < {COMPLETION_THROTTLE_MS}ms)"
+                )
+            return True
+
+        return False
+
+    def _update_completion_time(self) -> None:
+        """Update the last completion query time"""
+        self.last_completion_time = time.time()
 
     def _execute_ssh_command(self, remote_command: str) -> subprocess.CompletedProcess | None:
         """Execute a command on the remote host via SSH and return the result"""
@@ -620,6 +854,9 @@ class SCPMode:
             # Use the filename from the local path
             filename = Path(local_path).name
             remote_path = f"{self.current_remote_dir}/{filename}"
+        else:
+            # Resolve relative paths to absolute paths
+            remote_path = self._resolve_remote_path(remote_path)
 
         try:
             # Execute the SCP command
@@ -694,6 +931,11 @@ class SCPMode:
                     )
                     # Update transfer stats
                     update_transfer_stats(self.connection_name, 1, file_size)
+
+                # Invalidate cache for the target directory
+                target_dir = str(Path(remote_path).parent)
+                self._invalidate_cache(target_dir)
+
                 display_success(
                     f"Uploaded {local_path} ({format_size(file_size)}) in {elapsed_str}"
                 )
@@ -986,6 +1228,10 @@ class SCPMode:
 
             # Update current directory
             self.current_remote_dir = result.stdout.strip()
+
+            # Invalidate all cache on directory change
+            self._invalidate_cache()
+
             display_success(f"Changed to directory: {self.current_remote_dir}")
             return True
         except Exception as e:
@@ -1368,6 +1614,27 @@ class SCPMode:
                 display_info(
                     "If [yellow]<remote_path>[/yellow] is not specified, displays the current remote directory"
                 )
+            elif cmd == "debug":
+                display_info("[bold cyan]\nToggle debug logging to console:[/bold cyan]")
+                display_info(
+                    "[yellow]Usage:[/yellow] [cyan]debug[/cyan] [[yellow]on|off|enable|disable|true|false|1|0[/yellow]]"
+                )
+                display_info("\n[magenta bold]Description:[/magenta bold]")
+                display_info("  Toggles debug logging output to the console.")
+                display_info(
+                    "  Logs are always saved to /tmp/lazyssh/logs regardless of this setting."
+                )
+                display_info("  When enabled, all log messages will be displayed in the console.")
+                display_info("\n[magenta bold]Examples:[/magenta bold]")
+                display_info(
+                    "  [green]debug[/green]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
+                )
+                display_info(
+                    "  [green]debug on[/green]   [dim]# Explicitly enable debug mode[/dim]"
+                )
+                display_info(
+                    "  [green]debug off[/green]  [dim]# Explicitly disable debug mode[/dim]"
+                )
             else:
                 display_error(f"Unknown command: {cmd}")
                 self.cmd_help([])
@@ -1385,6 +1652,7 @@ class SCPMode:
         display_info("  [cyan]cd[/cyan]      - Change remote working directory")
         display_info("  [cyan]lcd[/cyan]     - Change local download directory")
         display_info("  [cyan]local[/cyan]   - Set or display local download directory")
+        display_info("  [cyan]debug[/cyan]   - Toggle debug logging to console")
         display_info("  [cyan]exit[/cyan]    - Exit SCP mode")
         display_info(
             "  [cyan]help[/cyan]    - Show this help message or help for a specific command"
@@ -1653,6 +1921,32 @@ class SCPMode:
         except Exception as e:
             display_error(f"Failed to change local directory: {str(e)}")
             return False
+
+    def cmd_debug(self, args: list[str]) -> bool:
+        """Enable or disable debug logging"""
+        from .logging_module import DEBUG_MODE
+
+        if args and args[0].lower() in ("off", "disable", "false", "0"):
+            # Explicitly disable
+            set_debug_mode(False)
+            display_info("Debug logging disabled")
+            if SCP_LOGGER:
+                SCP_LOGGER.info("Debug logging disabled")
+        elif args and args[0].lower() in ("on", "enable", "true", "1"):
+            # Explicitly enable
+            set_debug_mode(True)
+            display_info("Debug logging enabled")
+            if SCP_LOGGER:
+                SCP_LOGGER.info("Debug logging enabled")
+        else:
+            # Toggle current state
+            new_mode = not DEBUG_MODE
+            set_debug_mode(new_mode)
+            status = "enabled" if new_mode else "disabled"
+            display_info(f"Debug logging {status}")
+            if SCP_LOGGER:
+                SCP_LOGGER.info(f"Debug logging {status}")
+        return True
 
     def check_connection(self) -> bool:
         """Check if the SSH connection is still active"""

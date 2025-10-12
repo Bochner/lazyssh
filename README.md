@@ -14,9 +14,8 @@ LazySSH simplifies SSH connection management with an elegant CLI interface. It h
 - **Connection Management**: Handle multiple SSH connections with control sockets
 - **Tunneling**: Create forward and reverse tunnels with simple commands
 - **Dynamic Proxy**: Set up SOCKS proxy for secure browsing
-- **SCP Mode**: Transfer files securely between local and remote systems with rich visualization
-- **Terminal Integration**: Open terminal sessions directly from LazySSH
-- **Human-Readable Output**: Sizes and formatting optimized for readability
+- **SCP Mode**: Transfer files securely with rich visualization and progress tracking
+- **Terminal Integration**: Open terminal sessions directly with runtime method switching
 - **Rich Visual Elements**: Color coding, progress bars, and tree visualizations
 
 ## Quick Start
@@ -26,6 +25,8 @@ LazySSH simplifies SSH connection management with an elegant CLI interface. It h
 ```bash
 # Install globally
 pip install lazyssh
+
+# Or with pipx (recommended)
 pipx install lazyssh
 
 # Or install for the current user only
@@ -79,7 +80,7 @@ For detailed documentation, please see the [docs directory](docs/):
 
 ### Optional Dependencies
 
-- **Terminator terminal emulator** - For opening terminals in external windows. If not installed, LazySSH will use a native Python terminal that runs in the current terminal window.
+- **Terminator terminal emulator** - For opening terminals in external windows. If not installed, LazySSH will use a native terminal that runs in the current terminal window.
 
 ### Platform Support
 
@@ -106,8 +107,8 @@ You can control which terminal method to use either at runtime or via environmen
 **Runtime configuration (recommended):**
 ```bash
 # From command mode
-lazyssh> terminal native    # Set terminal method to native
-lazyssh> terminal auto      # Set terminal method to auto
+lazyssh> terminal native      # Set terminal method to native
+lazyssh> terminal auto        # Set terminal method to auto
 lazyssh> terminal terminator  # Set terminal method to terminator
 
 # From menu mode: Select "8. Change terminal method"
@@ -131,41 +132,14 @@ export LAZYSSH_TERMINAL_METHOD=terminator
 - If Terminator is not installed: Uses native terminal in current window
 - Falls back gracefully if the preferred method fails
 
-**New in this version:**
-- Native terminal now allows returning to LazySSH after exiting the SSH session
+**Features:**
+- Native terminal allows returning to LazySSH after exiting the SSH session
 - Terminal method can be changed at runtime without restarting LazySSH
 - Terminal method is displayed in the SSH connections status table
 
 ## License
 
 MIT License
-
-## GitHub Project Board
-
-This repository uses GitHub Projects for issue and PR tracking. To use the automated project board features:
-
-### Setting Up Project Board
-
-For detailed setup instructions, see [.github/setup-project-board.md](.github/setup-project-board.md).
-
-Quick setup:
-1. Create a new project at: https://github.com/users/YOUR_USERNAME/projects
-2. Name it "LazySSH Development" 
-3. Configure the Status field with the predefined options
-4. Link your repository to the project
-
-### Workflow Automation
-
-The repository includes automated workflows that will:
-- Add new issues and PRs to the project board
-- Update status based on labels and PR state
-- Sync existing items when manually triggered
-
-To manually trigger a sync of all open issues and PRs:
-1. Go to Actions → Project Board Automation
-2. Click "Run workflow"
-3. Check "Sync all open issues and PRs"
-4. Click "Run workflow"
 
 ## Contributing
 

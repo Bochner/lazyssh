@@ -14,10 +14,10 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
+from . import logging_module
 from .logging_module import (  # noqa: F401
     APP_LOGGER,
     CMD_LOGGER,
-    DEBUG_MODE,
     log_ssh_command,
     set_debug_mode,
 )
@@ -821,7 +821,7 @@ class CommandMode:
         elif cmd == "debug":
             display_info("[bold cyan]\nToggle debug logging to console:[/bold cyan]")
             display_info(
-                "[yellow]Usage:[/yellow] [cyan]debug[/cyan] [[yellow]off|disable|false|0[/yellow]]"
+                "[yellow]Usage:[/yellow] [cyan]debug[/cyan] [[yellow]on|off|enable|disable|true|false|1|0[/yellow]]"
             )
             display_info("\n[magenta bold]Description:[/magenta bold]")
             display_info("  Toggles debug logging output to the console.")
@@ -831,6 +831,7 @@ class CommandMode:
             display_info(
                 "  [green]debug[/green]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
             )
+            display_info("  [green]debug on[/green]   [dim]# Explicitly enable debug mode[/dim]")
             display_info("  [green]debug off[/green]  [dim]# Explicitly disable debug mode[/dim]")
         else:
             display_error(f"Unknown command: {cmd}")
@@ -1014,15 +1015,25 @@ class CommandMode:
     def cmd_debug(self, args: list[str]) -> bool:
         """Enable or disable debug logging"""
         if args and args[0].lower() in ("off", "disable", "false", "0"):
+            # Explicitly disable
             set_debug_mode(False)
             display_info("Debug logging disabled")
             if CMD_LOGGER:
                 CMD_LOGGER.info("Debug logging disabled")
-        else:
+        elif args and args[0].lower() in ("on", "enable", "true", "1"):
+            # Explicitly enable
             set_debug_mode(True)
             display_info("Debug logging enabled")
             if CMD_LOGGER:
                 CMD_LOGGER.info("Debug logging enabled")
+        else:
+            # Toggle current state
+            new_mode = not logging_module.DEBUG_MODE
+            set_debug_mode(new_mode)
+            status = "enabled" if new_mode else "disabled"
+            display_info(f"Debug logging {status}")
+            if CMD_LOGGER:
+                CMD_LOGGER.info(f"Debug logging {status}")
         return True
 
     def cmd_disconnectall(self, args: list[str]) -> bool:
