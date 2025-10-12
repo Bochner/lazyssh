@@ -1,5 +1,7 @@
 # Publishing to PyPI
 
+> **Note**: This guide is for maintainers. If you're looking to use LazySSH, see the [User Guide](user-guide.md) instead.
+
 This guide explains how to publish LazySSH to PyPI using GitHub Actions.
 
 ## Prerequisites

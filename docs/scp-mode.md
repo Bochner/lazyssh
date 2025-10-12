@@ -1,247 +1,296 @@
 # SCP Mode Guide
 
-LazySSH includes a robust SCP (Secure Copy Protocol) mode for transferring files between your local machine and remote servers. This guide provides comprehensive information on using SCP mode effectively.
+LazySSH's SCP mode provides a streamlined interface for transferring files between your local machine and remote servers with rich visual feedback and progress tracking.
 
 ## Table of Contents
 
-- [Entering SCP Mode](#entering-scp-mode)
-- [The SCP Mode Interface](#the-scp-mode-interface)
-- [Basic File Operations](#basic-file-operations)
+- [Getting Started](#getting-started)
+- [File Operations](#file-operations)
+- [Navigation](#navigation)
 - [Advanced Features](#advanced-features)
 - [Command Reference](#command-reference)
-- [Tips and Best Practices](#tips-and-best-practices)
+- [Common Workflows](#common-workflows)
 
-## Entering SCP Mode
+## Getting Started
 
-You can enter SCP mode from LazySSH's command mode by using the `scp` command:
+### Entering SCP Mode
+
+From LazySSH command mode:
 
 ```bash
-# Specify a connection directly
+# Enter SCP mode for a specific connection
 lazyssh> scp myserver
 
 # Or let LazySSH prompt you to select a connection
 lazyssh> scp
 ```
 
-If you don't specify a connection, LazySSH will display a list of active connections and prompt you to select one.
+### Understanding the Prompt
 
-## The SCP Mode Interface
-
-Once in SCP mode, you'll see a prompt that shows:
+Once in SCP mode, you'll see:
 
 ```
-scp myserver:/current/remote/path [↓/local/download/directory | ↑/local/upload/directory]>
+scp myserver:/current/remote/path [↓/local/download | ↑/local/upload]>
 ```
 
-This prompt displays:
-- The connection name (`myserver`)
-- Your current remote directory (`/current/remote/path`)
-- Your current local download directory (`/local/download/directory`) marked with ↓
-- Your current local upload directory (`/local/upload/directory`) marked with ↑
+This shows:
+- **Connection name**: `myserver`
+- **Remote directory**: `/current/remote/path`
+- **Download directory**: `/local/download` (marked with ↓)
+- **Upload directory**: `/local/upload` (marked with ↑)
 
-## Basic File Operations
+## File Operations
 
 ### Downloading Files
 
-To download a file from the remote server:
-
 ```bash
-# Basic usage
+# Download single file
 get remote_file.txt
 
-# Specify a different local filename
+# Download with different local name
 get remote_file.txt local_copy.txt
 
-# Use absolute paths
+# Download with absolute paths
 get /etc/nginx/nginx.conf ~/configs/nginx.conf
 ```
 
 ### Uploading Files
 
-To upload a file to the remote server:
-
 ```bash
-# Basic usage
+# Upload single file
 put local_file.txt
 
-# Specify a different remote filename
+# Upload with different remote name
 put local_file.txt uploaded_file.txt
 
-# Use absolute paths
+# Upload with absolute paths
 put ~/scripts/backup.sh /home/user/scripts/backup.sh
 ```
 
-### Navigating Directories
+### Batch Downloads
 
-#### Remote Navigation
+Download multiple files matching a pattern:
+
+```bash
+# Download all log files
+mget *.log
+
+# Download compressed files from a specific directory
+mget /var/log/nginx/*.gz
+```
+
+LazySSH will:
+1. Show matching files with sizes
+2. Display total download size
+3. Ask for confirmation
+4. Show progress for each file
+
+## Navigation
+
+### Remote Navigation
 
 ```bash
 # Change remote directory
 cd /var/log
 
-# Check current remote directory
+# Check current location
 pwd
 
-# List remote directory contents
+# List remote files
 ls
 ls /home/user/documents
 
-# Display remote directory structure in a tree view
+# View directory tree
 tree
 tree /home/user/projects
 ```
 
-#### Local Navigation
+### Local Navigation
 
 ```bash
-# Set local download directory
+# Set local download/upload directory
 local ~/Downloads/server-files
 
-# Change local download directory
+# Change download directory
 lcd ~/Downloads/server-logs
 
-# Set specific download or upload directory
+# Set specific directories
 local download ~/Downloads/server-files
 local upload ~/Uploads/server-files
 
-# Check current local directory
+# View current local directories
 local
 
-# List local directory contents
+# List local files
 lls
 lls ~/other/directory
 ```
 
 ## Advanced Features
 
-### Batch Downloads with `mget`
+### Directory Tree Visualization
 
-The `mget` command allows you to download multiple files matching a pattern:
-
-```bash
-# Download all log files
-mget *.log
-
-# Download all files in a remote directory
-mget /var/log/nginx/*.gz
-```
-
-When using `mget`, LazySSH:
-1. Displays all matching files with their sizes
-2. Shows the total download size
-3. Asks for confirmation before downloading
-4. Shows progress as files are downloaded
-
-### Human-Readable File Listings
-
-Both `ls` and `lls` commands display file sizes in human-readable format (KB, MB, GB), making it easier to understand file sizes at a glance.
+The `tree` command displays a hierarchical, color-coded view of remote directories:
 
 ```bash
-# Remote file listing with human-readable sizes
-ls
-
-# Local file listing with sizes and summary
-lls
-```
-
-The `lls` command also displays a summary at the end, showing:
-- Total number of files and directories
-- Total size of all files in human-readable format
-
-### Visualizing Directory Structure
-
-The `tree` command provides a hierarchical view of the remote directory structure:
-
-```bash
-# Display the current remote directory in tree format
 tree
-
-# Display a specific remote directory in tree format
 tree /var/www/html
 ```
 
-This command:
-- Shows a visual tree representation of directories and files
-- Color-codes files by type (executables, images, archives, etc.)
-- Provides a count of total files and directories
+Features:
+- Visual tree representation
+- Color-coded file types
+- File and directory counts
+
+### Human-Readable Listings
+
+File listings display sizes in human-readable format (KB, MB, GB):
+
+```bash
+# Remote listing
+ls
+
+# Local listing with summary
+lls
+```
+
+The `lls` command shows:
+- File count and directory count
+- Total size of all files
+
+### Progress Tracking
+
+File transfers show:
+- Real-time progress bars
+- Transfer speed
+- Time remaining
+- Total bytes transferred
 
 ## Command Reference
 
-| Command | Description | Syntax |
-|---------|-------------|--------|
-| `get` | Download a file | `get <remote_file> [<local_file>]` |
-| `put` | Upload a file | `put <local_file> [<remote_file>]` |
-| `mget` | Download multiple files | `mget <pattern>` |
-| `ls` | List remote files | `ls [<remote_path>]` |
-| `lls` | List local files | `lls [<local_path>]` |
-| `tree` | Display remote directory structure | `tree [<remote_path>]` |
-| `cd` | Change remote directory | `cd <remote_path>` |
-| `lcd` | Change local download directory | `lcd <local_path>` |
-| `pwd` | Show current remote directory | `pwd` |
-| `local` | Set/show local download/upload directories | `local [<path>]` or `local [download|upload] <path>` |
-| `help` | Show help | `help [<command>]` |
-| `exit` | Exit SCP mode | `exit` |
+| Command | Description |
+|---------|-------------|
+| `get <file> [<local>]` | Download a file |
+| `put <file> [<remote>]` | Upload a file |
+| `mget <pattern>` | Download multiple files matching pattern |
+| `ls [<path>]` | List remote files |
+| `lls [<path>]` | List local files |
+| `tree [<path>]` | Display remote directory tree |
+| `cd <path>` | Change remote directory |
+| `lcd <path>` | Change local download directory |
+| `pwd` | Show current remote directory |
+| `local [<path>]` | Set/show local download/upload directories |
+| `help [<command>]` | Show help information |
+| `exit` | Return to LazySSH |
 
-## Tips and Best Practices
+### Tab Completion
 
-### Efficient File Navigation
+Press Tab to auto-complete:
+- Command names
+- Remote file and directory paths
+- Local file and directory paths
 
-- Use tab completion to quickly find files and directories
-- Press Tab after typing a partial filename to auto-complete
-- Use `pwd` and `local` frequently to verify your current locations
-- Use `ls` with specific directories to explore without changing your current location
-- Use `tree` to get a visual overview of complex directory structures
+## Common Workflows
 
-### Download Organization
+### Log File Analysis
 
-- Use the `lcd` or `local` command to create separate download directories for different purposes
-- Set up a logical directory structure to keep downloaded files organized
-- Consider using date-based directories for log files or other time-based downloads
+```bash
+# Navigate to logs
+cd /var/log
 
-### Handling Large Files
+# Get overview of structure
+tree
 
-- Use the file size information displayed by `ls` to check file sizes before downloading
-- When using `mget`, check the total download size displayed before confirming
-- For very large downloads, consider using a more specialized tool or breaking the download into smaller chunks
+# List files
+ls
 
-### Using Path Shortcuts
+# Download all Apache logs
+mget apache2/*.log
 
-- `~` expands to your home directory on both local and remote systems
-- `.` refers to the current directory
-- `..` refers to the parent directory
-- These shortcuts work in all path-related commands
+# Return to LazySSH
+exit
+```
 
-### Security Considerations
+### Configuration Backup
+
+```bash
+# Navigate to config directory
+cd /etc
+
+# View structure
+tree nginx
+
+# Download all config files
+mget *.conf
+
+# Exit
+exit
+```
+
+### Application Deployment
+
+```bash
+# Navigate to deployment directory
+cd /var/www/myapp
+
+# Upload application package
+put updated_app.zip
+
+# Verify upload
+ls -lh updated_app.zip
+
+# Exit
+exit
+```
+
+### Batch File Synchronization
+
+```bash
+# Set organized download location
+local ~/Downloads/server-backup-2025-10
+
+# Navigate to target directory
+cd /home/user/important-docs
+
+# Download everything
+mget *
+
+# Exit
+exit
+```
+
+## Tips
+
+### Efficient Navigation
+
+- Use `pwd` and `local` frequently to verify your location
+- Use `ls <path>` to explore without changing directories
+- Use `tree` for quick overview of complex structures
+- Tab completion works for both remote and local paths
+
+### Path Shortcuts
+
+- `~` expands to home directory (local and remote)
+- `.` refers to current directory
+- `..` refers to parent directory
+
+### File Management
+
+- Check file sizes with `ls` before downloading large files
+- Use `mget` confirmation prompt to verify total download size
+- Organize downloads with `lcd` or `local` commands
+- Use date-based directories for log files
+
+### Performance
+
+- `tree` may be slow on very large directories - use on specific subdirectories
+- Batch downloads with `mget` are more efficient than multiple `get` commands
+- Progress bars show transfer speed and time estimates
+
+### Security
 
 - Downloaded files maintain their original permissions
-- Be cautious when uploading executable files or scripts
-- Double-check paths when using `put` to avoid overwriting important files
+- Verify paths carefully when using `put` to avoid overwriting files
+- Be cautious with executable files and scripts
 
-### Common Workflows
-
-**Log Analysis:**
-```bash
-cd /var/log
-tree  # Get a quick overview of log file organization
-ls
-mget apache2/*.log
-exit
-# Now process the logs locally
-```
-
-**Configuration Backup:**
-```bash
-cd /etc
-tree nginx  # See the structure of the nginx config directory
-mget *.conf
-exit
-# Now you have backups of all config files
-```
-
-**Deploying Updates:**
-```bash
-cd /var/www/myapp
-put updated_app.zip
-# Now unzip on the server
-exit
-``` 
+For complete command syntax, see [commands.md](commands.md).

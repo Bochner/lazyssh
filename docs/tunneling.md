@@ -1,245 +1,378 @@
 # SSH Tunneling Guide
 
-LazySSH provides powerful SSH tunneling capabilities that allow you to securely forward ports between your local machine and remote servers. This guide explains the different tunneling options and how to use them effectively.
+LazySSH provides powerful SSH tunneling capabilities for securely forwarding ports between your local machine and remote servers.
 
 ## Table of Contents
 
-- [Understanding SSH Tunnels](#understanding-ssh-tunnels)
+- [Tunnel Types](#tunnel-types)
 - [Forward Tunnels](#forward-tunnels)
 - [Reverse Tunnels](#reverse-tunnels)
 - [Dynamic SOCKS Proxy](#dynamic-socks-proxy)
 - [Managing Tunnels](#managing-tunnels)
-- [Common Use Cases](#common-use-cases)
+- [Real-World Scenarios](#real-world-scenarios)
 - [Troubleshooting](#troubleshooting)
 
-## Understanding SSH Tunnels
+## Tunnel Types
 
-SSH tunneling creates an encrypted connection between ports on different machines, allowing secure data transfer through potentially insecure networks. LazySSH supports three main types of tunnels:
+LazySSH supports three types of tunnels:
 
-1. **Forward Tunnels**: Forward a local port to a remote server (local → remote)
-2. **Reverse Tunnels**: Forward a remote port to your local machine (remote → local)
-3. **Dynamic SOCKS Proxy**: Create a flexible SOCKS proxy through your SSH connection
+1. **Forward Tunnels (Local)**: Access remote services through local ports
+2. **Reverse Tunnels (Remote)**: Expose local services through remote ports  
+3. **Dynamic SOCKS Proxy**: Flexible proxy for routing application traffic
 
 ## Forward Tunnels
 
-Forward tunnels (local port forwarding) allow you to access a service on a remote network through a local port on your machine.
+Forward tunnels allow you to access services on a remote network through a local port.
 
-### Creating a Forward Tunnel
+### Creating Forward Tunnels
 
 ```bash
 # Syntax
-lazyssh> tunc <connection_name> l <local_port> <remote_host> <remote_port>
+lazyssh> tunc <connection> l <local_port> <remote_host> <remote_port>
 
-# Example: Forward local port 8080 to port 80 on the remote server
+# Example: Access remote web server locally
 lazyssh> tunc myserver l 8080 localhost 80
 ```
 
-**Parameters:**
-- `connection_name`: Name of your SSH connection
-- `l`: Specifies a local/forward tunnel
-- `local_port`: The port on your local machine that will forward to the remote port
-- `remote_host`: The destination host from the perspective of the SSH server
-- `remote_port`: The port on the remote host to connect to
+Now connect to `localhost:8080` to access the remote server's port 80.
 
-### How Forward Tunnels Work
+### How It Works
 
 ```
-[Your Computer] → [Local Port 8080] → [SSH Connection] → [Remote Server] → [Remote Host:Port 80]
+Your Computer → localhost:8080 → SSH Tunnel → Remote Server → remote_host:80
 ```
 
-When you connect to `localhost:8080` on your machine, the connection is tunneled through SSH to `remote_host:80` as seen from the perspective of the remote server.
+### Common Uses
 
-### Common Forward Tunnel Use Cases
+**Access remote web interface:**
+```bash
+lazyssh> tunc myserver l 8080 localhost 80
+# Visit http://localhost:8080 in your browser
+```
 
-- Accessing a remote web server securely (`localhost:8080` → `remote:80`)
-- Connecting to a database server behind a firewall (`localhost:3306` → `database_server:3306`)
-- Accessing a remote service that is only bound to localhost on the remote server
+**Connect to remote database:**
+```bash
+lazyssh> tunc myserver l 3306 localhost 3306
+# Connect your database client to localhost:3306
+```
+
+**Access service behind firewall:**
+```bash
+lazyssh> tunc myserver l 8080 internal-server 80
+# Access internal-server:80 through your SSH connection
+```
 
 ## Reverse Tunnels
 
-Reverse tunnels (remote port forwarding) allow remote machines to access a service on your local machine through a port on the remote server.
+Reverse tunnels allow remote machines to access services on your local machine.
 
-### Creating a Reverse Tunnel
+### Creating Reverse Tunnels
 
 ```bash
 # Syntax
-lazyssh> tunc <connection_name> r <remote_port> <local_host> <local_port>
+lazyssh> tunc <connection> r <remote_port> <local_host> <local_port>
 
-# Example: Forward remote port 8080 to port 3000 on your local machine
+# Example: Expose local dev server remotely
 lazyssh> tunc myserver r 8080 localhost 3000
 ```
 
-**Parameters:**
-- `connection_name`: Name of your SSH connection
-- `r`: Specifies a remote/reverse tunnel
-- `remote_port`: The port on the remote server that will forward to your local port
-- `local_host`: The destination host from the perspective of your local machine
-- `local_port`: The port on your local machine to connect to
+Remote users can now access your local port 3000 via `remote_server:8080`.
 
-### How Reverse Tunnels Work
+### How It Works
 
 ```
-[Remote Server] → [Remote Port 8080] → [SSH Connection] → [Your Computer] → [Local Port 3000]
+Remote Server → remote_server:8080 → SSH Tunnel → Your Computer → localhost:3000
 ```
 
-When someone connects to port 8080 on the remote server, the connection is tunneled back through SSH to port 3000 on your machine.
+### Common Uses
 
-### Common Reverse Tunnel Use Cases
+**Share local development server:**
+```bash
+lazyssh> tunc myserver r 8080 localhost 3000
+# Others can access your dev server at remote_server:8080
+```
 
-- Sharing a local development server with others
-- Exposing a local web server through a remote VPS with a public IP
-- Allowing remote access to a service behind a NAT or firewall
+**Expose local service through VPS:**
+```bash
+lazyssh> tunc vps r 80 localhost 8080
+# Your local service now accessible via VPS public IP
+```
+
+**Bypass NAT/firewall:**
+```bash
+lazyssh> tunc server r 2222 localhost 22
+# Allow remote SSH access to your machine behind NAT
+```
 
 ## Dynamic SOCKS Proxy
 
-A dynamic SOCKS proxy provides a flexible way to route traffic through your SSH connection, allowing applications to access various services through the remote server.
+A dynamic SOCKS proxy provides flexible routing of application traffic through your SSH connection.
 
-### Creating a Dynamic SOCKS Proxy
+### Creating a SOCKS Proxy
 
-You create a dynamic SOCKS proxy when establishing an SSH connection:
+Create a proxy when establishing your SSH connection:
 
 ```bash
-# With default port (9050)
-lazyssh> lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy
+# Default port (9050)
+lazyssh> lazyssh -ip server.com -port 22 -user admin -socket proxy -proxy
 
-# With custom port
-lazyssh> lazyssh -ip 192.168.1.100 -port 22 -user admin -socket myserver -proxy 8080
+# Custom port
+lazyssh> lazyssh -ip server.com -port 22 -user admin -socket proxy -proxy 8080
 ```
 
 ### Using the SOCKS Proxy
 
-Once created, you can configure applications to use your SOCKS proxy:
+**Configure Firefox:**
+1. Settings → Network Settings → Manual proxy configuration
+2. SOCKS Host: `localhost`
+3. Port: `9050` (or your custom port)
+4. Select SOCKS v5
+5. Check "Proxy DNS when using SOCKS v5"
 
-**Web Browser (Firefox):**
-1. Go to Settings/Preferences
-2. Search for "proxy"
-3. Configure manual proxy settings
-4. Set SOCKS Host to "localhost" and Port to "9050" (or your custom port)
-5. Select "SOCKS v5"
-
-**Command Line Tools:**
+**Command-line tools:**
 ```bash
-# curl example
+# curl
 curl --socks5 localhost:9050 https://example.com
 
-# wget example
+# wget
 wget --socks-proxy=localhost:9050 https://example.com
+
+# ssh
+ssh -o ProxyCommand='nc -x localhost:9050 %h %p' user@destination
 ```
 
-### Common SOCKS Proxy Use Cases
+### Common Uses
 
-- Secure browsing through an encrypted tunnel
-- Accessing region-restricted content through a server in another location
-- Bypassing network restrictions by tunneling through SSH
-- Protecting your traffic on untrusted networks
+- **Secure browsing on public Wi-Fi**: Route all browser traffic through encrypted tunnel
+- **Access geo-restricted content**: Browse as if you're at your server's location
+- **Bypass network restrictions**: Tunnel through firewalls and content filters
+- **Protect sensitive traffic**: Encrypt data on untrusted networks
 
 ## Managing Tunnels
 
 ### Listing Tunnels
 
-To view all active tunnels:
+View all active connections and tunnels:
 
 ```bash
 lazyssh> list
 ```
 
-This displays:
-- Tunnel ID
-- Type (forward or reverse)
-- Local port
-- Remote host and port
-- The connection they belong to
+Shows:
+- Connection names
+- Tunnel IDs
+- Tunnel types (forward/reverse)
+- Port mappings
+- SOCKS proxy status
 
 ### Deleting Tunnels
 
-To remove a tunnel:
+Remove a specific tunnel:
 
 ```bash
-# Syntax
 lazyssh> tund <tunnel_id>
 
 # Example
 lazyssh> tund 1
 ```
 
-The tunnel ID is shown in the output of the `list` command.
+Get the tunnel ID from the `list` command output.
 
-## Common Use Cases
+## Real-World Scenarios
 
-### Accessing a Remote Database
+### Secure Database Access
+
+Access production database from local tools:
 
 ```bash
-# Create a connection
-lazyssh> lazyssh -ip database.example.com -port 22 -user dbadmin -socket dbserver
+# Create connection
+lazyssh> lazyssh -ip db-server.com -port 22 -user admin -socket proddb
 
-# Forward local port 3306 to the database port on the remote server
-lazyssh> tunc dbserver l 3306 localhost 3306
+# Forward database port
+lazyssh> tunc proddb l 5432 localhost 5432
 
-# Now you can connect to the database using: localhost:3306
+# Connect with local tools
+# psql -h localhost -p 5432 -U dbuser production
 ```
 
-### Exposing a Local Development Server
+### Development Server Sharing
+
+Share your local work with remote team:
 
 ```bash
-# Create a connection to your VPS
+# Connect to VPS
 lazyssh> lazyssh -ip vps.example.com -port 22 -user admin -socket myvps
 
-# Create a reverse tunnel from VPS port 8080 to your local development server
+# Expose local dev server
 lazyssh> tunc myvps r 8080 localhost 3000
 
-# Now people can access your development server at: vps.example.com:8080
+# Team accesses at: http://vps.example.com:8080
 ```
 
-### Secure Browsing on Public Wi-Fi
+### Secure Remote Administration
+
+Access web admin interface blocked by firewall:
 
 ```bash
-# Create a connection with a SOCKS proxy
-lazyssh> lazyssh -ip home.example.com -port 22 -user user -socket home -proxy
+# SSH to jump host
+lazyssh> lazyssh -ip jump.corp.com -port 22 -user admin -socket jump
 
-# Configure your browser to use the SOCKS proxy at localhost:9050
-# Now your browsing traffic is encrypted through your home server
+# Forward admin interface
+lazyssh> tunc jump l 8443 admin-server 443
+
+# Access at: https://localhost:8443
+```
+
+### Multi-Service Access
+
+Access multiple services through one connection:
+
+```bash
+# Create connection
+lazyssh> lazyssh -ip server.com -port 22 -user admin -socket multi
+
+# Forward multiple ports
+lazyssh> tunc multi l 8080 localhost 80       # Web
+lazyssh> tunc multi l 3306 localhost 3306     # MySQL
+lazyssh> tunc multi l 6379 localhost 6379     # Redis
+lazyssh> tunc multi l 9200 localhost 9200     # Elasticsearch
+
+# All services now accessible locally
+```
+
+### Secure Public Wi-Fi Usage
+
+Browse safely on untrusted networks:
+
+```bash
+# Create connection with SOCKS proxy
+lazyssh> lazyssh -ip home-server.com -port 22 -user admin -socket home -proxy
+
+# Configure browser to use localhost:9050
+# All traffic now encrypted through your home server
+```
+
+### Remote Docker Registry Access
+
+Access private registry behind firewall:
+
+```bash
+# Forward registry port
+lazyssh> tunc myserver l 5000 localhost 5000
+
+# Use registry
+# docker pull localhost:5000/myimage
 ```
 
 ## Troubleshooting
 
-### Tunnel Creation Failures
+### Port Already in Use
 
-If you encounter errors when creating tunnels:
+**Problem:** "Address already in use" error
 
-1. **Port already in use**: Try a different local port
-   ```bash
-   # If port 8080 fails with "address already in use"
-   lazyssh> tunc myserver l 8081 localhost 80
-   ```
+**Solution:**
+```bash
+# Check what's using the port
+lsof -i:8080
 
-2. **Remote port restricted**: Some remote ports (<1024) require root privileges
-   ```bash
-   # Try using a higher port number
-   lazyssh> tunc myserver r 8080 localhost 80
-   ```
+# Use a different port
+lazyssh> tunc myserver l 8081 localhost 80
+```
 
-3. **Connection issues**: Verify the SSH connection is active
-   ```bash
-   lazyssh> list
-   ```
+### Connection Refused
 
-### SOCKS Proxy Problems
+**Problem:** Tunnel created but connection refused
 
-If your SOCKS proxy isn't working:
+**Solutions:**
+- Verify remote service is running
+- Check firewall rules on remote server
+- Ensure correct host/port in tunnel command
+- Verify SSH connection is active: `list`
 
-1. **Verify proxy is active**: Check that the connection with SOCKS is running
-   ```bash
-   lazyssh> list
-   ```
+### Remote Port Restricted
 
-2. **Check application configuration**: Ensure your application is correctly configured to use the SOCKS proxy
+**Problem:** Can't bind to remote port <1024
 
-3. **DNS resolution**: Some applications need to be configured to resolve DNS through the proxy (e.g., Firefox's "Proxy DNS when using SOCKS v5" option)
+**Solution:**
+```bash
+# Use high-numbered ports (>1024)
+lazyssh> tunc myserver r 8080 localhost 80
+```
 
-### Performance Issues
+### SOCKS Proxy Not Working
 
-If tunnel performance is slow:
+**Problem:** Applications can't connect through proxy
 
-1. **Compression**: SSH compression may help with text-heavy traffic
-2. **Multiple tunnels**: Avoid creating too many tunnels through a single connection
-3. **Connection quality**: The tunnel can only be as fast as your SSH connection 
+**Solutions:**
+- Verify proxy is active: `list`
+- Check application proxy settings
+- Ensure SOCKS v5 is selected
+- Enable "Proxy DNS" in browser settings
+- Try with command-line tool first to isolate issue
+
+### Tunnel Drops Frequently
+
+**Problem:** Tunnel disconnects regularly
+
+**Solutions:**
+- Check SSH connection stability
+- Verify network quality
+- Consider adding SSH keep-alive:
+  ```bash
+  # In ~/.ssh/config
+  Host *
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+  ```
+
+### Permission Denied
+
+**Problem:** Can't create tunnel
+
+**Solutions:**
+- Verify SSH connection is active
+- Check server allows port forwarding (`AllowTcpForwarding` in sshd_config)
+- Ensure you have necessary permissions
+
+## Quick Reference
+
+### Forward Tunnel Examples
+
+```bash
+# Web server
+tunc myserver l 8080 localhost 80
+
+# Database
+tunc myserver l 3306 db-internal 3306
+
+# RDP
+tunc myserver l 3389 windows-box 3389
+
+# VNC
+tunc myserver l 5900 localhost 5900
+```
+
+### Reverse Tunnel Examples
+
+```bash
+# Web server
+tunc myserver r 8080 localhost 3000
+
+# SSH access
+tunc myserver r 2222 localhost 22
+
+# Application API
+tunc myserver r 8000 localhost 8000
+```
+
+### SOCKS Proxy
+
+```bash
+# Create with default port
+lazyssh -ip server.com -port 22 -user admin -socket proxy -proxy
+
+# Create with custom port
+lazyssh -ip server.com -port 22 -user admin -socket proxy -proxy 8080
+```
+
+For general command syntax, see [commands.md](commands.md).

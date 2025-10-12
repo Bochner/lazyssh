@@ -8,6 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [1.3.5] - 2025-10-12
+
+### Added
+- **SCP Mode Performance Optimizations**: Implemented intelligent caching and throttling system
+  - Directory listing cache with configurable 30-second TTL reduces redundant SSH commands
+  - Completion throttling (300ms delay) limits query frequency during rapid typing
+  - Cache automatically invalidates on directory changes (`cd`, `put` commands)
+  - Expected 80-90% reduction in SSH commands during typical completion workflows
+  - Cache-first strategy for both `ls` and `find` commands
+- **Debug Command in SCP Mode**: Added `debug` command to toggle debug logging on/off at runtime
+  - Consistent behavior with command mode debug toggle
+  - Accepts optional argument for explicit control (`debug on`, `debug off`)
+  - No restart required to enable/disable verbose logging
+  - Debug logs always saved to `/tmp/lazyssh/logs` regardless of debug mode state
+
+### Changed
+- **Documentation Modernization**: Comprehensive update to all documentation files
+  - Simplified README.md with focus on quick start and essential features
+  - Restructured user-guide.md as streamlined user journey (installation → first connection → workflows)
+  - Updated commands.md with current command names, removed redundant tutorial content
+  - Simplified scp-mode.md and tunneling.md to focus on practical usage patterns
+  - Updated troubleshooting.md to reflect current architecture
+  - Corrected all references from `terminal <connection>` to `open <connection>`
+  - Fixed environment variable names throughout (`LAZYSSH_TERMINAL_METHOD`)
+  - Marked Terminator as optional with native terminal as default
+  - Documented runtime terminal method switching
+  - Updated SCP mode documentation to reflect caching and optimization features
+- **Code Quality Improvements**: Enhanced variable naming consistency and code organization in SCP mode
+
+### Removed
+- Removed `install.sh` script (installation via pip/pipx only)
+- Cleaned up obsolete OpenSpec CLI specification files from repository
+
+### Performance
+- SCP mode tab completion now significantly faster on high-latency connections
+- Reduced network traffic during file path completion
+- More responsive user experience during rapid typing in SCP mode
+
+
 ## [1.3.4] - 2025-10-11
 
 ### Changed
