@@ -8,7 +8,7 @@ This guide provides a streamlined introduction to using LazySSH for SSH connecti
 - [Your First Connection](#your-first-connection)
 - [Core Workflows](#core-workflows)
 - [Saved Connection Configurations](#saved-connection-configurations)
-- [Interface Modes](#interface-modes)
+- [Wizard Workflows](#wizard-workflows)
 - [Terminal Methods](#terminal-methods)
 - [Advanced Features](#advanced-features)
 
@@ -367,36 +367,49 @@ lazyssh> connect web2
 lazyssh> connect db
 ```
 
-## Interface Modes
+## Wizard Workflows
 
-LazySSH offers two interface modes:
+LazySSH provides guided wizard workflows for complex operations that benefit from step-by-step assistance.
 
-### Command Mode (Default)
+### SSH Connection Wizard
 
-Provides a command-line experience with smart tab completion:
-
-```bash
-# Start in command mode
-lazyssh
-
-# Use commands directly
-lazyssh> list
-lazyssh> open myserver
-```
-
-### Menu Mode
-
-Offers a guided menu interface:
+The `wizard lazyssh` command guides you through creating SSH connections:
 
 ```bash
-# Start in menu mode
-lazyssh --prompt
-
-# Or switch from command mode
-lazyssh> mode
+lazyssh> wizard lazyssh
 ```
 
-Switch between modes anytime using the `mode` command.
+The wizard will prompt you for:
+- Host IP address or hostname
+- SSH port (defaults to 22)
+- Username
+- Connection name (socket)
+- Optional SSH key path
+- Optional SOCKS proxy port
+
+### Tunnel Creation Wizard
+
+The `wizard tunnel` command helps you create tunnels:
+
+```bash
+lazyssh> wizard tunnel
+```
+
+The wizard will guide you through:
+- Selecting an existing connection
+- Choosing tunnel type (forward or reverse)
+- Setting local and remote ports
+- Configuring host addresses
+
+### When to Use Wizards
+
+Use wizard workflows when:
+- You're new to LazySSH and want guided assistance
+- Creating complex tunnel configurations
+- Setting up connections with multiple parameters
+- You prefer step-by-step guidance over command syntax
+
+For experienced users, direct commands remain available for faster operation.
 
 ## Terminal Methods
 
@@ -421,8 +434,6 @@ LazySSH supports two methods for opening terminal sessions:
 lazyssh> terminal native
 lazyssh> terminal terminator
 lazyssh> terminal auto  # Auto-select best available
-
-# From menu mode: Select "8. Change terminal method"
 ```
 
 **Set via environment variable:**
@@ -523,7 +534,7 @@ scp myserver> help mget
 | `tund <tunnel_id>` | Delete tunnel |
 | `scp <name>` | Enter SCP mode |
 | `terminal <method>` | Change terminal method |
-| `mode` | Switch interface mode |
+| `wizard <type>` | Start guided workflow (lazyssh, tunnel) |
 | `help` | Show help |
 | `exit` | Exit LazySSH |
 

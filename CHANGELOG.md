@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2025-10-12
+
+### Added
+- **Wizard Command**: New guided workflow system for complex operations
+  - `wizard lazyssh` - Interactive guided SSH connection creation with step-by-step prompts
+  - `wizard tunnel` - Interactive guided tunnel creation with parameter collection
+  - Simplified user experience for users who prefer guided workflows over command-line arguments
+  - Maintains all existing functionality while providing an alternative interface
+
+### Changed
+- **BREAKING:** Removed dual-mode system entirely
+  - Eliminated prompt mode (menu-driven interface) completely
+  - Removed `--prompt` command-line flag
+  - Removed `mode` command and all mode-switching functionality
+  - LazySSH now defaults to command mode interface only
+  - Simplified codebase by removing 797 lines of obsolete mode-related code
+- **BREAKING:** Removed mode-related UI elements and messaging
+  - Updated help text to remove mode references
+  - Removed mode switching logic from main application flow
+  - Cleaned up command completion to remove mode-related suggestions
+
+### Removed
+- **BREAKING:** Prompt mode interface and all associated functionality
+  - Removed `prompt_mode_main()` function
+  - Removed `handle_menu_action()` and `main_menu()` functions
+  - Removed all prompt mode menu functions from UI module
+  - Removed mode-related imports and dependencies
+- **BREAKING:** Mode switching commands and flags
+  - Removed `mode` command from command mode
+  - Removed `--prompt` command-line argument
+  - Removed mode-related help text and error messages
+
+### Migration Notes
+- **IMPORTANT:** Users who relied on prompt mode should use the new `wizard` command instead
+  - Old: `lazyssh --prompt` → New: `lazyssh` (then use `wizard` command)
+  - Old: `mode` command → New: Not needed (no modes exist)
+  - The `wizard` command provides similar guided experience to the old prompt mode
+  - All existing command mode functionality remains unchanged
+
 
 ## [1.4.0] - 2025-10-12
 
@@ -34,11 +73,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `save-config <config-name>` - Save current connection as a named configuration
   - `delete-config <config-name>` - Delete a saved configuration
   - `backup-config` - Create backup of configuration file
-- **Menu Mode Configuration Options**:
-  - View saved configurations (option 9)
-  - Connect from saved config with interactive selection (option 10)
-  - Save current connection to config (option 11)
-  - Delete saved config with interactive selection (option 12)
 - **CLI Configuration Support**:
   - `--config` flag to load and display saved configurations on startup
   - Supports custom config file path or uses default `/tmp/lazyssh/connections.conf`
@@ -136,7 +170,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Terminal method can now be changed at runtime without restarting LazySSH
   - Added `terminal <method>` command in command mode to set terminal method (auto, native, terminator)
-  - Added "Change terminal method" menu option in menu mode (option 8)
   - Terminal method now displayed in SSH connections status table
 - State management for terminal method preference in SSHManager class
 - New `open` command for opening terminal sessions, creating symmetry with the `close` command
@@ -299,8 +332,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.9] - 2025-03-29
 
 ### Added
-- Added SCP mode support to prompt mode
-- Enhanced SSH connection creation in prompt mode with support for additional options:
+- Enhanced SSH connection creation with support for additional options:
   - Custom SSH key specification (-ssh-key)
   - Custom shell selection (-shell)
   - Terminal disabling option (-no-term)

@@ -274,19 +274,29 @@ scp [<connection_name>]
 scp myserver
 ```
 
-### `mode`
+### `wizard`
 
-Switches between command mode and prompt mode.
+Starts guided workflows for complex operations.
 
 **Syntax:**
 ```
-mode
+wizard <type>
 ```
 
-**Example:**
+**Parameters:**
+- `type`: The type of wizard to start (`lazyssh` or `tunnel`)
+
+**Examples:**
 ```bash
-mode
+# Start SSH connection wizard
+wizard lazyssh
+
+# Start tunnel creation wizard
+wizard tunnel
 ```
+
+**Description:**
+The wizard provides step-by-step guidance for creating SSH connections and tunnels. This is particularly helpful for new users or when setting up complex configurations.
 
 ### `clear`
 

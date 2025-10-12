@@ -1,4 +1,23 @@
-## ADDED Requirements
+# User Interface Specification
+
+## Purpose
+Define the user interface capabilities for lazySSH, including command-line operations, help system, and guided workflows.
+## Requirements
+### Requirement: Command Line Interface
+The system SHALL provide a command-line interface for all operations.
+
+#### Scenario: Basic command execution
+- **WHEN** a user runs a command
+- **THEN** the system SHALL execute the command and return results
+- **AND** the system SHALL display appropriate output or error messages
+
+### Requirement: Help System
+The system SHALL provide comprehensive help documentation accessible via the `help` command.
+
+#### Scenario: Help command usage
+- **WHEN** a user runs `help` or `help <command>`
+- **THEN** the system SHALL display relevant documentation
+- **AND** the documentation SHALL include usage examples and parameter descriptions
 
 ### Requirement: Wizard Command
 
@@ -37,20 +56,13 @@ The system SHALL provide a `wizard` command that offers guided, interactive work
 - **AND** the documentation SHALL explain available workflows
 - **AND** the documentation SHALL provide examples for each workflow
 
-## REMOVED Requirements
+### Requirement: Unified Command Interface
 
-### Requirement: Dual Mode System
-**Reason**: Prompt mode has become obsolete and mode switching adds unnecessary complexity
-**Migration**: Users can use the new `wizard` command for guided workflows instead of switching to prompt mode
+The system SHALL operate in a single unified command mode, eliminating the complexity of mode switching while maintaining all functionality through direct commands and wizard workflows.
 
-### Requirement: Mode Switching
-**Reason**: Eliminating modes removes the need for mode switching functionality
-**Migration**: All functionality is now available in the unified command interface
+#### Scenario: Single mode operation
+- **WHEN** the application starts
+- **THEN** it SHALL operate in command mode only
+- **AND** mode switching functionality SHALL not be available
+- **AND** all operations SHALL be accessible through direct commands or wizard workflows
 
-### Requirement: Prompt Mode Interface
-**Reason**: Menu-driven interface is rarely used and adds maintenance overhead
-**Migration**: Wizard command provides similar guided experience without mode complexity
-
-### Requirement: Command Line Mode Flag
-**Reason**: No longer needed since there is only one interface mode
-**Migration**: Application always starts in command mode (now the only mode)
