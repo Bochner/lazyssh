@@ -8,6 +8,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [1.4.0] - 2025-10-12
+
+### Added
+- **Connection Configuration Management**: Comprehensive system for saving and managing SSH connection configurations
+  - Save connection configurations after establishing connections (prompted automatically)
+  - Store configurations in TOML format at `/tmp/lazyssh/connections.conf`
+  - Support for all connection parameters: host, port, username, SSH key, shell, proxy port, terminal preference
+  - Atomic file operations with proper error handling and 600 file permissions for security
+  - Comment preservation in configuration file
+  - Automatic config file initialization with helpful examples on first use
+- **Configuration Backup System**:
+  - `backup-config` command to create backup of connections.conf file
+  - Backups saved as `connections.conf.backup` with same security permissions (600)
+  - Graceful handling of missing config files and I/O errors
+  - Protection against accidental data loss before making changes
+- **Always-Visible Configuration Display**:
+  - Loaded configurations now displayed on startup (when configs exist)
+  - Configuration table shown after every command (like active SSH connections)
+  - Consistent display ordering: configs → connections → tunnels
+  - Better awareness of available saved connections at all times
+- **New Commands for Configuration Management**:
+  - `config` / `configs` - Display all saved configurations in a formatted table
+  - `connect <config-name>` - Connect using a saved configuration
+  - `save-config <config-name>` - Save current connection as a named configuration
+  - `delete-config <config-name>` - Delete a saved configuration
+  - `backup-config` - Create backup of configuration file
+- **Menu Mode Configuration Options**:
+  - View saved configurations (option 9)
+  - Connect from saved config with interactive selection (option 10)
+  - Save current connection to config (option 11)
+  - Delete saved config with interactive selection (option 12)
+- **CLI Configuration Support**:
+  - `--config` flag to load and display saved configurations on startup
+  - Supports custom config file path or uses default `/tmp/lazyssh/connections.conf`
+  - Non-blocking startup if config file doesn't exist
+- **Enhanced Tab Completion**:
+  - `connect` command suggests saved configuration names
+  - `delete-config` command suggests saved configuration names
+  - `save-config` command suggests active connection names
+  - `backup-config` command with tab completion support
+  - Dynamic completion cache that updates when configs are modified
+- **Configuration Validation**:
+  - Config name validation (alphanumeric, dash, underscore only)
+  - Required field validation (host, port, username, socket_name)
+  - SSH key file existence warnings (non-blocking)
+  - Socket name conflict detection with user prompt
+  - Port number validation
+  - TOML parsing error handling with clear messages
+- **UI Components**:
+  - Rich table display for saved configurations
+  - Color-coded configuration display matching SSH status table style
+  - Confirmation prompts for overwriting existing configurations
+  - Helpful error messages and guidance for configuration operations
+
+### Changed
+- Enhanced `config.py` module with new configuration management functions
+- Updated `__main__.py` with save prompt after connection creation
+- Extended `command_mode.py` with configuration commands and tab completion
+- Improved `ui.py` with configuration display function
+- Pre-commit checks now validate TOML syntax in configuration files
+
+### Security
+- Configuration files created with 600 permissions (owner read/write only)
+- Configuration directory created with 700 permissions
+- Atomic file write operations prevent corruption
+- Safe handling of sensitive information (SSH keys, connection details)
+
+
 ## [1.3.5] - 2025-10-12
 
 ### Added

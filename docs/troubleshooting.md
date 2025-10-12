@@ -10,6 +10,7 @@ This guide provides solutions to common issues you might encounter when using La
 - [Terminal Issues](#terminal-issues)
 - [Tunneling Problems](#tunneling-problems)
 - [SCP Mode Issues](#scp-mode-issues)
+- [Configuration Management Issues](#configuration-management-issues)
 - [Common Error Messages](#common-error-messages)
 
 ## Installation Issues
@@ -410,6 +411,227 @@ lazyssh> tunc myserver r 8080 localhost 80
    scp myserver> ls -l /path/to/file
    ```
 4. Watch for special characters in filenames
+
+## Configuration Management Issues
+
+### Config File Not Found
+
+**Issue**: "Config file not found" or similar error.
+
+**This is normal** if you haven't saved any configurations yet.
+
+**Solutions**:
+
+1. Save your first configuration:
+   ```bash
+   lazyssh> save-config myserver
+   ```
+2. Or create the file manually:
+   ```bash
+   mkdir -p /tmp/lazyssh
+   touch /tmp/lazyssh/connections.conf
+   chmod 600 /tmp/lazyssh/connections.conf
+   ```
+
+### TOML Parsing Errors
+
+**Issue**: "Failed to parse config file" or TOML syntax errors.
+
+**Solutions**:
+
+1. Check the config file syntax:
+   ```bash
+   cat /tmp/lazyssh/connections.conf
+   ```
+2. Verify TOML format:
+   ```toml
+   [server-name]
+   host = "example.com"
+   port = 22
+   username = "admin"
+   ```
+3. Common issues:
+   - Missing quotes around strings
+   - Invalid section names (must be `[name]`)
+   - Duplicate section names
+   - Invalid field names
+4. Fix manually or delete and recreate:
+   ```bash
+   rm /tmp/lazyssh/connections.conf
+   lazyssh> save-config newserver
+   ```
+
+### Invalid Config Name
+
+**Issue**: "Invalid configuration name" error when saving.
+
+**Solutions**:
+
+1. Use only alphanumeric characters, dashes, and underscores:
+   ```bash
+   # Valid names
+   lazyssh> save-config prod-server
+   lazyssh> save-config server_1
+   lazyssh> save-config webserver01
+   
+   # Invalid names (avoid)
+   # server.name  (no dots)
+   # my server    (no spaces)
+   # server@prod  (no special chars)
+   ```
+2. Keep names simple and descriptive
+3. Use dashes instead of spaces: `prod-server` not `prod server`
+
+### Config File Permission Errors
+
+**Issue**: "Permission denied" when accessing config file.
+
+**Solutions**:
+
+1. Check file permissions:
+   ```bash
+   ls -la /tmp/lazyssh/connections.conf
+   ```
+2. Should be: `-rw------- (600)` owned by you
+3. Fix permissions:
+   ```bash
+   chmod 600 /tmp/lazyssh/connections.conf
+   chown $USER /tmp/lazyssh/connections.conf
+   ```
+4. Check directory permissions:
+   ```bash
+   ls -ld /tmp/lazyssh/
+   chmod 700 /tmp/lazyssh/
+   ```
+
+### Configuration Not Found
+
+**Issue**: "Configuration 'name' not found" when using `connect` command.
+
+**Solutions**:
+
+1. List available configurations:
+   ```bash
+   lazyssh> config
+   ```
+2. Check spelling of config name
+3. Names are case-sensitive
+4. Verify config exists in file:
+   ```bash
+   cat /tmp/lazyssh/connections.conf
+   ```
+
+### Cannot Overwrite Configuration
+
+**Issue**: Warning about overwriting existing configuration.
+
+**Expected behavior**: LazySSH asks for confirmation before overwriting.
+
+**Solutions**:
+
+1. Confirm overwrite if you want to update:
+   ```bash
+   Configuration 'prod-server' already exists. Overwrite? (y/N): y
+   ```
+2. Use a different name if you want to keep both:
+   ```bash
+   lazyssh> save-config prod-server-new
+   ```
+3. Delete old config first:
+   ```bash
+   lazyssh> delete-config prod-server
+   lazyssh> save-config prod-server
+   ```
+
+### Missing SSH Key File
+
+**Issue**: Saved config references SSH key that doesn't exist.
+
+**Solutions**:
+
+1. Check if key file exists:
+   ```bash
+   ls -la ~/.ssh/id_rsa
+   ```
+2. Update config file with correct path:
+   ```bash
+   nano /tmp/lazyssh/connections.conf
+   ```
+3. Or create new connection without that key:
+   ```bash
+   lazyssh> delete-config oldserver
+   lazyssh> lazyssh -ip host -port 22 -user admin -socket newserver
+   ```
+
+### Invalid Port Number in Config
+
+**Issue**: "Invalid port number" when loading config.
+
+**Solutions**:
+
+1. Check port number in config:
+   ```bash
+   cat /tmp/lazyssh/connections.conf
+   ```
+2. Port must be between 1-65535
+3. Fix manually:
+   ```bash
+   nano /tmp/lazyssh/connections.conf
+   # Change: port = 22
+   ```
+4. Or recreate the config:
+   ```bash
+   lazyssh> delete-config servername
+   lazyssh> save-config servername
+   ```
+
+### Config File Corrupted
+
+**Issue**: Config file appears corrupted or unreadable.
+
+**Solutions**:
+
+1. Backup current config:
+   ```bash
+   cp /tmp/lazyssh/connections.conf /tmp/lazyssh/connections.conf.backup
+   ```
+2. Try to view and identify the issue:
+   ```bash
+   cat /tmp/lazyssh/connections.conf
+   ```
+3. If unfixable, start fresh:
+   ```bash
+   rm /tmp/lazyssh/connections.conf
+   lazyssh> save-config first-server
+   ```
+4. Manually reconstruct from backup if needed
+
+### Configs Disappear After Reboot
+
+**This is by design, not a bug.**
+
+**Explanation**: 
+Config files are stored in `/tmp/lazyssh/` which is cleared on system reboot for security reasons.
+
+**Solutions if you need persistence**:
+
+1. Store configs in a permanent location:
+   ```bash
+   # Create permanent config directory
+   mkdir -p ~/.config/lazyssh
+   cp /tmp/lazyssh/connections.conf ~/.config/lazyssh/
+   
+   # Use custom path
+   lazyssh --config ~/.config/lazyssh/connections.conf
+   ```
+2. Create a startup script to copy configs back:
+   ```bash
+   #!/bin/bash
+   mkdir -p /tmp/lazyssh
+   cp ~/.config/lazyssh/connections.conf /tmp/lazyssh/
+   chmod 600 /tmp/lazyssh/connections.conf
+   ```
+3. **Security note**: Permanent storage increases risk. Ensure proper file permissions.
 
 ## Common Error Messages
 
