@@ -289,6 +289,16 @@ class LazySSHCompleter(Completer):
                     if not word_before_cursor or config_name.startswith(word_before_cursor):
                         yield Completion(config_name, start_position=-len(word_before_cursor))
 
+        # Handle completion for wizard command (suggest workflow names)
+        elif command == "wizard":
+            if (len(words) == 1 and text.endswith(" ")) or (
+                len(words) == 2 and not text.endswith(" ")
+            ):
+                workflows = ["lazyssh", "tunnel"]
+                for workflow in workflows:
+                    if not word_before_cursor or workflow.startswith(word_before_cursor):
+                        yield Completion(workflow, start_position=-len(word_before_cursor))
+
 
 class CommandMode:
     def __init__(self, ssh_manager: SSHManager) -> None:
@@ -317,7 +327,7 @@ class CommandMode:
             "tund": self.cmd_tund,
             "close": self.cmd_close,
             "clear": self.cmd_clear,
-            "mode": self.cmd_mode,
+            "wizard": self.cmd_wizard,
         }
 
         # Initialize history
@@ -435,13 +445,7 @@ class CommandMode:
                     result = self.commands[cmd](args)
 
                     # Handle the result
-                    if result == "mode":
-                        # Special case for switching modes
-                        if CMD_LOGGER:
-                            CMD_LOGGER.info("Switching to prompt mode")
-                        return "mode"
-
-                    elif result:
+                    if result:
                         # Success
                         if not cmd == "list":  # Don't show status after list command
                             self.show_status()
@@ -1000,7 +1004,7 @@ class CommandMode:
 
             display_info("[magenta bold]System Commands:[/magenta bold]")
             display_info("  [cyan]list[/cyan]    - Show all connections and tunnels")
-            display_info("  [cyan]mode[/cyan]    - Switch mode (command/prompt)")
+            display_info("  [cyan]wizard[/cyan]  - Guided workflows for complex operations")
             display_info("  [cyan]debug[/cyan]   - Toggle debug logging to console")
             display_info("  [cyan]help[/cyan]    - Show this help")
             display_info("  [cyan]exit[/cyan]    - Exit the program")
@@ -1110,9 +1114,6 @@ class CommandMode:
                 "  [green]open web[/green]     [dim]# Open terminal for connection 'web'[/dim]"
             )
             display_info("\n[dim]Note: Use 'close <ssh_id>' to close the connection[/dim]")
-        elif cmd == "mode":
-            display_info("[bold cyan]\nSwitch between command and interactive modes:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]mode[/cyan]")
         elif cmd == "clear":
             display_info("[bold cyan]\nClear the terminal screen:[/bold cyan]")
             display_info("[yellow]Usage:[/yellow] [cyan]clear[/cyan]")
@@ -1174,6 +1175,22 @@ class CommandMode:
             )
             display_info("  [green]debug on[/green]   [dim]# Explicitly enable debug mode[/dim]")
             display_info("  [green]debug off[/green]  [dim]# Explicitly disable debug mode[/dim]")
+        elif cmd == "wizard":
+            display_info("[bold cyan]\nGuided workflows for complex operations:[/bold cyan]")
+            display_info("[yellow]Usage:[/yellow] [cyan]wizard[/cyan] [yellow]<workflow>[/yellow]")
+            display_info("[magenta bold]Available workflows:[/magenta bold]")
+            display_info("  [cyan]lazyssh[/cyan] - Guided SSH connection creation")
+            display_info("  [cyan]tunnel[/cyan]  - Guided tunnel creation")
+            display_info("\n[magenta bold]Description:[/magenta bold]")
+            display_info("  The wizard provides step-by-step guidance for complex operations")
+            display_info("  that benefit from interactive configuration.")
+            display_info("\n[magenta bold]Examples:[/magenta bold]")
+            display_info(
+                "  [green]wizard lazyssh[/green]  [dim]# Start guided SSH connection creation[/dim]"
+            )
+            display_info(
+                "  [green]wizard tunnel[/green]   [dim]# Start guided tunnel creation[/dim]"
+            )
         else:
             display_error(f"Unknown command: {cmd}")
             self.cmd_help([])
@@ -1217,12 +1234,6 @@ class CommandMode:
         # Now exit
         display_success("Goodbye!")
         sys.exit(0)
-
-    def cmd_mode(self, args: list[str]) -> str:
-        """Switch to prompt mode"""
-        # Switch to prompt mode
-        display_info("Switching to prompt mode...")
-        return "mode"
 
     def cmd_clear(self, args: list[str]) -> bool:
         """Clear the terminal screen"""
@@ -1393,3 +1404,278 @@ class CommandMode:
 
         display_success("All connections closed")
         return True
+
+    def cmd_wizard(self, args: list[str]) -> bool:
+        """Handle wizard command for guided workflows"""
+        if not args:
+            display_error("Usage: wizard <workflow>")
+            display_info("Available workflows:")
+            display_info("  [cyan]lazyssh[/cyan] - Guided SSH connection creation")
+            display_info("  [cyan]tunnel[/cyan]  - Guided tunnel creation")
+            display_info("Example: wizard lazyssh")
+            return False
+
+        workflow = args[0].lower()
+
+        if workflow == "lazyssh":
+            return self._wizard_lazyssh()
+        elif workflow == "tunnel":
+            return self._wizard_tunnel()
+        else:
+            display_error(f"Unknown workflow: {workflow}")
+            display_info("Available workflows: lazyssh, tunnel")
+            return False
+
+    def _wizard_lazyssh(self) -> bool:
+        """Guided workflow for SSH connection creation"""
+        display_info("[bold cyan]\n🔮 SSH Connection Wizard[/bold cyan]")
+        display_info("This wizard will guide you through creating a new SSH connection.\n")
+
+        try:
+            from rich.prompt import Confirm, Prompt
+
+            # Get basic connection details
+            host = Prompt.ask("[cyan]Enter hostname or IP address[/cyan]")
+            if not host:
+                display_error("Hostname is required")
+                return False
+
+            port = Prompt.ask("[cyan]Enter SSH port[/cyan]", default="22")
+            try:
+                port_int = int(port)
+            except ValueError:
+                display_error("Port must be a number")
+                return False
+
+            username = Prompt.ask("[cyan]Enter username[/cyan]")
+            if not username:
+                display_error("Username is required")
+                return False
+
+            socket_name = Prompt.ask("[cyan]Enter connection name (used as identifier)[/cyan]")
+            if not socket_name:
+                display_error("Connection name is required")
+                return False
+
+            # Validate socket name
+            if not validate_config_name(socket_name):
+                display_error(
+                    "Invalid connection name. Use alphanumeric characters, dashes, and underscores only"
+                )
+                return False
+
+            # Check if socket name already exists
+            socket_path = f"/tmp/{socket_name}"
+            if socket_path in self.ssh_manager.connections:
+                display_warning(f"Connection name '{socket_name}' is already in use.")
+                if not Confirm.ask("Do you want to use a different name?", default=True):
+                    display_info("Proceeding with the existing connection name.")
+                else:
+                    new_socket = Prompt.ask("Enter a new connection name")
+                    if not new_socket or not validate_config_name(new_socket):
+                        display_error(
+                            "Invalid connection name. Use alphanumeric characters, dashes, and underscores only"
+                        )
+                        return False
+                    socket_name = new_socket
+                    socket_path = f"/tmp/{socket_name}"
+
+            # Ask about optional settings
+            display_info("\n[bold yellow]Optional Settings:[/bold yellow]")
+
+            # SSH Key
+            use_ssh_key = Confirm.ask("Use specific SSH key?", default=False)
+            identity_file = None
+            if use_ssh_key:
+                identity_file = Prompt.ask("Enter path to SSH key (e.g. ~/.ssh/id_rsa)")
+                if not identity_file:
+                    display_warning("No SSH key specified, using default SSH key")
+
+            # Shell
+            use_custom_shell = Confirm.ask("Use custom shell?", default=False)
+            shell = None
+            if use_custom_shell:
+                shell = Prompt.ask("Enter shell to use", default="bash")
+                if not shell:
+                    display_warning("No shell specified, using default shell")
+
+            # Terminal preference
+            no_term = Confirm.ask("Disable terminal?", default=False)
+
+            # Dynamic proxy
+            use_proxy = Confirm.ask("Create dynamic SOCKS proxy?", default=False)
+            dynamic_port = None
+            if use_proxy:
+                proxy_port = Prompt.ask("Enter proxy port", default="9050")
+                try:
+                    dynamic_port = int(proxy_port)
+                except ValueError:
+                    display_error("Port must be a number")
+                    return False
+
+            # Create the connection
+            display_info(f"\n[bold green]Creating connection '{socket_name}'...[/bold green]")
+
+            conn = SSHConnection(
+                host=host,
+                port=port_int,
+                username=username,
+                socket_path=socket_path,
+                dynamic_port=dynamic_port,
+                identity_file=identity_file,
+                shell=shell,
+                no_term=no_term,
+            )
+
+            if self.ssh_manager.create_connection(conn):
+                display_success(f"Connection '{socket_name}' established successfully!")
+                if dynamic_port:
+                    display_success(f"Dynamic proxy created on port {dynamic_port}")
+
+                # Ask about saving configuration
+                if Confirm.ask("Save this connection configuration?", default=True):
+                    config_name = Prompt.ask("Enter configuration name", default=socket_name)
+
+                    if validate_config_name(config_name):
+                        # Build config parameters
+                        config_params = {
+                            "host": host,
+                            "port": port_int,
+                            "username": username,
+                            "socket_name": socket_name,
+                        }
+
+                        # Add optional parameters
+                        if identity_file:
+                            config_params["ssh_key"] = identity_file
+                        if shell:
+                            config_params["shell"] = shell
+                        if no_term:
+                            config_params["no_term"] = no_term
+                        if dynamic_port:
+                            config_params["proxy_port"] = dynamic_port
+
+                        # Check if config already exists
+                        if config_exists(config_name):
+                            if not Confirm.ask(
+                                f"Configuration '{config_name}' already exists. Overwrite?"
+                            ):
+                                display_info("Configuration not saved")
+                                return True
+
+                        # Save the configuration
+                        if save_config(config_name, config_params):
+                            display_success(f"Configuration '{config_name}' saved")
+                        else:
+                            display_error(f"Failed to save configuration '{config_name}'")
+                    else:
+                        display_error(
+                            "Invalid configuration name. Use alphanumeric characters, dashes, and underscores only"
+                        )
+
+                return True
+            else:
+                display_error("Failed to create connection")
+                return False
+
+        except (KeyboardInterrupt, EOFError):
+            display_info("\nWizard cancelled")
+            return False
+        except Exception as e:
+            display_error(f"Error in wizard: {str(e)}")
+            if CMD_LOGGER:
+                CMD_LOGGER.error(f"Error in wizard lazyssh: {str(e)}")
+            return False
+
+    def _wizard_tunnel(self) -> bool:
+        """Guided workflow for tunnel creation"""
+        display_info("[bold cyan]\n🔮 Tunnel Creation Wizard[/bold cyan]")
+        display_info("This wizard will guide you through creating a new tunnel.\n")
+
+        if not self.ssh_manager.connections:
+            display_error("No active connections available")
+            display_info("First create a connection using 'wizard lazyssh' or 'lazyssh' command")
+            return False
+
+        try:
+            from rich.prompt import Confirm, IntPrompt, Prompt
+
+            # Select connection
+            display_info("[bold yellow]Select SSH Connection:[/bold yellow]")
+            conn_list = list(self.ssh_manager.connections.items())
+            for i, (socket_path, conn) in enumerate(conn_list, 1):
+                conn_name = Path(socket_path).name
+                display_info(f"  {i}. {conn_name} ({conn.username}@{conn.host}:{conn.port})")
+
+            choice = IntPrompt.ask("Enter connection number", default=1) - 1
+            if not (0 <= choice < len(conn_list)):
+                display_error("Invalid connection number")
+                return False
+
+            socket_path, conn = conn_list[choice]
+            conn_name = Path(socket_path).name
+
+            # Select tunnel type
+            display_info(f"\n[bold yellow]Tunnel Type for '{conn_name}':[/bold yellow]")
+            display_info("1. Forward tunnel (local port -> remote host:port)")
+            display_info("2. Reverse tunnel (remote port -> local host:port)")
+
+            tunnel_choice = IntPrompt.ask("Choose tunnel type (1-2)", default=1)
+            if tunnel_choice not in [1, 2]:
+                display_error("Invalid choice")
+                return False
+
+            is_reverse = tunnel_choice == 2
+
+            # Get tunnel parameters
+            if is_reverse:
+                display_info("\n[bold yellow]Reverse Tunnel Parameters:[/bold yellow]")
+                display_info("This will forward a remote port to your local machine")
+                local_port = IntPrompt.ask("Enter local port to bind to")
+                remote_host = Prompt.ask("Enter remote host to connect to", default="127.0.0.1")
+                remote_port = IntPrompt.ask("Enter remote port to connect to")
+                tunnel_type_str = "reverse"
+            else:
+                display_info("\n[bold yellow]Forward Tunnel Parameters:[/bold yellow]")
+                display_info("This will forward a local port to a remote host")
+                local_port = IntPrompt.ask("Enter local port to bind to")
+                remote_host = Prompt.ask("Enter remote host to connect to")
+                remote_port = IntPrompt.ask("Enter remote port to connect to")
+                tunnel_type_str = "forward"
+
+            # Confirm tunnel creation
+            if is_reverse:
+                tunnel_desc = f"Remote port {remote_port} -> Local {local_port}"
+            else:
+                tunnel_desc = f"Local port {local_port} -> Remote {remote_host}:{remote_port}"
+
+            display_info("\n[bold green]Tunnel Summary:[/bold green]")
+            display_info(f"Connection: {conn_name}")
+            display_info(f"Type: {tunnel_type_str}")
+            display_info(f"Mapping: {tunnel_desc}")
+
+            if not Confirm.ask("Create this tunnel?", default=True):
+                display_info("Tunnel creation cancelled")
+                return False
+
+            # Create the tunnel
+            display_info(f"\n[bold green]Creating {tunnel_type_str} tunnel...[/bold green]")
+
+            if self.ssh_manager.create_tunnel(
+                socket_path, local_port, remote_host, remote_port, is_reverse
+            ):
+                display_success(f"{tunnel_type_str.capitalize()} tunnel created successfully!")
+                display_info(f"Tunnel mapping: {tunnel_desc}")
+                return True
+            else:
+                display_error("Failed to create tunnel")
+                return False
+
+        except (KeyboardInterrupt, EOFError):
+            display_info("\nWizard cancelled")
+            return False
+        except Exception as e:
+            display_error(f"Error in wizard: {str(e)}")
+            if CMD_LOGGER:
+                CMD_LOGGER.error(f"Error in wizard tunnel: {str(e)}")
+            return False
