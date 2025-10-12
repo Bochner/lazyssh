@@ -507,16 +507,16 @@ class SCPMode:
             self.remote_home_dir = None
 
         console.print(
-            f"\n[bold green]Success:[/bold green] Connected to [bold magenta]{self.conn.host}[/bold magenta] as [bold cyan]{self.conn.username}[/bold cyan]"
+            f"\n[success]Success:[/success] Connected to [highlight]{self.conn.host}[/highlight] as [variable]{self.conn.username}[/variable]"
         )
         console.print(
-            f"[info]Local download directory:[/info] [yellow]{self.local_download_dir}[/yellow]"
+            f"[info]Local download directory:[/info] [number]{self.local_download_dir}[/number]"
         )
         console.print(
-            f"[info]Local upload directory:[/info] [yellow]{self.local_upload_dir}[/yellow]"
+            f"[info]Local upload directory:[/info] [number]{self.local_upload_dir}[/number]"
         )
         console.print(
-            f"[info]Current remote directory:[/info] [yellow]{self.current_remote_dir}[/yellow]"
+            f"[info]Current remote directory:[/info] [number]{self.current_remote_dir}[/number]"
         )
         if SCP_LOGGER:
             SCP_LOGGER.info(f"SCP mode connected to {self.conn.host} via {self.socket_path}")
@@ -766,11 +766,11 @@ class SCPMode:
             display_info("Create an SSH connection first using 'lazyssh' command")
             return False
 
-        console.print("\n[bold cyan]Select an SSH connection for SCP mode:[/bold cyan]")
+        console.print("\n[header]Select an SSH connection for SCP mode:[/header]")
         for i, name in enumerate(connections, 1):
             conn = connection_map[name]
             console.print(
-                f"[info]{i}.[/info] [bold green]{name}[/bold green] [dim]([/dim][bold cyan]{conn.username}[/bold cyan][bold]@[/bold][bold magenta]{conn.host}[/bold magenta][dim])[/dim]"
+                f"[info]{i}.[/info] [success]{name}[/success] [dim]([/dim][variable]{conn.username}[/variable][operator]@[/operator][highlight]{conn.host}[/highlight][dim])[/dim]"
             )
 
         # Use Rich's prompt for the connection selection
@@ -887,7 +887,7 @@ class SCPMode:
             # Create a progress bar with enhanced styling
             with Progress(
                 TextColumn("[info]{task.description}[/info]", justify="right"),
-                BarColumn(bar_width=None, style="info", complete_style="success"),
+                BarColumn(bar_width=50, style="info", complete_style="success"),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
                 TextColumn(
@@ -989,6 +989,49 @@ class SCPMode:
             display_error("Local download directory not set")
             return
 
+        # Check if the remote file exists and get its size
+        try:
+            # Get file size before download to log it properly
+            size_cmd = f"stat -c %s '{remote_path}'"
+            size_result = self._execute_ssh_command(size_cmd)
+            file_size = 0
+            if size_result and size_result.returncode == 0:
+                file_size = int(size_result.stdout.strip())
+            else:
+                display_error(f"File not found or cannot access: {remote_path}")
+                return
+        except Exception as e:
+            display_error(f"Error checking file: {str(e)}")
+            return
+
+        # Display file information in a table like mget does
+        display_info("Found 1 matching file:")
+
+        # Create a Rich table for listing the file with standardized styling
+        table = create_standard_table()
+
+        # Add columns with consistent styling
+        table.add_column("Filename", style="table.row")
+        table.add_column("Size", justify="right", style="accent")
+
+        # Format size in human-readable format
+        human_size = self._format_file_size(file_size)
+        table.add_row(Path(remote_path).name, human_size)
+
+        # Display the table
+        console.print(table)
+
+        # Show total download size
+        human_total = self._format_file_size(file_size)
+        display_info(f"Total download size: [bold green]{human_total}[/]")
+
+        # Confirm download using Rich's Confirm.ask for a color-coded prompt
+        if not Confirm.ask(
+            f"Download [bold cyan]1[/] file to [bold blue]{self.local_download_dir}[/]?"
+        ):
+            display_info("Download cancelled")
+            return
+
         # Create parent directory if it doesn't exist
         local_dir = Path(str(local_path)).parent if local_path else None
         if local_dir and not local_dir.exists():
@@ -999,13 +1042,6 @@ class SCPMode:
                 return
 
         try:
-            # Get file size before download to log it properly
-            size_cmd = f"stat -c %s '{remote_path}'"
-            size_result = self._execute_ssh_command(size_cmd)
-            file_size = 0
-            if size_result and size_result.returncode == 0:
-                file_size = int(size_result.stdout.strip())
-
             # Execute the SCP command
             remote_source = f"{self.conn.username}@{self.conn.host}:{remote_path}"
             cmd = self._get_scp_command(remote_source, str(local_path))
@@ -1019,7 +1055,7 @@ class SCPMode:
             # Create a progress bar with enhanced styling
             with Progress(
                 TextColumn("[info]{task.description}[/info]", justify="right"),
-                BarColumn(bar_width=None, style="info", complete_style="success"),
+                BarColumn(bar_width=50, style="info", complete_style="success"),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
                 TextColumn(
@@ -1356,7 +1392,7 @@ class SCPMode:
 
             with Progress(
                 TextColumn("[info]{task.description}[/info]", justify="right"),
-                BarColumn(bar_width=None, style="info", complete_style="success"),
+                BarColumn(bar_width=50, style="info", complete_style="success"),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
                 DownloadColumn(),

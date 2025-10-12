@@ -19,22 +19,37 @@ from rich.theme import Theme
 from . import __version__
 from .models import SSHConnection
 
-# Centralized theme definition
+# Centralized Dracula theme definition
 LAZYSSH_THEME = Theme(
     {
-        "info": "bright_cyan",
-        "warning": "bright_yellow",
-        "error": "bright_red",
-        "success": "bright_green",
-        "header": "bold blue",
-        "accent": "bright_cyan",
-        "dim": "dim white",
-        "highlight": "bold magenta",
-        "border": "blue",
-        "table.header": "bold cyan",
-        "table.row": "white",
-        "panel.title": "bold blue",
-        "panel.subtitle": "dim blue",
+        # Core Dracula colors
+        "info": "#8be9fd",  # Cyan - for info messages and function names
+        "warning": "#f1fa8c",  # Yellow - for warnings and variables
+        "error": "#ff5555",  # Red - for errors and danger messages
+        "success": "#50fa7b",  # Green - for success messages and strings
+        "header": "#bd93f9",  # Purple - for headers and operators
+        "accent": "#8be9fd",  # Cyan - for accents and highlights
+        "dim": "#6272a4",  # Comment - for muted text and secondary info
+        "highlight": "#ff79c6",  # Pink - for keywords and special commands
+        "border": "#6272a4",  # Comment - for borders
+        "table.header": "#bd93f9",  # Purple - for table headers
+        "table.row": "#f8f8f2",  # Foreground - for table rows
+        "panel.title": "#bd93f9",  # Purple - for panel titles
+        "panel.subtitle": "#6272a4",  # Comment - for panel subtitles
+        # Additional Dracula colors for specific use cases
+        "keyword": "#ff79c6",  # Pink - for keywords like if, for, return
+        "operator": "#bd93f9",  # Purple - for operators and special symbols
+        "string": "#50fa7b",  # Green - for strings
+        "variable": "#f8f8f2",  # Foreground - for variables
+        "number": "#ffb86c",  # Orange - for numbers and constants
+        "comment": "#6272a4",  # Comment - for comments and muted text
+        "foreground": "#f8f8f2",  # Foreground - for default text
+        "background": "#282a36",  # Background - for main background
+        # Progress bar specific colors
+        "progress.description": "#8be9fd",  # Cyan - for progress descriptions
+        "progress.percentage": "#f8f8f2",  # Foreground - for percentage text
+        "progress.bar": "#6272a4",  # Comment - for progress bar background
+        "progress.bar.complete": "#50fa7b",  # Green - for completed portion
     }
 )
 
@@ -524,43 +539,67 @@ def update_live_connections(live: Live, connections: dict[str, SSHConnection]) -
 
 
 def create_high_contrast_theme() -> Theme:
-    """Create a high contrast theme for better accessibility."""
+    """Create a high contrast theme for better accessibility using Dracula colors."""
     return Theme(
         {
-            "info": "bright_white",
-            "warning": "bright_yellow",
-            "error": "bright_red",
-            "success": "bright_green",
-            "header": "bold bright_white",
-            "accent": "bright_cyan",
-            "dim": "bright_white",
-            "highlight": "bold bright_magenta",
-            "border": "bright_white",
-            "table.header": "bold bright_white",
-            "table.row": "bright_white",
-            "panel.title": "bold bright_white",
-            "panel.subtitle": "bright_white",
+            "info": "#8be9fd",  # Cyan - bright for high contrast
+            "warning": "#f1fa8c",  # Yellow - bright for visibility
+            "error": "#ff5555",  # Red - bright for errors
+            "success": "#50fa7b",  # Green - bright for success
+            "header": "#bd93f9",  # Purple - bright for headers
+            "accent": "#8be9fd",  # Cyan - bright for accents
+            "dim": "#f8f8f2",  # Foreground - bright instead of dim
+            "highlight": "#ff79c6",  # Pink - bright for highlights
+            "border": "#f8f8f2",  # Foreground - bright borders
+            "table.header": "#bd93f9",  # Purple - bright headers
+            "table.row": "#f8f8f2",  # Foreground - bright text
+            "panel.title": "#bd93f9",  # Purple - bright titles
+            "panel.subtitle": "#f8f8f2",  # Foreground - bright subtitles
+            "keyword": "#ff79c6",  # Pink - bright keywords
+            "operator": "#bd93f9",  # Purple - bright operators
+            "string": "#50fa7b",  # Green - bright strings
+            "variable": "#f8f8f2",  # Foreground - bright variables
+            "number": "#ffb86c",  # Orange - bright numbers
+            "comment": "#f8f8f2",  # Foreground - bright comments
+            "foreground": "#f8f8f2",  # Foreground - bright text
+            # Progress bar specific colors
+            "progress.description": "#8be9fd",  # Cyan - for progress descriptions
+            "progress.percentage": "#f8f8f2",  # Foreground - for percentage text
+            "progress.bar": "#f8f8f2",  # Foreground - bright progress bar background
+            "progress.bar.complete": "#50fa7b",  # Green - for completed portion
         }
     )
 
 
 def create_colorblind_friendly_theme() -> Theme:
-    """Create a colorblind-friendly theme using patterns and shapes."""
+    """Create a colorblind-friendly theme using Dracula colors with enhanced differentiation."""
     return Theme(
         {
-            "info": "bright_blue",
-            "warning": "bright_yellow",
-            "error": "bright_red",
-            "success": "bright_green",
-            "header": "bold bright_blue",
-            "accent": "bright_cyan",
-            "dim": "dim white",
-            "highlight": "bold bright_magenta",
-            "border": "blue",
-            "table.header": "bold bright_blue",
-            "table.row": "white",
-            "panel.title": "bold bright_blue",
-            "panel.subtitle": "dim bright_blue",
+            "info": "#8be9fd",  # Cyan - distinct from other colors
+            "warning": "#f1fa8c",  # Yellow - distinct warning color
+            "error": "#ff5555",  # Red - distinct error color
+            "success": "#50fa7b",  # Green - distinct success color
+            "header": "#bd93f9",  # Purple - distinct header color
+            "accent": "#8be9fd",  # Cyan - accent color
+            "dim": "#6272a4",  # Comment - muted but readable
+            "highlight": "#ff79c6",  # Pink - distinct highlight color
+            "border": "#6272a4",  # Comment - subtle borders
+            "table.header": "#bd93f9",  # Purple - distinct headers
+            "table.row": "#f8f8f2",  # Foreground - readable text
+            "panel.title": "#bd93f9",  # Purple - distinct titles
+            "panel.subtitle": "#6272a4",  # Comment - readable subtitles
+            "keyword": "#ff79c6",  # Pink - distinct keywords
+            "operator": "#bd93f9",  # Purple - distinct operators
+            "string": "#50fa7b",  # Green - distinct strings
+            "variable": "#f8f8f2",  # Foreground - readable variables
+            "number": "#ffb86c",  # Orange - distinct numbers
+            "comment": "#6272a4",  # Comment - readable comments
+            "foreground": "#f8f8f2",  # Foreground - readable text
+            # Progress bar specific colors
+            "progress.description": "#8be9fd",  # Cyan - for progress descriptions
+            "progress.percentage": "#f8f8f2",  # Foreground - for percentage text
+            "progress.bar": "#6272a4",  # Comment - progress bar background
+            "progress.bar.complete": "#50fa7b",  # Green - for completed portion
         }
     )
 

@@ -70,27 +70,29 @@ class SSHManager:
             cmd.append(f"{conn.username}@{conn.host}")
 
             # Display the command that will be executed with proper formatting
-            console.print("\n[bold cyan]The following SSH command will be executed:[/bold cyan]")
+            console.print("\n[header]The following SSH command will be executed:[/header]")
 
-            # Create a formatted command display with syntax highlighting
+            # Create a formatted command display with syntax highlighting using Dracula colors
             console.print(
-                f"[bold green]ssh[/bold green] [cyan]-M[/cyan] [cyan]-S[/cyan] [yellow]{conn.socket_path}[/yellow] [cyan]-o[/cyan] [magenta]UserKnownHostsFile=/dev/null[/magenta] [cyan]-o[/cyan] [magenta]StrictHostKeyChecking=no[/magenta] [cyan]-f[/cyan] [cyan]-N[/cyan]",
+                f"[string]ssh[/string] [operator]-M[/operator] [operator]-S[/operator] [number]{conn.socket_path}[/number] [operator]-o[/operator] [keyword]UserKnownHostsFile=/dev/null[/keyword] [operator]-o[/operator] [keyword]StrictHostKeyChecking=no[/keyword] [operator]-f[/operator] [operator]-N[/operator]",
                 end="",
             )
 
             # Add optional parameters with proper formatting
             if conn.port:
-                console.print(f" [cyan]-p[/cyan] [yellow]{conn.port}[/yellow]", end="")
+                console.print(f" [operator]-p[/operator] [number]{conn.port}[/number]", end="")
             if conn.dynamic_port:
-                console.print(f" [cyan]-D[/cyan] [yellow]{conn.dynamic_port}[/yellow]", end="")
+                console.print(
+                    f" [operator]-D[/operator] [number]{conn.dynamic_port}[/number]", end=""
+                )
             if conn.identity_file:
                 console.print(
-                    f" [cyan]-i[/cyan] [yellow]{Path(conn.identity_file).expanduser()}[/yellow]",
+                    f" [operator]-i[/operator] [number]{Path(conn.identity_file).expanduser()}[/number]",
                     end="",
                 )
 
             console.print(
-                f" [bold cyan]{conn.username}[/bold cyan][bold]@[/bold][bold magenta]{conn.host}[/bold magenta]"
+                f" [variable]{conn.username}[/variable][operator]@[/operator][highlight]{conn.host}[/highlight]"
             )
             console.print()  # Add blank line for better readability
             if SSH_LOGGER:
@@ -322,15 +324,15 @@ class SSHManager:
                 ssh_args.append(conn.shell)
 
             # Display the command that will be executed with proper formatting
-            console.print("\n[bold cyan]Opening terminal (native):[/bold cyan]")
+            console.print("\n[header]Opening terminal (native):[/header]")
             console.print(
-                f"[bold green]ssh[/bold green] [cyan]-tt[/cyan] [cyan]-S[/cyan] [yellow]{socket_path}[/yellow] [bold cyan]{conn.username}[/bold cyan][bold]@[/bold][bold magenta]{conn.host}[/bold magenta]",
+                f"[string]ssh[/string] [operator]-tt[/operator] [operator]-S[/operator] [number]{socket_path}[/number] [variable]{conn.username}[/variable][operator]@[/operator][highlight]{conn.host}[/highlight]",
                 end="",
             )
 
             # Add shell if specified
             if conn.shell:
-                console.print(f" [magenta]{conn.shell}[/magenta]", end="")
+                console.print(f" [keyword]{conn.shell}[/keyword]", end="")
 
             console.print()  # Add blank line for better readability
             if SSH_LOGGER:
@@ -357,9 +359,9 @@ class SSHManager:
 
         except Exception as e:
             display_error(f"Error opening native terminal: {str(e)}")
-            console.print("\n[bold yellow]You can manually connect using:[/bold yellow]")
+            console.print("\n[warning]You can manually connect using:[/warning]")
             console.print(
-                f"[bold green]ssh[/bold green] [cyan]-S[/cyan] [yellow]{socket_path}[/yellow] [bold cyan]{conn.username}[/bold cyan][bold]@[/bold][bold magenta]{conn.host}[/bold magenta]"
+                f"[string]ssh[/string] [operator]-S[/operator] [number]{socket_path}[/number] [variable]{conn.username}[/variable][operator]@[/operator][highlight]{conn.host}[/highlight]"
             )
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error opening native terminal: {str(e)}")
@@ -404,9 +406,9 @@ class SSHManager:
                 ssh_cmd += f" {conn.shell}"
 
             # Display the commands that will be executed with proper formatting
-            console.print("\n[bold cyan]Opening terminal (terminator):[/bold cyan]")
+            console.print("\n[header]Opening terminal (terminator):[/header]")
             console.print(
-                f"[bold green]{terminator_path}[/bold green] [cyan]-e[/cyan] [yellow]'{ssh_cmd}'[/yellow]"
+                f"[string]{terminator_path}[/string] [operator]-e[/operator] [string]'{ssh_cmd}'[/string]"
             )
             console.print()  # Add blank line for better readability
             if SSH_LOGGER:
@@ -509,9 +511,9 @@ class SSHManager:
 
         except Exception as e:
             display_error(f"Error opening terminal: {str(e)}")
-            console.print("\n[bold yellow]You can manually connect using:[/bold yellow]")
+            console.print("\n[warning]You can manually connect using:[/warning]")
             console.print(
-                f"[bold green]ssh[/bold green] [cyan]-S[/cyan] [yellow]{socket_path}[/yellow] [bold cyan]{conn.username}[/bold cyan][bold]@[/bold][bold magenta]{conn.host}[/bold magenta]"
+                f"[string]ssh[/string] [operator]-S[/operator] [number]{socket_path}[/number] [variable]{conn.username}[/variable][operator]@[/operator][highlight]{conn.host}[/highlight]"
             )
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error opening terminal: {str(e)}")

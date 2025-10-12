@@ -834,7 +834,7 @@ class CommandMode:
             for i, (sock_path, c) in enumerate(conn_list, 1):
                 conn_name = Path(sock_path).name
                 console.print(
-                    f"  [info]{i}.[/info] [bold green]{conn_name}[/bold green] [dim]([/dim][bold cyan]{c.username}[/bold cyan][bold]@[/bold][bold magenta]{c.host}[/bold magenta][dim]:[/dim][yellow]{c.port}[/yellow][dim])[/dim]"
+                    f"  [info]{i}.[/info] [success]{conn_name}[/success] [dim]([/dim][variable]{c.username}[/variable][operator]@[/operator][highlight]{c.host}[/highlight][dim]:[/dim][number]{c.port}[/number][dim])[/dim]"
                 )
 
             try:
@@ -937,20 +937,20 @@ class CommandMode:
     def cmd_help(self, args: list[str]) -> bool:
         """Handle help command"""
         if not args:
-            display_info("[bold cyan]\nLazySSH Command Mode - Available Commands:[/bold cyan]\n")
-            display_info("[magenta bold]SSH Connection:[/magenta bold]")
+            display_info("[header]\nLazySSH Command Mode - Available Commands:[/header]\n")
+            display_info("[highlight]SSH Connection:[/highlight]")
             display_info(
-                "  [cyan]lazyssh[/cyan] -ip [yellow]<ip>[/yellow] -port [yellow]<port>[/yellow] -user [yellow]<username>[/yellow] -socket [yellow]<n>[/yellow] "
-                "[-proxy [yellow]<port>[/yellow]] [-ssh-key [yellow]<path>[/yellow]] [-shell [yellow]<shell>[/yellow]] [-no-term]"
+                "  [string]lazyssh[/string] -ip [number]<ip>[/number] -port [number]<port>[/number] -user [number]<username>[/number] -socket [number]<n>[/number] "
+                "[-proxy [number]<port>[/number]] [-ssh-key [number]<path>[/number]] [-shell [number]<shell>[/number]] [-no-term]"
             )
-            display_info("  [cyan]close[/cyan] [yellow]<ssh_id>[/yellow]")
+            display_info("  [string]close[/string] [number]<ssh_id>[/number]")
             display_info(
-                "  [dim]Example:[/dim] [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/green]"
+                "  [dim]Example:[/dim] [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/success]"
             )
             display_info(
-                "  [dim]Example:[/dim] [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh[/green]"
+                "  [dim]Example:[/dim] [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh[/success]"
             )
-            display_info("  [dim]Example:[/dim] [green]close ubuntu[/green]\n")
+            display_info("  [dim]Example:[/dim] [success]close ubuntu[/success]\n")
 
             display_info("[magenta bold]Tunnel Management:[/magenta bold]")
             display_info(
@@ -1361,10 +1361,10 @@ class CommandMode:
                 return False
 
         # Start SCP mode
-        console.print("\n[bold cyan]Entering SCP mode...[/bold cyan]")
+        console.print("\n[header]Entering SCP mode...[/header]")
         scp_mode = SCPMode(self.ssh_manager, selected_connection)
         scp_mode.run()
-        console.print("\n[bold green]Exited SCP mode[/bold green]")
+        console.print("\n[success]Exited SCP mode[/success]")
         return True
 
     def cmd_debug(self, args: list[str]) -> bool:

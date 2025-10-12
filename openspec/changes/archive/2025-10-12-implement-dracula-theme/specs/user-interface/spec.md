@@ -1,55 +1,4 @@
-# User Interface Specification
-
-## Purpose
-Define the user interface capabilities for lazySSH, including command-line operations, help system, and guided workflows.
-## Requirements
-### Requirement: Command Line Interface
-
-The system SHALL provide a command-line interface for all operations with enhanced visual consistency and professional styling using Rich library components.
-
-#### Scenario: Enhanced command execution feedback
-- **WHEN** a user runs a command
-- **THEN** the system SHALL execute the command and return results with consistent, professional formatting
-- **AND** the system SHALL display appropriate output or error messages using standardized Rich components
-- **AND** all feedback SHALL follow the established visual design language
-
-### Requirement: Help System
-
-The system SHALL provide comprehensive help documentation accessible via the `help` command with enhanced formatting using Rich's markdown rendering and consistent styling.
-
-#### Scenario: Enhanced help command usage
-- **WHEN** a user runs `help` or `help <command>`
-- **THEN** the system SHALL display relevant documentation with Rich markdown rendering
-- **AND** the documentation SHALL include usage examples and parameter descriptions with consistent formatting
-- **AND** the help display SHALL use standardized panels, tables, and text formatting
-
-### Requirement: Wizard Command
-
-The system SHALL provide a `wizard` command that offers guided, interactive workflows for complex operations with enhanced visual design and consistent user feedback.
-
-#### Scenario: Enhanced wizard command with lazyssh workflow
-- **WHEN** a user runs `wizard lazyssh`
-- **THEN** the system SHALL guide the user through SSH connection creation with enhanced visual prompts and feedback
-- **AND** the system SHALL prompt for required parameters using consistent Rich prompt styling
-- **AND** the system SHALL provide clear visual feedback during each step of the workflow
-- **AND** the system SHALL execute the equivalent `lazyssh` command with enhanced success/error messaging
-
-#### Scenario: Enhanced wizard command with tunnel workflow
-- **WHEN** a user runs `wizard tunnel`
-- **THEN** the system SHALL guide the user through tunnel creation with enhanced visual prompts and feedback
-- **AND** the system SHALL prompt for required parameters using consistent Rich prompt styling
-- **AND** the system SHALL provide clear visual feedback during each step of the workflow
-- **AND** the system SHALL execute the equivalent `tunc` command with enhanced success/error messaging
-
-### Requirement: Unified Command Interface
-
-The system SHALL operate in a single unified command mode, eliminating the complexity of mode switching while maintaining all functionality through direct commands and wizard workflows.
-
-#### Scenario: Single mode operation
-- **WHEN** the application starts
-- **THEN** it SHALL operate in command mode only
-- **AND** mode switching functionality SHALL not be available
-- **AND** all operations SHALL be accessible through direct commands or wizard workflows
+## MODIFIED Requirements
 
 ### Requirement: Centralized Rich Console Management
 
@@ -89,28 +38,6 @@ The system SHALL provide factory functions for common UI components to ensure co
 - **AND** progress bars SHALL have consistent styling, columns, and behavior using Dracula colors
 - **AND** the system SHALL support both determinate and indeterminate progress indicators
 
-### Requirement: Enhanced Progress and Status Indicators
-
-The system SHALL implement Rich's advanced progress bar system with animated spinners, transfer speed indicators, and time remaining displays for better user feedback.
-
-#### Scenario: File transfer progress with Rich progress bars
-- **WHEN** a user performs file transfers in SCP mode
-- **THEN** the system SHALL display Rich progress bars with transfer speed, time remaining, and file size information
-- **AND** the progress bars SHALL be visually consistent with other UI elements
-- **AND** the system SHALL support multiple concurrent transfers with separate progress indicators
-
-#### Scenario: Indeterminate operation status
-- **WHEN** the system performs operations with unknown duration (SSH connections, directory listings)
-- **THEN** the system SHALL display animated spinners with descriptive messages
-- **AND** the spinners SHALL use consistent styling and animation patterns
-- **AND** the system SHALL provide clear feedback about the operation being performed
-
-#### Scenario: Status updates during operations
-- **WHEN** long-running operations are in progress
-- **THEN** the system SHALL provide live status updates using Rich's live rendering capabilities
-- **AND** the updates SHALL be smooth and non-disruptive to the user experience
-- **AND** the system SHALL maintain visual consistency with other UI elements
-
 ### Requirement: Consistent Error and Success Message Formatting
 
 The system SHALL provide standardized formatting for all user feedback messages including errors, warnings, success messages, and informational displays using Dracula color palette.
@@ -132,6 +59,8 @@ The system SHALL provide standardized formatting for all user feedback messages 
 - **THEN** the system SHALL use standardized info formatting with Dracula cyan (#8be9fd) colors and layout
 - **AND** informational messages SHALL be clearly readable and appropriately styled
 - **AND** the formatting SHALL be consistent across all modules and modes
+
+## ADDED Requirements
 
 ### Requirement: Dracula Color Theme Implementation
 
@@ -156,4 +85,3 @@ The system SHALL implement a comprehensive Dracula color theme across all UI com
 - **AND** high contrast theme SHALL use Dracula colors with improved visibility
 - **AND** colorblind-friendly theme SHALL use Dracula colors with better differentiation
 - **AND** all accessibility themes SHALL maintain WCAG compliance
-
