@@ -1,5 +1,6 @@
 """UI utilities for LazySSH"""
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -53,8 +54,122 @@ LAZYSSH_THEME = Theme(
     }
 )
 
-# Centralized console instance with consistent theme
-console = Console(theme=LAZYSSH_THEME)
+
+# Environment variable parsing functions
+def parse_boolean_env_var(var_name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable."""
+    value = os.getenv(var_name)
+    if value is None:
+        return default
+    return value.lower() in ("true", "1", "yes", "on")
+
+
+def parse_integer_env_var(var_name: str, default: int, min_val: int = 1, max_val: int = 10) -> int:
+    """Parse an integer environment variable with bounds checking."""
+    value = os.getenv(var_name, "")
+    try:
+        int_value = int(value)
+        return max(min_val, min(max_val, int_value))
+    except (ValueError, TypeError):
+        return default
+
+
+def get_ui_config() -> dict[str, Any]:
+    """Get UI configuration from environment variables."""
+    return {
+        "high_contrast": parse_boolean_env_var("LAZYSSH_HIGH_CONTRAST", False),
+        "no_rich": parse_boolean_env_var("LAZYSSH_NO_RICH", False),
+        "refresh_rate": parse_integer_env_var("LAZYSSH_REFRESH_RATE", 4, 1, 10),
+        "no_animations": parse_boolean_env_var("LAZYSSH_NO_ANIMATIONS", False),
+        "colorblind_mode": parse_boolean_env_var("LAZYSSH_COLORBLIND_MODE", False),
+        "plain_text": parse_boolean_env_var("LAZYSSH_PLAIN_TEXT", False),
+    }
+
+
+def get_theme_for_config(config: dict[str, Any]) -> Theme:
+    """Get the appropriate theme based on configuration."""
+    if config["plain_text"]:
+        # Return a minimal theme for plain text mode
+        return Theme(
+            {
+                "info": "default",
+                "warning": "default",
+                "error": "default",
+                "success": "default",
+                "header": "default",
+                "accent": "default",
+                "dim": "default",
+                "highlight": "default",
+                "border": "default",
+                "table.header": "default",
+                "table.row": "default",
+                "panel.title": "default",
+                "panel.subtitle": "default",
+                "keyword": "default",
+                "operator": "default",
+                "string": "default",
+                "variable": "default",
+                "number": "default",
+                "comment": "default",
+                "foreground": "default",
+                "background": "default",
+                "progress.description": "default",
+                "progress.percentage": "default",
+                "progress.bar": "default",
+                "progress.bar.complete": "default",
+            }
+        )
+    elif config["high_contrast"]:
+        return create_high_contrast_theme()
+    elif config["colorblind_mode"]:
+        return create_colorblind_friendly_theme()
+    else:
+        return LAZYSSH_THEME
+
+
+def get_terminal_width() -> int:
+    """Get the terminal width with fallbacks."""
+    # Try environment variable first
+    if "COLUMNS" in os.environ:
+        try:
+            return int(os.environ["COLUMNS"])
+        except ValueError:
+            pass
+
+    # Try tput command
+    try:
+        import shutil
+
+        result = shutil.which("tput")
+        if result:
+            import subprocess
+
+            cols = subprocess.check_output(["tput", "cols"], text=True).strip()
+            return int(cols)
+    except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
+        pass
+
+    # Fallback to a reasonable default
+    return 80
+
+
+def create_console_with_config(config: dict[str, Any]) -> Console:
+    """Create a console instance with configuration applied."""
+    theme = get_theme_for_config(config)
+
+    return Console(
+        theme=theme,
+        force_terminal=not config["no_rich"],
+        legacy_windows=False,
+        color_system="auto" if not (config["no_rich"] or config["plain_text"]) else None,
+        width=get_terminal_width(),
+        height=None,  # Auto-detect height
+    )
+
+
+# Initialize UI configuration and console
+ui_config = get_ui_config()
+console = create_console_with_config(ui_config)
 
 
 def display_banner() -> None:
@@ -92,7 +207,7 @@ def display_banner() -> None:
         subtitle="[panel.subtitle]SSH Made Easy[/panel.subtitle]",
         border_style="border",
         box=ROUNDED,
-        padding=(1, 2),
+        padding=(1, 2),  # Increased padding for better readability
     )
 
     # Print the panel centered
@@ -236,7 +351,7 @@ def create_standard_table(title: str = "", show_header: bool = True) -> Table:
         show_header=show_header,
         header_style="table.header",
         box=ROUNDED,
-        padding=(0, 1, 0, 1),
+        padding=(0, 2, 0, 2),  # Increased horizontal padding for better readability
     )
     return table
 
@@ -248,7 +363,7 @@ def create_info_panel(content: str, title: str = "Information") -> Panel:
         title=f"[panel.title]{title}[/panel.title]",
         border_style="info",
         box=ROUNDED,
-        padding=(1, 2),
+        padding=(1, 3),  # Increased padding for better readability
     )
 
 
@@ -259,7 +374,7 @@ def create_success_panel(content: str, title: str = "Success") -> Panel:
         title=f"[panel.title]{title}[/panel.title]",
         border_style="success",
         box=ROUNDED,
-        padding=(1, 2),
+        padding=(1, 3),  # Increased padding for better readability
     )
 
 
@@ -270,7 +385,7 @@ def create_error_panel(content: str, title: str = "Error") -> Panel:
         title=f"[panel.title]{title}[/panel.title]",
         border_style="error",
         box=ROUNDED,
-        padding=(1, 2),
+        padding=(1, 3),  # Increased padding for better readability
     )
 
 
@@ -281,8 +396,20 @@ def create_warning_panel(content: str, title: str = "Warning") -> Panel:
         title=f"[panel.title]{title}[/panel.title]",
         border_style="warning",
         box=ROUNDED,
-        padding=(1, 2),
+        padding=(1, 3),  # Increased padding for better readability
     )
+
+
+def get_current_ui_config() -> dict[str, Any]:
+    """Get the current UI configuration."""
+    return ui_config.copy()
+
+
+def update_console_config() -> None:
+    """Update the global console instance with current configuration."""
+    global console
+    ui_config = get_ui_config()
+    console = create_console_with_config(ui_config)
 
 
 def get_console() -> Console:
@@ -401,7 +528,7 @@ def render_markdown(content: str, title: str = "") -> None:
             title=f"[panel.title]{title}[/panel.title]",
             border_style="border",
             box=ROUNDED,
-            padding=(1, 2),
+            padding=(1, 3),  # Increased padding for better readability
         )
         console.print(panel)
     else:
@@ -417,7 +544,7 @@ def render_help_markdown(content: str) -> None:
         subtitle="[panel.subtitle]LazySSH Documentation[/panel.subtitle]",
         border_style="info",
         box=ROUNDED,
-        padding=(1, 2),
+        padding=(1, 3),  # Increased padding for better readability
     )
     console.print(panel)
 
@@ -434,7 +561,7 @@ def render_documentation_markdown(content: str, section: str = "") -> None:
         title=title,
         border_style="accent",
         box=ROUNDED,
-        padding=(1, 2),
+        padding=(1, 3),  # Increased padding for better readability
     )
     console.print(panel)
 
@@ -456,7 +583,7 @@ def create_markdown_panel(content: str, title: str = "", panel_type: str = "info
         title=f"[panel.title]{title}[/panel.title]" if title else None,
         border_style=border_style,
         box=ROUNDED,
-        padding=(1, 2),
+        padding=(1, 3),  # Increased padding for better readability
     )
 
 
@@ -465,20 +592,31 @@ def create_markdown_panel(content: str, title: str = "", panel_type: str = "info
 
 def create_live_progress(task_description: str) -> tuple[Live, Progress]:
     """Create a live progress display for long-running operations."""
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    )
+    config = get_ui_config()  # Get fresh configuration
+    if config["no_animations"]:
+        # Create a simple progress without spinner for no-animations mode
+        progress = Progress(
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        )
+    else:
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        )
     progress.add_task(task_description, total=None)
-    live = Live(progress, console=console, refresh_per_second=4)
+    refresh_rate = config["refresh_rate"]
+    live = Live(progress, console=console, refresh_per_second=refresh_rate)
     return live, progress
 
 
 def create_live_status_display() -> Live:
     """Create a live status display for real-time updates."""
     layout = create_progress_layout()
-    live = Live(layout, console=console, refresh_per_second=2)
+    config = get_ui_config()  # Get fresh configuration
+    refresh_rate = config["refresh_rate"]
+    live = Live(layout, console=console, refresh_per_second=refresh_rate)
     return live
 
 
@@ -496,7 +634,9 @@ def update_live_status(live: Live, status_text: str, details: str = "") -> None:
 def create_live_table(table_title: str) -> tuple[Live, Table]:
     """Create a live updating table display."""
     table = create_standard_table(title=table_title)
-    live = Live(table, console=console, refresh_per_second=1)
+    config = get_ui_config()  # Get fresh configuration
+    refresh_rate = config["refresh_rate"]
+    live = Live(table, console=console, refresh_per_second=refresh_rate)
     return live, table
 
 
@@ -508,7 +648,9 @@ def create_live_connection_monitor() -> Live:
     update_layout_header(layout, "SSH Connection Monitor")
     update_layout_footer(layout, "Press Ctrl+C to exit")
 
-    live = Live(layout, console=console, refresh_per_second=1)
+    config = get_ui_config()  # Get fresh configuration
+    refresh_rate = config["refresh_rate"]
+    live = Live(layout, console=console, refresh_per_second=refresh_rate)
     return live
 
 
@@ -673,7 +815,7 @@ def ensure_terminal_compatibility() -> bool:
     try:
         # Test if Rich can render properly
         test_console = Console()
-        test_console.print("[green]Test[/green]")
+        test_console.print("[success]Test[/success]")
         return True
     except Exception:
         # Fallback to basic text output
@@ -687,6 +829,33 @@ def create_fallback_display(content: str) -> None:
 
     clean_content = re.sub(r"\[/?[^\]]*\]", "", content)
     print(clean_content)
+
+
+def display_message_with_fallback(message: str, message_type: str = "info") -> None:
+    """Display a message with fallback for plain text mode."""
+    config = get_ui_config()  # Get fresh configuration
+    if config["plain_text"] or config["no_rich"]:
+        # Use simple text output for plain text mode
+        prefixes = {
+            "info": "INFO:",
+            "success": "SUCCESS:",
+            "error": "ERROR:",
+            "warning": "WARNING:",
+        }
+        prefix = prefixes.get(message_type, "INFO:")
+        print(f"{prefix} {message}")
+    else:
+        # Use Rich styling for normal mode
+        if message_type == "info":
+            display_info(message)
+        elif message_type == "success":
+            display_success(message)
+        elif message_type == "error":
+            display_error(message)
+        elif message_type == "warning":
+            display_warning(message)
+        else:
+            display_info(message)
 
 
 # Performance Testing and Optimization Functions
@@ -767,11 +936,17 @@ def measure_render_time(func: Any) -> Any:
 
 def create_efficient_progress_bar(total: int = 100) -> Progress:
     """Create an efficient progress bar with minimal overhead."""
-    return Progress(
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        refresh_per_second=10,  # Reduced refresh rate for better performance
-    )
+    config = get_ui_config()  # Get fresh configuration
+    if config["no_animations"]:
+        return Progress(
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        )
+    else:
+        return Progress(
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        )
 
 
 def batch_render_updates(updates: list[tuple[str, str]]) -> None:

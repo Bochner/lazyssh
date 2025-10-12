@@ -127,7 +127,7 @@ class SSHManager:
             # Store the connection
             self.connections[conn.socket_path] = conn
             console.print(
-                f"[bold green]Success:[/bold green] SSH connection established to [bold magenta]{conn.host}[/bold magenta]"
+                f"[success]Success:[/success] SSH connection established to [header]{conn.host}[/]"
             )
 
             # Log connection success
@@ -427,7 +427,7 @@ class SSHManager:
             if process.poll() is None:
                 # Still running, which is good
                 console.print(
-                    f"[bold green]Success:[/bold green] Terminal opened for [bold magenta]{conn.host}[/bold magenta]"
+                    f"[success]Success:[/success] Terminal opened for [header]{conn.host}[/]"
                 )
                 return True
             else:

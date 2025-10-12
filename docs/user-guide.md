@@ -10,6 +10,7 @@ This guide provides a streamlined introduction to using LazySSH for SSH connecti
 - [Saved Connection Configurations](#saved-connection-configurations)
 - [Wizard Workflows](#wizard-workflows)
 - [Terminal Methods](#terminal-methods)
+- [Environment Variables](#environment-variables)
 - [Advanced Features](#advanced-features)
 
 ## Installation
@@ -446,6 +447,91 @@ export LAZYSSH_TERMINAL_METHOD=native
 
 # Force Terminator
 export LAZYSSH_TERMINAL_METHOD=terminator
+```
+
+## Environment Variables
+
+LazySSH supports several environment variables to customize the user interface and behavior:
+
+### UI Customization
+
+**LAZYSSH_HIGH_CONTRAST** - Enable high contrast theme for better accessibility:
+```bash
+export LAZYSSH_HIGH_CONTRAST=true
+lazyssh
+```
+
+**LAZYSSH_COLORBLIND_MODE** - Use colorblind-friendly theme:
+```bash
+export LAZYSSH_COLORBLIND_MODE=true
+lazyssh
+```
+
+**LAZYSSH_PLAIN_TEXT** - Force plain text rendering without Rich formatting:
+```bash
+export LAZYSSH_PLAIN_TEXT=true
+lazyssh
+```
+
+### Performance Tuning
+
+**LAZYSSH_REFRESH_RATE** - Control live update frequency (1-10):
+```bash
+# Slow updates for better performance
+export LAZYSSH_REFRESH_RATE=1
+lazyssh
+
+# Fast updates for real-time monitoring
+export LAZYSSH_REFRESH_RATE=10
+lazyssh
+```
+
+**LAZYSSH_NO_ANIMATIONS** - Disable progress animations and spinners:
+```bash
+export LAZYSSH_NO_ANIMATIONS=true
+lazyssh
+```
+
+### Terminal Compatibility
+
+**LAZYSSH_NO_RICH** - Disable Rich library features for basic terminal compatibility:
+```bash
+export LAZYSSH_NO_RICH=true
+lazyssh
+```
+
+### Environment Variable Values
+
+All boolean environment variables accept these values (case-insensitive):
+- `true`, `1`, `yes`, `on` → Enable the feature
+- `false`, `0`, `no`, `off`, or any other value → Disable the feature
+
+### Precedence Rules
+
+When multiple theme variables are set:
+1. **LAZYSSH_PLAIN_TEXT** overrides all other theme settings
+2. **LAZYSSH_HIGH_CONTRAST** takes precedence over **LAZYSSH_COLORBLIND_MODE**
+3. Other settings work independently
+
+### Common Combinations
+
+**Maximum accessibility:**
+```bash
+export LAZYSSH_HIGH_CONTRAST=true
+export LAZYSSH_NO_ANIMATIONS=true
+export LAZYSSH_REFRESH_RATE=1
+```
+
+**Performance optimized:**
+```bash
+export LAZYSSH_NO_ANIMATIONS=true
+export LAZYSSH_REFRESH_RATE=2
+```
+
+**Basic terminal compatibility:**
+```bash
+export LAZYSSH_NO_RICH=true
+export LAZYSSH_PLAIN_TEXT=true
 ```
 
 ## Advanced Features

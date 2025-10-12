@@ -15,6 +15,7 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
+from rich.console import Console
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -24,6 +25,7 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 from rich.prompt import Confirm, IntPrompt
+from rich.table import Column
 from rich.text import Text
 from rich.tree import Tree
 
@@ -50,6 +52,74 @@ from .ui import (
 # Cache and throttling configuration
 CACHE_TTL_SECONDS = 30
 COMPLETION_THROTTLE_MS = 300
+
+
+def truncate_filename(filename: str, max_length: int = 30) -> str:
+    """Truncate filename to fit within progress bar display."""
+    if len(filename) <= max_length:
+        return filename
+
+    # Keep the extension if possible
+    if "." in filename:
+        name, ext = filename.rsplit(".", 1)
+        if len(ext) + 4 <= max_length:  # 4 for "..."
+            truncated_name = name[: max_length - len(ext) - 3] + "..."
+            return f"{truncated_name}.{ext}"
+
+    # Fallback: just truncate with ellipsis
+    return filename[: max_length - 3] + "..."
+
+
+def create_progress_bar(console_instance: Console) -> Progress:
+    """Create a progress bar with proper sizing and filename truncation."""
+    # Use Column ratios to control width allocation
+    # Description gets 1/4 of width, bar gets 2/4, other columns get 1/4
+    description_column = TextColumn("[info]{task.description}[/info]", table_column=Column(ratio=1))
+    bar_column = BarColumn(
+        bar_width=None, style="info", complete_style="success", table_column=Column(ratio=2)
+    )
+
+    return Progress(
+        description_column,
+        bar_column,
+        "[progress.percentage]{task.percentage:>3.1f}%",
+        "  ",
+        TextColumn(
+            "[accent]{task.completed:.2f}/{task.total:.2f} MB[/accent]",
+            justify="right",
+            table_column=Column(ratio=1),
+        ),
+        "  ",
+        TransferSpeedColumn(),
+        "  ",
+        TimeRemainingColumn(),
+        console=console_instance,
+        expand=True,
+    )
+
+
+def create_multi_file_progress_bar(console_instance: Console) -> Progress:
+    """Create a progress bar for multi-file downloads with proper sizing."""
+    # Use Column ratios to control width allocation
+    # Description gets 1/4 of width, bar gets 2/4, other columns get 1/4
+    description_column = TextColumn("[info]{task.description}[/info]", table_column=Column(ratio=1))
+    bar_column = BarColumn(
+        bar_width=None, style="info", complete_style="success", table_column=Column(ratio=2)
+    )
+
+    return Progress(
+        description_column,
+        bar_column,
+        "[progress.percentage]{task.percentage:>3.1f}%",
+        "  ",
+        DownloadColumn(),
+        "  ",
+        TransferSpeedColumn(),
+        "  ",
+        TimeRemainingColumn(),
+        console=console_instance,
+        expand=True,
+    )
 
 
 class SCPModeCompleter(Completer):
@@ -420,11 +490,11 @@ class SCPMode:
         )
         self.style = Style.from_dict(
             {
-                "prompt": "ansicyan bold",
-                "path": "ansigreen",
-                "dir1": "ansiyellow",
-                "dir2": "ansimagenta",
-                "brackets": "ansigreen",
+                "prompt": "#8be9fd bold",  # Cyan - info color
+                "path": "#50fa7b",  # Green - success color
+                "dir1": "#f1fa8c",  # Yellow - warning color
+                "dir2": "#ff79c6",  # Pink - highlight color
+                "brackets": "#6272a4",  # Comment - dim color
             }
         )
 
@@ -885,24 +955,12 @@ class SCPMode:
             start_time = time.time()
 
             # Create a progress bar with enhanced styling
-            with Progress(
-                TextColumn("[info]{task.description}[/info]", justify="right"),
-                BarColumn(bar_width=50, style="info", complete_style="success"),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                TextColumn(
-                    "[accent]{task.completed:.2f}/{task.total:.2f} MB[/accent]", justify="right"
-                ),
-                "•",
-                TransferSpeedColumn(),
-                "•",
-                TimeRemainingColumn(),
-                console=self.console,
-            ) as progress:
+            with create_progress_bar(self.console) as progress:
                 # Convert bytes to MB for display
                 file_size_mb = file_size / (1024 * 1024)
                 upload_task = progress.add_task(
-                    f"[cyan]Uploading {Path(local_path).name}", total=file_size_mb
+                    f"[info]Uploading {truncate_filename(Path(local_path).name)}",
+                    total=file_size_mb,
                 )
 
                 # Start the upload process
@@ -1023,12 +1081,10 @@ class SCPMode:
 
         # Show total download size
         human_total = self._format_file_size(file_size)
-        display_info(f"Total download size: [bold green]{human_total}[/]")
+        display_info(f"Total download size: [success]{human_total}[/]")
 
         # Confirm download using Rich's Confirm.ask for a color-coded prompt
-        if not Confirm.ask(
-            f"Download [bold cyan]1[/] file to [bold blue]{self.local_download_dir}[/]?"
-        ):
+        if not Confirm.ask(f"Download [info]1[/] file to [highlight]{self.local_download_dir}[/]?"):
             display_info("Download cancelled")
             return
 
@@ -1053,24 +1109,12 @@ class SCPMode:
             start_time = time.time()
 
             # Create a progress bar with enhanced styling
-            with Progress(
-                TextColumn("[info]{task.description}[/info]", justify="right"),
-                BarColumn(bar_width=50, style="info", complete_style="success"),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                TextColumn(
-                    "[accent]{task.completed:.2f}/{task.total:.2f} MB[/accent]", justify="right"
-                ),
-                "•",
-                TransferSpeedColumn(),
-                "•",
-                TimeRemainingColumn(),
-                console=self.console,
-            ) as progress:
+            with create_progress_bar(self.console) as progress:
                 # Convert bytes to MB for display
                 file_size_mb = file_size / (1024 * 1024)
                 download_task = progress.add_task(
-                    f"[cyan]Downloading {Path(remote_path).name}", total=file_size_mb
+                    f"[info]Downloading {truncate_filename(Path(remote_path).name)}",
+                    total=file_size_mb,
                 )
 
                 # Start the download process
@@ -1171,10 +1215,10 @@ class SCPMode:
             # Format and display the output
             output = result.stdout.strip()
             if not output:
-                display_info(f"Directory [bold blue]{path}[/] is empty")
+                display_info(f"Directory [highlight]{path}[/] is empty")
                 return True
 
-            display_info(f"Contents of [bold blue]{path}[/]:")
+            display_info(f"Contents of [highlight]{path}[/]:")
 
             # Create a Rich table with standardized styling
             table = create_standard_table()
@@ -1294,7 +1338,7 @@ class SCPMode:
 
     def cmd_pwd(self, args: list[str]) -> bool:
         """Print current remote directory"""
-        display_info(f"Current remote directory: {self.current_remote_dir}")
+        display_info(f"Current remote directory: [number]{self.current_remote_dir}[/number]")
         return True
 
     def cmd_mget(self, args: list[str]) -> bool:
@@ -1366,11 +1410,11 @@ class SCPMode:
 
             # Format total size in human-readable format
             human_total = self._format_file_size(total_size)
-            display_info(f"Total download size: [bold green]{human_total}[/]")
+            display_info(f"Total download size: [success]{human_total}[/]")
 
             # Confirm download using Rich's Confirm.ask for a color-coded prompt
             if not Confirm.ask(
-                f"Download [bold cyan]{len(matched_files)}[/] files to [bold blue]{self.local_download_dir}[/]?"
+                f"Download [info]{len(matched_files)}[/] files to [highlight]{self.local_download_dir}[/]?"
             ):
                 display_info("Download cancelled")
                 return False
@@ -1390,18 +1434,7 @@ class SCPMode:
             # Start timing the download
             start_time = time.time()
 
-            with Progress(
-                TextColumn("[info]{task.description}[/info]", justify="right"),
-                BarColumn(bar_width=50, style="info", complete_style="success"),
-                "[progress.percentage]{task.percentage:>3.1f}%",
-                "•",
-                DownloadColumn(),
-                "•",
-                TransferSpeedColumn(),
-                "•",
-                TimeRemainingColumn(),
-                console=self.console,
-            ) as progress:
+            with create_multi_file_progress_bar(self.console) as progress:
                 # Create a task for overall progress based on total bytes, not file count
                 overall_task = progress.add_task("Overall progress", total=total_size)
 
@@ -1417,7 +1450,7 @@ class SCPMode:
                     try:
                         # Create a task for this file
                         file_task = progress.add_task(
-                            f"[cyan]Downloading {filename}", total=file_size
+                            f"[info]Downloading {truncate_filename(filename)}", total=file_size
                         )
 
                         # Get the SCP command
@@ -1495,7 +1528,7 @@ class SCPMode:
 
                 # Include file size and elapsed time in success message
                 display_success(
-                    f"Successfully downloaded [bold cyan]{success_count}[/] of [bold cyan]{len(matched_files)}[/] files ([bold green]{self._format_file_size(total_downloaded_bytes)}[/] in [bold]{elapsed_str}[/])"
+                    f"Successfully downloaded [info]{success_count}[/] of [info]{len(matched_files)}[/] files ([success]{self._format_file_size(total_downloaded_bytes)}[/] in [header]{elapsed_str}[/])"
                 )
 
             return success_count > 0
@@ -1506,8 +1539,12 @@ class SCPMode:
     def cmd_local(self, args: list[str]) -> bool:
         """Set or display local download and upload directories"""
         if not args:
-            display_info(f"Current local download directory: {self.local_download_dir}")
-            display_info(f"Current local upload directory: {self.local_upload_dir}")
+            display_info(
+                f"Current local download directory: [number]{self.local_download_dir}[/number]"
+            )
+            display_info(
+                f"Current local upload directory: [number]{self.local_upload_dir}[/number]"
+            )
             return True
 
         if len(args) >= 2 and args[0] in ["download", "upload"]:
@@ -1582,12 +1619,12 @@ class SCPMode:
         if args:
             cmd = args[0].lower()
             if cmd == "put":
-                display_info("[bold cyan]\nUpload a file to the remote server:[/bold cyan]")
+                display_info("[header]\nUpload a file to the remote server:[/header]")
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]put[/cyan] [yellow]<local_file>[/yellow] [[yellow]<remote_file>[/yellow]]"
+                    "[number]Usage:[/number] [highlight]put[/highlight] [number]<local_file>[/number] [[number]<remote_file>[/number]]"
                 )
                 display_info(
-                    "If [yellow]<remote_file>[/yellow] is not specified, the file will be uploaded with the same name"
+                    "If [number]<remote_file>[/number] is not specified, the file will be uploaded with the same name"
                 )
                 display_info(
                     "[dim]Local files are read from the upload directory shown in the prompt[/dim]"
@@ -1596,121 +1633,121 @@ class SCPMode:
                     "[dim]Use tab completion to see available files in the upload directory[/dim]"
                 )
             elif cmd == "get":
-                display_info("[bold cyan]\nDownload a file from the remote server:[/bold cyan]")
+                display_info("[header]\nDownload a file from the remote server:[/header]")
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]get[/cyan] [yellow]<remote_file>[/yellow] [[yellow]<local_file>[/yellow]]"
+                    "[number]Usage:[/number] [highlight]get[/highlight] [number]<remote_file>[/number] [[number]<local_file>[/number]]"
                 )
                 display_info(
-                    "If [yellow]<local_file>[/yellow] is not specified, the file will be downloaded to the current local directory"
+                    "If [number]<local_file>[/number] is not specified, the file will be downloaded to the current local directory"
                 )
             elif cmd == "ls":
-                display_info("[bold cyan]\nList files in a remote directory:[/bold cyan]")
+                display_info("[header]\nList files in a remote directory:[/header]")
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]ls[/cyan] [[yellow]<remote_path>[/yellow]]"
+                    "[number]Usage:[/number] [highlight]ls[/highlight] [[number]<remote_path>[/number]]"
                 )
                 display_info(
-                    "If [yellow]<remote_path>[/yellow] is not specified, lists the current remote directory"
+                    "If [number]<remote_path>[/number] is not specified, lists the current remote directory"
                 )
             elif cmd == "pwd":
-                display_info("[bold cyan]\nShow current remote working directory:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]pwd[/cyan]")
+                display_info("[header]\nShow current remote working directory:[/header]")
+                display_info("[number]Usage:[/number] [highlight]pwd[/highlight]")
             elif cmd == "cd":
-                display_info("[bold cyan]\nChange remote working directory:[/bold cyan]")
+                display_info("[header]\nChange remote working directory:[/header]")
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]cd[/cyan] [yellow]<remote_path>[/yellow]"
+                    "[number]Usage:[/number] [highlight]cd[/highlight] [number]<remote_path>[/number]"
                 )
             elif cmd == "local":
                 display_info(
-                    "[bold cyan]\nSet or display local download and upload directories:[/bold cyan]"
+                    "[header]\nSet or display local download and upload directories:[/header]"
                 )
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]local[/cyan] [[yellow]<local_path>[/yellow]]"
+                    "[number]Usage:[/number] [highlight]local[/highlight] [[number]<local_path>[/number]]"
                 )
                 display_info(
-                    "If [yellow]<local_path>[/yellow] is not specified, displays both the download and upload directories"
+                    "If [number]<local_path>[/number] is not specified, displays both the download and upload directories"
                 )
-                display_info("[magenta bold]To set a specific directory type:[/magenta bold]")
+                display_info("[highlight]To set a specific directory type:[/highlight]")
                 display_info(
-                    "  [cyan]local download[/cyan] [yellow]<path>[/yellow] - Set the download directory"
+                    "  [highlight]local download[/highlight] [number]<path>[/number] - Set the download directory"
                 )
                 display_info(
-                    "  [cyan]local upload[/cyan] [yellow]<path>[/yellow]   - Set the upload directory"
+                    "  [highlight]local upload[/highlight] [number]<path>[/number]   - Set the upload directory"
                 )
             elif cmd == "lcd":
-                display_info("[bold cyan]\nChange local download directory:[/bold cyan]")
+                display_info("[header]\nChange local download directory:[/header]")
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]lcd[/cyan] [yellow]<local_path>[/yellow]"
+                    "[number]Usage:[/number] [highlight]lcd[/highlight] [number]<local_path>[/number]"
                 )
                 display_info("Change the directory where files are downloaded to")
             elif cmd == "exit":
-                display_info("[bold cyan]\nExit SCP mode and return to lazyssh prompt:[/bold cyan]")
-                display_info("[yellow]Usage:[/yellow] [cyan]exit[/cyan]")
+                display_info("[header]\nExit SCP mode and return to lazyssh prompt:[/header]")
+                display_info("[number]Usage:[/number] [highlight]exit[/highlight]")
             elif cmd == "lls":
+                display_info("[header]\nList contents of the local download directory:[/header]")
                 display_info(
-                    "[bold cyan]\nList contents of the local download directory:[/bold cyan]"
+                    "[number]Usage:[/number] [highlight]lls[/highlight] [[number]<local_path>[/number]]"
                 )
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]lls[/cyan] [[yellow]<local_path>[/yellow]]"
-                )
-                display_info(
-                    "If [yellow]<local_path>[/yellow] is not specified, lists the current local download directory"
+                    "If [number]<local_path>[/number] is not specified, lists the current local download directory"
                 )
                 display_info("Shows file sizes and directory summary information")
             elif cmd == "tree":
                 display_info(
-                    "[bold cyan]\nDisplay a tree view of the remote directory structure:[/bold cyan]"
+                    "[header]\nDisplay a tree view of the remote directory structure:[/header]"
                 )
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]tree[/cyan] [[yellow]<remote_path>[/yellow]]"
+                    "[number]Usage:[/number] [highlight]tree[/highlight] [[number]<remote_path>[/number]]"
                 )
                 display_info(
-                    "If [yellow]<remote_path>[/yellow] is not specified, displays the current remote directory"
+                    "If [number]<remote_path>[/number] is not specified, displays the current remote directory"
                 )
             elif cmd == "debug":
-                display_info("[bold cyan]\nToggle debug logging to console:[/bold cyan]")
+                display_info("[header]\nToggle debug logging to console:[/header]")
                 display_info(
-                    "[yellow]Usage:[/yellow] [cyan]debug[/cyan] [[yellow]on|off|enable|disable|true|false|1|0[/yellow]]"
+                    "[number]Usage:[/number] [highlight]debug[/highlight] [[number]on|off|enable|disable|true|false|1|0[/number]]"
                 )
-                display_info("\n[magenta bold]Description:[/magenta bold]")
+                display_info("\n[header]Description:[/header]")
                 display_info("  Toggles debug logging output to the console.")
                 display_info(
                     "  Logs are always saved to /tmp/lazyssh/logs regardless of this setting."
                 )
                 display_info("  When enabled, all log messages will be displayed in the console.")
-                display_info("\n[magenta bold]Examples:[/magenta bold]")
+                display_info("\n[header]Examples:[/header]")
                 display_info(
-                    "  [green]debug[/green]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
+                    "  [success]debug[/success]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
                 )
                 display_info(
-                    "  [green]debug on[/green]   [dim]# Explicitly enable debug mode[/dim]"
+                    "  [success]debug on[/success]   [dim]# Explicitly enable debug mode[/dim]"
                 )
                 display_info(
-                    "  [green]debug off[/green]  [dim]# Explicitly disable debug mode[/dim]"
+                    "  [success]debug off[/success]  [dim]# Explicitly disable debug mode[/dim]"
                 )
             else:
                 display_error(f"Unknown command: {cmd}")
                 self.cmd_help([])
             return True
 
-        display_info("[bold cyan]\nAvailable SCP mode commands:[/bold cyan]")
-        display_info("  [cyan]put[/cyan]     - Upload a file to the remote server")
-        display_info("  [cyan]get[/cyan]     - Download a file from the remote server")
-        display_info("  [cyan]ls[/cyan]      - List files in a remote directory")
-        display_info("  [cyan]lls[/cyan]     - List files in the local download directory")
+        display_info("[header]\nAvailable SCP mode commands:[/header]")
+        display_info("  [highlight]put[/highlight]     - Upload a file to the remote server")
+        display_info("  [highlight]get[/highlight]     - Download a file from the remote server")
+        display_info("  [highlight]ls[/highlight]      - List files in a remote directory")
         display_info(
-            "  [cyan]tree[/cyan]    - Display a tree view of the remote directory structure"
-        )
-        display_info("  [cyan]pwd[/cyan]     - Show current remote working directory")
-        display_info("  [cyan]cd[/cyan]      - Change remote working directory")
-        display_info("  [cyan]lcd[/cyan]     - Change local download directory")
-        display_info("  [cyan]local[/cyan]   - Set or display local download directory")
-        display_info("  [cyan]debug[/cyan]   - Toggle debug logging to console")
-        display_info("  [cyan]exit[/cyan]    - Exit SCP mode")
-        display_info(
-            "  [cyan]help[/cyan]    - Show this help message or help for a specific command"
+            "  [highlight]lls[/highlight]     - List files in the local download directory"
         )
         display_info(
-            "\n[dim]Use 'help [yellow]<command>[/yellow]' for detailed help on a specific command[/dim]"
+            "  [highlight]tree[/highlight]    - Display a tree view of the remote directory structure"
+        )
+        display_info("  [highlight]pwd[/highlight]     - Show current remote working directory")
+        display_info("  [highlight]cd[/highlight]      - Change remote working directory")
+        display_info("  [highlight]lcd[/highlight]     - Change local download directory")
+        display_info("  [highlight]local[/highlight]   - Set or display local download directory")
+        display_info("  [highlight]debug[/highlight]   - Toggle debug logging to console")
+        display_info("  [highlight]exit[/highlight]    - Exit SCP mode")
+        display_info(
+            "  [highlight]help[/highlight]    - Show this help message or help for a specific command"
+        )
+        display_info(
+            "\n[dim]Use 'help [number]<command>[/number]' for detailed help on a specific command[/dim]"
         )
         return True
 
@@ -1746,7 +1783,7 @@ class SCPMode:
                 display_error(f"Directory not found: {target_dir_path}")
                 return False
 
-            display_info(f"Contents of [bold blue]{target_dir_path}[/]:")
+            display_info(f"Contents of [highlight]{target_dir_path}[/]:")
 
             # Create a Rich table with standardized styling
             table = create_standard_table()
@@ -1827,7 +1864,7 @@ class SCPMode:
             # Show summary footer
             human_total = self._format_file_size(total_size)
             console.print(
-                f"\nTotal: [bold cyan]{file_count}[/] files, [bold cyan]{dir_count}[/] directories, [bold green]{human_total}[/] total size"
+                f"\nTotal: [info]{file_count}[/] files, [info]{dir_count}[/] directories, [success]{human_total}[/] total size"
             )
 
             return True
@@ -1864,7 +1901,7 @@ class SCPMode:
                 return False
 
             # Create the root tree node
-            tree = Tree(f"[bold cyan]{remote_path}[/]")
+            tree = Tree(f"[header]{remote_path}[/]")
             path_to_node = {remote_path: tree}
 
             # Track statistics
@@ -1899,7 +1936,7 @@ class SCPMode:
 
                 if entry_type == "d":  # Directory
                     dir_count += 1
-                    node = parent_node.add(f"[bold blue]{filename}/[/]")
+                    node = parent_node.add(f"[highlight]{filename}/[/]")
                     path_to_node[path] = node
                 else:  # File
                     file_count += 1
@@ -1907,29 +1944,27 @@ class SCPMode:
                     if any(
                         filename.endswith(ext) for ext in [".py", ".js", ".sh", ".bash", ".zsh"]
                     ):
-                        node = parent_node.add(f"[green]{filename}[/]")
+                        node = parent_node.add(f"[success]{filename}[/]")
                     elif any(
                         filename.endswith(ext)
                         for ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff"]
                     ):
-                        node = parent_node.add(f"[magenta]{filename}[/]")
+                        node = parent_node.add(f"[highlight]{filename}[/]")
                     elif any(
                         filename.endswith(ext) for ext in [".mp4", ".avi", ".mov", ".mkv", ".wmv"]
                     ):
-                        node = parent_node.add(f"[cyan]{filename}[/]")
+                        node = parent_node.add(f"[info]{filename}[/]")
                     elif any(
                         filename.endswith(ext)
                         for ext in [".tar", ".gz", ".zip", ".rar", ".7z", ".bz2"]
                     ):
-                        node = parent_node.add(f"[yellow]{filename}[/]")
+                        node = parent_node.add(f"[warning]{filename}[/]")
                     else:
                         node = parent_node.add(filename)
 
             # Display the tree
             console.print(tree)
-            console.print(
-                f"\nTotal: [bold cyan]{file_count}[/] files, [bold cyan]{dir_count}[/] directories"
-            )
+            console.print(f"\nTotal: [info]{file_count}[/] files, [info]{dir_count}[/] directories")
 
             return True
 
