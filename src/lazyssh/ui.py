@@ -1,6 +1,7 @@
 """UI utilities for LazySSH"""
 
 from pathlib import Path
+from typing import Any
 
 from rich.align import Align
 from rich.box import ROUNDED
@@ -138,5 +139,45 @@ def display_tunnels(socket_path: str, conn: SSHConnection) -> None:
             str(tunnel.local_port),
             f"{tunnel.remote_host}:{tunnel.remote_port}",
         )
+
+    console.print(table)
+
+
+def display_saved_configs(configs: dict[str, dict[str, Any]]) -> None:
+    """
+    Display saved connection configurations in a formatted table.
+
+    Args:
+        configs: Dictionary mapping config names to their parameters
+    """
+    if not configs:
+        display_info("No saved configurations")
+        return
+
+    table = Table(title="Saved Connection Configurations", border_style="blue")
+    table.add_column("Name", style="cyan", justify="center")
+    table.add_column("Host", style="magenta", justify="center")
+    table.add_column("Username", style="green", justify="center")
+    table.add_column("Port", style="yellow", justify="center")
+    table.add_column("SSH Key", style="bright_blue", justify="center")
+    table.add_column("Shell", style="bright_magenta", justify="center")
+    table.add_column("Proxy", style="blue", justify="center")
+    table.add_column("No-Term", style="dim", justify="center")
+
+    for name, params in configs.items():
+        # Extract parameters with defaults
+        host = params.get("host", "N/A")
+        username = params.get("username", "N/A")
+        port = str(params.get("port", "22"))
+        ssh_key = params.get("ssh_key", "N/A")
+        shell = params.get("shell", "N/A")
+        proxy_port = str(params.get("proxy_port", "N/A"))
+        no_term = "Yes" if params.get("no_term", False) else "No"
+
+        # Truncate SSH key path for display if too long
+        if ssh_key != "N/A" and len(ssh_key) > 30:
+            ssh_key = "..." + ssh_key[-27:]
+
+        table.add_row(name, host, username, port, ssh_key, shell, proxy_port, no_term)
 
     console.print(table)

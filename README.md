@@ -12,6 +12,7 @@ LazySSH simplifies SSH connection management with an elegant CLI interface. It h
 
 - **Dual Interface Modes**: Interactive menu mode or command mode with smart tab completion
 - **Connection Management**: Handle multiple SSH connections with control sockets
+- **Saved Configurations**: Save and reuse connection configurations with TOML-based storage
 - **Tunneling**: Create forward and reverse tunnels with simple commands
 - **Dynamic Proxy**: Set up SOCKS proxy for secure browsing
 - **SCP Mode**: Transfer files securely with rich visualization and progress tracking
@@ -136,6 +137,86 @@ export LAZYSSH_TERMINAL_METHOD=terminator
 - Native terminal allows returning to LazySSH after exiting the SSH session
 - Terminal method can be changed at runtime without restarting LazySSH
 - Terminal method is displayed in the SSH connections status table
+
+## Saved Connection Configurations
+
+LazySSH allows you to save connection configurations for quick reuse. Configurations are stored securely in TOML format at `/tmp/lazyssh/connections.conf` with owner-only permissions (600).
+
+### Saving Connections
+
+After creating a successful connection, LazySSH will prompt you to save it:
+
+```bash
+lazyssh> lazyssh -ip server.example.com -port 22 -user admin -socket myserver
+# After connection succeeds
+Save this connection configuration? (y/N): y
+Enter config name [myserver]: prod-server
+✓ Configuration saved as 'prod-server'
+```
+
+Or save manually from command mode:
+
+```bash
+lazyssh> save-config prod-server
+```
+
+### Using Saved Configurations
+
+**View saved configurations:**
+```bash
+lazyssh> config
+# Displays table of all saved configurations
+```
+
+**Connect using a saved configuration:**
+```bash
+lazyssh> connect prod-server
+```
+
+**Delete a saved configuration:**
+```bash
+lazyssh> delete-config prod-server
+```
+
+### Configuration File Format
+
+Configurations are stored in TOML format at `/tmp/lazyssh/connections.conf`:
+
+```toml
+[prod-server]
+host = "server.example.com"
+port = 22
+username = "admin"
+ssh_key = "/home/user/.ssh/id_rsa"
+
+[dev-server]
+host = "192.168.1.100"
+port = 2222
+username = "developer"
+proxy_port = 9050
+```
+
+### Security Considerations
+
+- **File Permissions**: Config file is automatically set to mode 600 (owner read/write only)
+- **Location**: Files are stored in `/tmp/lazyssh/` which is cleared on system reboot
+- **SSH Keys**: Only paths to SSH keys are stored, not the keys themselves
+- **Sensitive Data**: Consider using SSH keys instead of password authentication
+- **Manual Editing**: You can safely edit the TOML file directly if needed
+
+### CLI Flag
+
+View configurations at startup:
+
+```bash
+lazyssh --config
+```
+
+Or specify a custom config file path:
+
+```bash
+lazyssh --config /path/to/custom/connections.conf
+```
 
 ## License
 

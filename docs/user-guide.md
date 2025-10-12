@@ -7,6 +7,7 @@ This guide provides a streamlined introduction to using LazySSH for SSH connecti
 - [Installation](#installation)
 - [Your First Connection](#your-first-connection)
 - [Core Workflows](#core-workflows)
+- [Saved Connection Configurations](#saved-connection-configurations)
 - [Interface Modes](#interface-modes)
 - [Terminal Methods](#terminal-methods)
 - [Advanced Features](#advanced-features)
@@ -175,6 +176,197 @@ scp myserver:/var/log> lcd ~/Downloads
 scp myserver:/var/log> exit
 ```
 
+## Saved Connection Configurations
+
+LazySSH lets you save connection configurations for quick reuse. This eliminates repetitive typing and helps you manage multiple servers efficiently.
+
+### Saving a Configuration
+
+**Option 1: Save after connection (recommended)**
+
+When you successfully create a connection, LazySSH will prompt you:
+
+```bash
+lazyssh> lazyssh -ip server.example.com -port 22 -user admin -socket myserver
+# After connection succeeds
+Save this connection configuration? (y/N): y
+Enter config name [myserver]: prod-server
+✓ Configuration saved as 'prod-server'
+```
+
+**Option 2: Save manually**
+
+Save the current/last connection:
+
+```bash
+lazyssh> save-config prod-server
+```
+
+### Viewing Saved Configurations
+
+List all saved configurations:
+
+```bash
+lazyssh> config
+# or
+lazyssh> configs
+```
+
+This displays a table with:
+- Configuration name
+- Host
+- Username
+- Port
+- SSH key path
+- Shell preference
+- Proxy port (if any)
+- No-term flag
+
+**View at startup:**
+
+```bash
+lazyssh --config
+```
+
+### Connecting with Saved Configurations
+
+Connect using a saved configuration:
+
+```bash
+lazyssh> connect prod-server
+```
+
+This automatically applies all saved settings:
+- Host and port
+- Username
+- SSH key
+- Proxy settings
+- Shell preference
+- Terminal options
+
+### Managing Configurations
+
+**Delete a configuration:**
+
+```bash
+lazyssh> delete-config prod-server
+```
+
+You'll be asked to confirm before deletion.
+
+**Edit configurations manually:**
+
+The config file is located at `/tmp/lazyssh/connections.conf` in TOML format:
+
+```toml
+[prod-server]
+host = "server.example.com"
+port = 22
+username = "admin"
+ssh_key = "/home/user/.ssh/id_rsa"
+
+[dev-server]
+host = "192.168.1.100"
+port = 2222
+username = "developer"
+proxy_port = 9050
+shell = "/bin/zsh"
+
+[backup-server]
+host = "backup.example.com"
+port = 22
+username = "backup"
+no_term = true
+```
+
+You can safely edit this file directly.
+
+### Configuration File Format
+
+**Available fields:**
+- `host` (required) - Server hostname or IP address
+- `port` (default: 22) - SSH port number
+- `username` (required) - SSH username
+- `ssh_key` (optional) - Path to SSH private key
+- `proxy_port` (optional) - SOCKS proxy port (0 = no proxy)
+- `shell` (optional) - Preferred shell (e.g., "/bin/bash", "/bin/zsh")
+- `no_term` (optional) - Disable terminal allocation (true/false)
+
+### Security Notes
+
+- Config file permissions are automatically set to 600 (owner read/write only)
+- Files are stored in `/tmp/lazyssh/` which is cleared on system reboot
+- Only SSH key paths are stored, never the keys themselves
+- Use SSH key authentication instead of passwords for better security
+- The config file location in `/tmp` means configs won't persist after reboot (by design for security)
+
+### Example Workflows
+
+**Save frequently-used servers:**
+
+```bash
+# Production server with SSH key
+lazyssh> lazyssh -ip prod.example.com -port 22 -user admin -ssh-key ~/.ssh/prod_key -socket prod
+Save this connection configuration? (y/N): y
+Enter config name [prod]: production
+✓ Configuration saved as 'production'
+
+# Development server with proxy
+lazyssh> lazyssh -ip dev.example.com -port 2222 -user dev -proxy 9050 -socket dev
+Save this connection configuration? (y/N): y
+Enter config name [dev]: development
+✓ Configuration saved as 'development'
+
+# Later, reconnect quickly
+lazyssh> connect production
+lazyssh> connect development
+```
+
+**Quick server access:**
+
+```bash
+# Day 1: Set up your servers
+lazyssh> connect production
+lazyssh> connect staging
+lazyssh> connect development
+
+# Day 2+: Just connect
+lazyssh> connect production
+# Instant connection with all settings
+```
+
+**Batch setup:**
+
+Create `/tmp/lazyssh/connections.conf` manually:
+
+```toml
+[web1]
+host = "web1.example.com"
+port = 22
+username = "admin"
+ssh_key = "/home/user/.ssh/id_rsa"
+
+[web2]
+host = "web2.example.com"
+port = 22
+username = "admin"
+ssh_key = "/home/user/.ssh/id_rsa"
+
+[db]
+host = "db.example.com"
+port = 22
+username = "dbadmin"
+ssh_key = "/home/user/.ssh/db_key"
+```
+
+Then connect:
+
+```bash
+lazyssh> connect web1
+lazyssh> connect web2
+lazyssh> connect db
+```
+
 ## Interface Modes
 
 LazySSH offers two interface modes:
@@ -320,6 +512,10 @@ scp myserver> help mget
 |---------|-------------|
 | `lazyssh -ip <host> -port <port> -user <user> -socket <name>` | Create connection |
 | `list` | Show all connections and tunnels |
+| `config` | Display saved configurations |
+| `connect <name>` | Connect using saved configuration |
+| `save-config <name>` | Save current connection configuration |
+| `delete-config <name>` | Delete saved configuration |
 | `open <name>` | Open terminal session |
 | `close <name>` | Close connection |
 | `tunc <name> l <local_port> <remote_host> <remote_port>` | Create forward tunnel |

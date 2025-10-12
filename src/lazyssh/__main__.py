@@ -13,6 +13,12 @@ from rich.prompt import Confirm
 
 from lazyssh import check_dependencies
 from lazyssh.command_mode import CommandMode
+from lazyssh.config import (
+    config_exists,
+    load_configs,
+    save_config,
+    validate_config_name,
+)
 from lazyssh.logging_module import APP_LOGGER, ensure_log_directory
 from lazyssh.models import SSHConnection
 from lazyssh.ssh import SSHManager
@@ -21,6 +27,7 @@ from lazyssh.ui import (
     display_error,
     display_info,
     display_menu,
+    display_saved_configs,
     display_ssh_status,
     display_success,
     display_tunnels,
@@ -76,6 +83,14 @@ def handle_menu_action(choice: str) -> bool | Literal["mode"]:
         success = scp_mode_menu()
     elif choice == "8":
         success = change_terminal_method_menu()
+    elif choice == "9":
+        success = view_saved_configs_menu()
+    elif choice == "10":
+        success = connect_from_config_menu()
+    elif choice == "11":
+        success = save_connection_config_menu()
+    elif choice == "12":
+        success = delete_saved_config_menu()
     return success
 
 
@@ -96,7 +111,11 @@ def main_menu() -> str:
         "6": "Switch to command mode",
         "7": "Enter SCP mode",
         "8": "Change terminal method",
-        "9": "Exit",
+        "9": "View saved configurations",
+        "10": "Connect from saved config",
+        "11": "Save current connection",
+        "12": "Delete saved config",
+        "13": "Exit",
     }
     display_menu(options)
     choice = get_user_input("Choose an option")
@@ -181,6 +200,53 @@ def create_connection_menu() -> bool:
         display_success(f"Connection '{socket_name}' established")
         if dynamic_port:
             display_success(f"Dynamic proxy created on port {dynamic_port}")
+
+        # Prompt to save configuration
+        save_prompt = get_user_input("Save this connection configuration? (y/N)").lower()
+        if save_prompt == "y" or save_prompt == "yes":
+            # Prompt for config name (default: socket name)
+            config_name_input = get_user_input(f"Enter configuration name (default: {socket_name})")
+            config_name = config_name_input if config_name_input else socket_name
+
+            # Validate config name
+            if not validate_config_name(config_name):
+                display_error(
+                    "Invalid configuration name. Use alphanumeric characters, dashes, "
+                    "and underscores only"
+                )
+                display_warning("Configuration not saved")
+                return True
+
+            # Check if config already exists
+            if config_exists(config_name):
+                if not Confirm.ask(f"Configuration '{config_name}' already exists. Overwrite?"):
+                    display_info("Configuration not saved")
+                    return True
+
+            # Build config parameters
+            config_params = {
+                "host": host,
+                "port": int(port),
+                "username": username,
+                "socket_name": socket_name,
+            }
+
+            # Add optional parameters
+            if identity_file:
+                config_params["ssh_key"] = identity_file
+            if shell:
+                config_params["shell"] = shell
+            if no_term:
+                config_params["no_term"] = no_term
+            if dynamic_port:
+                config_params["proxy_port"] = dynamic_port
+
+            # Save the configuration
+            if save_config(config_name, config_params):
+                display_success(f"Configuration '{config_name}' saved")
+            else:
+                display_error(f"Failed to save configuration '{config_name}'")
+
         return True
     return False
 
@@ -471,7 +537,7 @@ def prompt_mode_main() -> Literal["mode"] | None:
     while True:
         try:
             choice = main_menu()
-            if choice == "9":
+            if choice == "13":
                 if check_active_connections():
                     safe_exit()
                 return None
@@ -480,7 +546,7 @@ def prompt_mode_main() -> Literal["mode"] | None:
             if result == "mode":
                 return "mode"  # Return to trigger mode switch
         except KeyboardInterrupt:
-            display_warning("\nUse option 9 to safely exit LazySSH.")
+            display_warning("\nUse option 13 to safely exit LazySSH.")
         except Exception as e:
             display_error(f"Error: {str(e)}")
 
@@ -550,10 +616,232 @@ def scp_mode_menu() -> bool:
     return False
 
 
+def view_saved_configs_menu() -> bool:
+    """
+    Menu option to view saved configurations.
+
+    Returns:
+        True always (just displays configurations)
+    """
+    display_info("\nSaved Configurations")
+    configs = load_configs()
+    display_saved_configs(configs)
+    return True
+
+
+def connect_from_config_menu() -> bool:
+    """
+    Menu option to connect using a saved configuration.
+
+    Returns:
+        True if connection was successful, False otherwise
+    """
+    configs = load_configs()
+    if not configs:
+        display_info("No saved configurations available")
+        return False
+
+    display_info("\nConnect from Saved Configuration")
+    display_info("Available configurations:")
+    config_list = list(configs.items())
+    for i, (name, params) in enumerate(config_list, 1):
+        host = params.get("host", "N/A")
+        username = params.get("username", "N/A")
+        display_info(f"{i}. {name} ({username}@{host})")
+
+    try:
+        choice = int(get_user_input("Enter configuration number")) - 1
+        if 0 <= choice < len(config_list):
+            config_name, config_data = config_list[choice]
+
+            # Validate required fields
+            required_fields = ["host", "port", "username", "socket_name"]
+            missing_fields = [field for field in required_fields if field not in config_data]
+            if missing_fields:
+                display_error(
+                    f"Invalid configuration '{config_name}': missing required field(s): "
+                    f"{', '.join(missing_fields)}"
+                )
+                return False
+
+            # Check if socket name is already in use
+            socket_path = f"/tmp/{config_data['socket_name']}"
+            if socket_path in ssh_manager.connections:
+                display_warning(f"Socket name '{config_data['socket_name']}' is already in use.")
+                if not Confirm.ask("Do you want to use a different name?", default=True):
+                    display_info("Connection aborted")
+                    return False
+                new_socket = get_user_input("Enter a new socket name")
+                if not new_socket:
+                    display_error("Socket name cannot be empty")
+                    return False
+                config_data["socket_name"] = new_socket
+                socket_path = f"/tmp/{new_socket}"
+
+            # Create connection object from config
+            conn = SSHConnection(
+                host=config_data["host"],
+                port=int(config_data["port"]),
+                username=config_data["username"],
+                socket_path=socket_path,
+                dynamic_port=config_data.get("proxy_port"),
+                identity_file=config_data.get("ssh_key"),
+                shell=config_data.get("shell"),
+                no_term=config_data.get("no_term", False),
+            )
+
+            # Create the connection
+            if ssh_manager.create_connection(conn):
+                display_success(f"Connection '{config_data['socket_name']}' established")
+                if conn.dynamic_port:
+                    display_success(f"Dynamic proxy created on port {conn.dynamic_port}")
+                return True
+            return False
+        else:
+            display_error("Invalid configuration number")
+    except ValueError:
+        display_error("Invalid input")
+    return False
+
+
+def save_connection_config_menu() -> bool:
+    """
+    Menu option to save a connection configuration.
+
+    Returns:
+        True if configuration was saved successfully, False otherwise
+    """
+    if not ssh_manager.connections:
+        display_error("No active connections to save")
+        display_info("First create a connection using option 1")
+        return False
+
+    display_info("\nSave Connection Configuration")
+
+    # If only one connection, use it
+    if len(ssh_manager.connections) == 1:
+        socket_path = list(ssh_manager.connections.keys())[0]
+        conn = ssh_manager.connections[socket_path]
+        conn_name = Path(socket_path).name
+        display_info(f"Saving configuration for connection: {conn_name}")
+    else:
+        # Multiple connections - ask user to select
+        display_info("Select connection to save:")
+        conn_list = list(ssh_manager.connections.items())
+        for i, (sock_path, c) in enumerate(conn_list, 1):
+            name = Path(sock_path).name
+            display_info(f"{i}. {name} ({c.username}@{c.host}:{c.port})")
+
+        try:
+            choice = int(get_user_input("Enter connection number")) - 1
+            if 0 <= choice < len(conn_list):
+                socket_path, conn = conn_list[choice]
+            else:
+                display_error("Invalid connection number")
+                return False
+        except ValueError:
+            display_error("Invalid input")
+            return False
+
+    # Get config name from user
+    default_name = Path(socket_path).name
+    config_name_input = get_user_input(f"Enter configuration name (default: {default_name})")
+    config_name = config_name_input if config_name_input else default_name
+
+    # Validate config name
+    if not validate_config_name(config_name):
+        display_error(
+            "Invalid configuration name. Use alphanumeric characters, dashes, and underscores only"
+        )
+        return False
+
+    # Check if config already exists
+    if config_exists(config_name):
+        if not Confirm.ask(f"Configuration '{config_name}' already exists. Overwrite?"):
+            display_info("Save cancelled")
+            return False
+
+    # Build config parameters
+    config_params = {
+        "host": conn.host,
+        "port": conn.port,
+        "username": conn.username,
+        "socket_name": Path(conn.socket_path).name,
+    }
+
+    # Add optional parameters
+    if conn.identity_file:
+        config_params["ssh_key"] = conn.identity_file
+    if conn.shell:
+        config_params["shell"] = conn.shell
+    if conn.no_term:
+        config_params["no_term"] = conn.no_term
+    if conn.dynamic_port:
+        config_params["proxy_port"] = conn.dynamic_port
+
+    # Save the configuration
+    if save_config(config_name, config_params):
+        display_success(f"Configuration '{config_name}' saved")
+        return True
+    else:
+        display_error(f"Failed to save configuration '{config_name}'")
+        return False
+
+
+def delete_saved_config_menu() -> bool:
+    """
+    Menu option to delete a saved configuration.
+
+    Returns:
+        True if configuration was deleted successfully, False otherwise
+    """
+    configs = load_configs()
+    if not configs:
+        display_info("No saved configurations to delete")
+        return False
+
+    display_info("\nDelete Saved Configuration")
+    display_info("Available configurations:")
+    config_list = list(configs.keys())
+    for i, name in enumerate(config_list, 1):
+        display_info(f"{i}. {name}")
+
+    try:
+        choice = int(get_user_input("Enter configuration number to delete")) - 1
+        if 0 <= choice < len(config_list):
+            config_name = config_list[choice]
+
+            # Confirm deletion
+            if not Confirm.ask(f"Delete configuration '{config_name}'?"):
+                display_info("Deletion cancelled")
+                return False
+
+            # Import and use delete_config function
+            from lazyssh.config import delete_config
+
+            if delete_config(config_name):
+                display_success(f"Configuration '{config_name}' deleted")
+                return True
+            else:
+                display_error(f"Failed to delete configuration '{config_name}'")
+                return False
+        else:
+            display_error("Invalid configuration number")
+    except ValueError:
+        display_error("Invalid input")
+    return False
+
+
 @click.command()
 @click.option("--prompt", is_flag=True, help="Start in prompt mode instead of command mode")
 @click.option("--debug", is_flag=True, help="Enable debug logging to console")
-def main(prompt: bool, debug: bool) -> None:
+@click.option(
+    "--config",
+    type=click.Path(exists=False),
+    default=None,
+    help="Load configuration file on startup (default: /tmp/lazyssh/connections.conf)",
+)
+def main(prompt: bool, debug: bool, config: str | None) -> None:
     """
     LazySSH - A comprehensive SSH toolkit for managing connections and tunnels.
 
@@ -576,6 +864,23 @@ def main(prompt: bool, debug: bool) -> None:
 
         # Display banner
         display_banner()
+
+        # Load and display configurations if --config flag is provided
+        if config is not None:
+            # If config is an empty string or flag was used without value, use default path
+            config_path = config if config else None
+            configs = load_configs(config_path)
+            if configs:
+                display_saved_configs(configs)
+                if APP_LOGGER:
+                    APP_LOGGER.info(f"Loaded {len(configs)} configuration(s) from config file")
+            else:
+                if config:
+                    display_warning(f"Configuration file not found or empty: {config}")
+                else:
+                    display_warning("No saved configurations found")
+                if APP_LOGGER:
+                    APP_LOGGER.warning("No configurations loaded")
 
         # Check dependencies
         required_missing, optional_missing = check_dependencies()

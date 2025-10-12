@@ -159,6 +159,87 @@ close <connection_name>
 close myserver
 ```
 
+### `config` (or `configs`)
+
+Displays all saved connection configurations.
+
+**Syntax:**
+```
+config
+```
+
+**Example:**
+```bash
+config
+# or
+configs
+```
+
+**Description:**
+Shows a table of all saved connection configurations including host, username, port, SSH key path, proxy settings, and other parameters. Configurations are stored in `/tmp/lazyssh/connections.conf` in TOML format.
+
+### `connect`
+
+Connects using a saved configuration.
+
+**Syntax:**
+```
+connect <config_name>
+```
+
+**Parameters:**
+- `config_name`: Name of the saved configuration to use
+
+**Example:**
+```bash
+connect prod-server
+```
+
+**Description:**
+Establishes a new SSH connection using all settings from a saved configuration. This automatically applies host, port, username, SSH key, proxy settings, and other parameters saved in the configuration.
+
+### `save-config`
+
+Saves the current or last connection configuration for reuse.
+
+**Syntax:**
+```
+save-config <config_name>
+```
+
+**Parameters:**
+- `config_name`: Name to save the configuration as (alphanumeric, dashes, and underscores only)
+
+**Example:**
+```bash
+save-config prod-server
+```
+
+**Description:**
+Saves the current or most recent connection parameters to `/tmp/lazyssh/connections.conf`. If a configuration with the same name exists, you'll be prompted to confirm overwriting it.
+
+**Note:** LazySSH also prompts you to save a configuration automatically after successfully creating a new connection.
+
+### `delete-config`
+
+Deletes a saved connection configuration.
+
+**Syntax:**
+```
+delete-config <config_name>
+```
+
+**Parameters:**
+- `config_name`: Name of the configuration to delete
+
+**Example:**
+```bash
+delete-config prod-server
+```
+
+**Description:**
+Removes a saved configuration from `/tmp/lazyssh/connections.conf`. You'll be asked to confirm before deletion.
+
 ### `scp`
 
 Enters SCP mode for file transfers with a specific connection.
@@ -480,6 +561,7 @@ LazySSH features intelligent tab completion in both command and SCP modes:
 
 - **Command Names**: Press Tab to see available commands
 - **Connection Names**: Automatically suggests connection names for commands like `open`, `close`, `scp`, and `tunc`
+- **Configuration Names**: Suggests saved configuration names for commands like `connect` and `delete-config`
 - **Terminal Methods**: Suggests `auto`, `native`, and `terminator` for the `terminal` command
 - **Command Parameters**: Suggests relevant parameters for commands
 - **File Paths**: Offers file path completion for commands requiring files

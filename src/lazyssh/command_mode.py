@@ -15,6 +15,14 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
 from . import logging_module
+from .config import (
+    config_exists,
+    delete_config,
+    get_config,
+    load_configs,
+    save_config,
+    validate_config_name,
+)
 from .logging_module import (  # noqa: F401
     APP_LOGGER,
     CMD_LOGGER,
@@ -27,6 +35,7 @@ from .ssh import SSHManager
 from .ui import (
     display_error,
     display_info,
+    display_saved_configs,
     display_ssh_status,
     display_success,
     display_tunnels,
@@ -249,6 +258,26 @@ class LazySSHCompleter(Completer):
                     if not word_before_cursor or conn_name.startswith(word_before_cursor):
                         yield Completion(conn_name, start_position=-len(word_before_cursor))
 
+        # Handle completion for connect command (saved configs)
+        elif command == "connect":
+            if (len(words) == 1 and text.endswith(" ")) or (
+                len(words) == 2 and not text.endswith(" ")
+            ):
+                config_names = self.command_mode._get_config_name_completions()
+                for config_name in config_names:
+                    if not word_before_cursor or config_name.startswith(word_before_cursor):
+                        yield Completion(config_name, start_position=-len(word_before_cursor))
+
+        # Handle completion for delete-config command
+        elif command == "delete-config":
+            if (len(words) == 1 and text.endswith(" ")) or (
+                len(words) == 2 and not text.endswith(" ")
+            ):
+                config_names = self.command_mode._get_config_name_completions()
+                for config_name in config_names:
+                    if not word_before_cursor or config_name.startswith(word_before_cursor):
+                        yield Completion(config_name, start_position=-len(word_before_cursor))
+
 
 class CommandMode:
     def __init__(self, ssh_manager: SSHManager) -> None:
@@ -258,7 +287,11 @@ class CommandMode:
 
         # Define available commands
         self.commands = {
-            "connect": self.cmd_lazyssh,  # Alias for lazyssh
+            "config": self.cmd_config,  # Display saved configurations
+            "configs": self.cmd_config,  # Alias for config
+            "connect": self.cmd_connect,  # Connect using saved config
+            "save-config": self.cmd_save_config,  # Save connection configuration
+            "delete-config": self.cmd_delete_config,  # Delete saved configuration
             "list": self.cmd_list,
             "lazyssh": self.cmd_lazyssh,
             "help": self.cmd_help,
@@ -292,6 +325,11 @@ class CommandMode:
             conn_name = Path(socket_path).name
             conn_completions.append(conn_name)
         return conn_completions
+
+    def _get_config_name_completions(self) -> list[str]:
+        """Get list of saved configuration names for completion"""
+        configs = load_configs()
+        return list(configs.keys())
 
     def get_prompt_text(self) -> HTML:
         """Get the prompt text with HTML formatting"""
@@ -607,6 +645,219 @@ class CommandMode:
         # Connections are already shown by show_status() before each prompt
         return True
 
+    def cmd_config(self, args: list[str]) -> bool:
+        """Handle config command for displaying saved configurations"""
+        configs = load_configs()
+        display_saved_configs(configs)
+        return True
+
+    def cmd_connect(self, args: list[str]) -> bool:
+        """Handle connect command for connecting using a saved configuration"""
+        if not args:
+            display_error("Usage: connect <config-name>")
+            configs = load_configs()
+            if configs:
+                display_info("Available configurations:")
+                for name in configs.keys():
+                    display_info(f"  {name}")
+            else:
+                display_info("No saved configurations available")
+            return False
+
+        config_name = args[0]
+        config_data = get_config(config_name)
+
+        if not config_data:
+            display_error(f"Configuration '{config_name}' not found")
+            configs = load_configs()
+            if configs:
+                display_info("Available configurations:")
+                for name in configs.keys():
+                    display_info(f"  {name}")
+            return False
+
+        # Validate required fields
+        required_fields = ["host", "port", "username", "socket_name"]
+        missing_fields = [field for field in required_fields if field not in config_data]
+        if missing_fields:
+            display_error(
+                f"Invalid configuration '{config_name}': missing required field(s): "
+                f"{', '.join(missing_fields)}"
+            )
+            return False
+
+        # Validate SSH key if provided
+        if "ssh_key" in config_data and config_data["ssh_key"]:
+            ssh_key_path = Path(config_data["ssh_key"]).expanduser()
+            if not ssh_key_path.exists():
+                display_warning(f"SSH key file not found: {config_data['ssh_key']}")
+                display_info("Continuing with configuration (key might exist at connection time)")
+
+        # Create connection object from config
+        try:
+            socket_path = f"/tmp/{config_data['socket_name']}"
+            
+            # Check if socket name is already in use
+            if socket_path in self.ssh_manager.connections:
+                display_warning(
+                    f"Socket name '{config_data['socket_name']}' is already in use."
+                )
+                from rich.prompt import Confirm
+
+                if not Confirm.ask("Do you want to use a different name?", default=True):
+                    display_info("Connection aborted")
+                    return False
+                new_socket = input("Enter a new socket name: ")
+                if not new_socket:
+                    display_error("Socket name cannot be empty")
+                    return False
+                config_data["socket_name"] = new_socket
+                socket_path = f"/tmp/{new_socket}"
+
+            conn = SSHConnection(
+                host=config_data["host"],
+                port=int(config_data["port"]),
+                username=config_data["username"],
+                socket_path=socket_path,
+                dynamic_port=config_data.get("proxy_port"),
+                identity_file=config_data.get("ssh_key"),
+                shell=config_data.get("shell"),
+                no_term=config_data.get("no_term", False),
+            )
+
+            if CMD_LOGGER:
+                CMD_LOGGER.info(
+                    f"Connecting using saved config '{config_name}': "
+                    f"{conn.username}@{conn.host}:{conn.port}"
+                )
+
+            # Create the connection
+            if self.ssh_manager.create_connection(conn):
+                display_success(f"Connection '{config_data['socket_name']}' established")
+                if conn.dynamic_port:
+                    display_success(f"Dynamic proxy created on port {conn.dynamic_port}")
+                return True
+            return False
+
+        except (ValueError, KeyError) as e:
+            display_error(f"Error creating connection from config: {str(e)}")
+            if CMD_LOGGER:
+                CMD_LOGGER.error(f"Error in connect command: {str(e)}")
+            return False
+
+    def cmd_save_config(self, args: list[str]) -> bool:
+        """Handle save-config command for saving a connection configuration"""
+        if not args:
+            display_error("Usage: save-config <config-name>")
+            return False
+
+        config_name = args[0]
+
+        # Validate config name
+        if not validate_config_name(config_name):
+            display_error(
+                "Invalid configuration name. Use alphanumeric characters, dashes, and underscores only"
+            )
+            return False
+
+        # Check if we have any active connections to save from
+        if not self.ssh_manager.connections:
+            display_error("No active connections to save")
+            display_info("First create a connection using the 'lazyssh' command")
+            return False
+
+        # If there's only one connection, use it
+        if len(self.ssh_manager.connections) == 1:
+            socket_path = list(self.ssh_manager.connections.keys())[0]
+            conn = self.ssh_manager.connections[socket_path]
+        else:
+            # Multiple connections - ask user to select
+            display_info("Multiple connections available. Select one:")
+            conn_list = list(self.ssh_manager.connections.items())
+            for i, (sock_path, c) in enumerate(conn_list, 1):
+                conn_name = Path(sock_path).name
+                display_info(f"  {i}. {conn_name} ({c.username}@{c.host}:{c.port})")
+
+            try:
+                choice = int(input("Enter connection number: ")) - 1
+                if 0 <= choice < len(conn_list):
+                    socket_path, conn = conn_list[choice]
+                else:
+                    display_error("Invalid connection number")
+                    return False
+            except (ValueError, KeyboardInterrupt):
+                display_error("Invalid input")
+                return False
+
+        # Check if config already exists
+        if config_exists(config_name):
+            from rich.prompt import Confirm
+
+            if not Confirm.ask(f"Configuration '{config_name}' already exists. Overwrite?"):
+                display_info("Save cancelled")
+                return False
+
+        # Build config parameters dictionary
+        config_params = {
+            "host": conn.host,
+            "port": conn.port,
+            "username": conn.username,
+            "socket_name": Path(conn.socket_path).name,
+        }
+
+        # Add optional parameters if present
+        if conn.identity_file:
+            config_params["ssh_key"] = conn.identity_file
+        if conn.shell:
+            config_params["shell"] = conn.shell
+        if conn.no_term:
+            config_params["no_term"] = conn.no_term
+        if conn.dynamic_port:
+            config_params["proxy_port"] = conn.dynamic_port
+
+        # Save the configuration
+        if save_config(config_name, config_params):
+            display_success(f"Configuration '{config_name}' saved")
+            if CMD_LOGGER:
+                CMD_LOGGER.info(f"Configuration '{config_name}' saved successfully")
+            return True
+        else:
+            display_error(f"Failed to save configuration '{config_name}'")
+            return False
+
+    def cmd_delete_config(self, args: list[str]) -> bool:
+        """Handle delete-config command for deleting a saved configuration"""
+        if not args:
+            display_error("Usage: delete-config <config-name>")
+            configs = load_configs()
+            if configs:
+                display_info("Available configurations:")
+                for name in configs.keys():
+                    display_info(f"  {name}")
+            return False
+
+        config_name = args[0]
+
+        if not config_exists(config_name):
+            display_error(f"Configuration '{config_name}' not found")
+            return False
+
+        # Confirm deletion
+        from rich.prompt import Confirm
+
+        if not Confirm.ask(f"Delete configuration '{config_name}'?"):
+            display_info("Deletion cancelled")
+            return False
+
+        if delete_config(config_name):
+            display_success(f"Configuration '{config_name}' deleted")
+            if CMD_LOGGER:
+                CMD_LOGGER.info(f"Configuration '{config_name}' deleted successfully")
+            return True
+        else:
+            display_error(f"Failed to delete configuration '{config_name}'")
+            return False
+
     def cmd_help(self, args: list[str]) -> bool:
         """Handle help command"""
         if not args:
@@ -656,6 +907,21 @@ class CommandMode:
             display_info("[magenta bold]File Transfer:[/magenta bold]")
             display_info("  [cyan]scp[/cyan] [[yellow]<ssh_id>[/yellow]]")
             display_info("  [dim]Example:[/dim] [green]scp ubuntu[/green]\n")
+
+            display_info("[magenta bold]Configuration Management:[/magenta bold]")
+            display_info("  [cyan]config[/cyan] / [cyan]configs[/cyan]              - Display saved configurations")
+            display_info(
+                "  [cyan]connect[/cyan] [yellow]<config-name>[/yellow]          - Connect using saved configuration"
+            )
+            display_info(
+                "  [cyan]save-config[/cyan] [yellow]<config-name>[/yellow]     - Save current connection as configuration"
+            )
+            display_info(
+                "  [cyan]delete-config[/cyan] [yellow]<config-name>[/yellow]   - Delete saved configuration"
+            )
+            display_info("  [dim]Example:[/dim] [green]config[/green]")
+            display_info("  [dim]Example:[/dim] [green]connect my-server[/green]")
+            display_info("  [dim]Example:[/dim] [green]save-config my-server[/green]\n")
 
             display_info("[magenta bold]System Commands:[/magenta bold]")
             display_info("  [cyan]list[/cyan]    - Show all connections and tunnels")
