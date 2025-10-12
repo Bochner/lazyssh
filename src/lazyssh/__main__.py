@@ -15,6 +15,7 @@ from lazyssh import check_dependencies
 from lazyssh.command_mode import CommandMode
 from lazyssh.config import (
     config_exists,
+    initialize_config_file,
     load_configs,
     save_config,
     validate_config_name,
@@ -861,6 +862,9 @@ def main(prompt: bool, debug: bool, config: str | None) -> None:
             set_debug_mode(True)
             if APP_LOGGER:
                 APP_LOGGER.debug("Debug logging enabled")
+
+        # Initialize config file with examples if it doesn't exist
+        initialize_config_file()
 
         # Display banner
         display_banner()

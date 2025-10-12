@@ -268,7 +268,17 @@ class LazySSHCompleter(Completer):
                     if not word_before_cursor or config_name.startswith(word_before_cursor):
                         yield Completion(config_name, start_position=-len(word_before_cursor))
 
-        # Handle completion for delete-config command
+        # Handle completion for save-config command (suggest established connection names)
+        elif command == "save-config":
+            if (len(words) == 1 and text.endswith(" ")) or (
+                len(words) == 2 and not text.endswith(" ")
+            ):
+                connection_names = self.command_mode._get_connection_name_completions()
+                for connection_name in connection_names:
+                    if not word_before_cursor or connection_name.startswith(word_before_cursor):
+                        yield Completion(connection_name, start_position=-len(word_before_cursor))
+
+        # Handle completion for delete-config command (suggest saved config names)
         elif command == "delete-config":
             if (len(words) == 1 and text.endswith(" ")) or (
                 len(words) == 2 and not text.endswith(" ")
@@ -330,6 +340,15 @@ class CommandMode:
         """Get list of saved configuration names for completion"""
         configs = load_configs()
         return list(configs.keys())
+
+    def _get_connection_name_completions(self) -> list[str]:
+        """Get list of established connection socket names for completion"""
+        connection_names = []
+        for socket_path in self.ssh_manager.connections.keys():
+            # Extract the socket name from the full path
+            connection_name = Path(socket_path).name
+            connection_names.append(connection_name)
+        return connection_names
 
     def get_prompt_text(self) -> HTML:
         """Get the prompt text with HTML formatting"""
@@ -699,7 +718,17 @@ class CommandMode:
 
         # Create connection object from config
         try:
-            socket_path = f"/tmp/{config_data['socket_name']}"
+            # Normalize and validate socket_name before using it
+            socket_name = os.path.basename(config_data.get("socket_name", ""))
+            if not socket_name or not validate_config_name(socket_name):
+                display_error(
+                    "Invalid socket name. Use alphanumeric characters, dashes, and underscores only"
+                )
+                return False
+
+            # Update config_data with normalized socket_name
+            config_data["socket_name"] = socket_name
+            socket_path = f"/tmp/{socket_name}"
 
             # Check if socket name is already in use
             if socket_path in self.ssh_manager.connections:

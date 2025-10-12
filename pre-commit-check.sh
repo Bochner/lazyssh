@@ -104,13 +104,13 @@ print_success() {
 # Function to print error
 print_error() {
     echo -e "${RED}✗ $1${NC}"
-    ((ERRORS_FOUND++))
+    ERRORS_FOUND=$((ERRORS_FOUND + 1))
 }
 
 # Function to print warning
 print_warning() {
     echo -e "${YELLOW}⚠ $1${NC}"
-    ((WARNINGS_FOUND++))
+    WARNINGS_FOUND=$((WARNINGS_FOUND + 1))
 }
 
 # Function to print info
@@ -121,7 +121,7 @@ print_info() {
 # Function to print fix applied
 print_fix() {
     echo -e "${GREEN}🔧 Fixed: $1${NC}"
-    ((FIXES_APPLIED++))
+    FIXES_APPLIED=$((FIXES_APPLIED + 1))
 }
 
 # Check if python3 is available
