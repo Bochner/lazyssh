@@ -774,17 +774,20 @@ def display_plugin_info(plugin: Any) -> None:
     """
     # Create info table
     info_table = Table.grid(padding=(0, 2))
-    info_table.add_column(style="info bold", justify="right")
-    info_table.add_column(style="table.row")
+    info_table.add_column(justify="right")  # No style on column, use markup in rows
+    info_table.add_column()
 
-    info_table.add_row("Name:", plugin.name)
-    info_table.add_row("Type:", "Python" if plugin.plugin_type == "python" else "Shell")
-    info_table.add_row("Version:", plugin.version)
-    info_table.add_row("Description:", plugin.description)
-    info_table.add_row("Requirements:", plugin.requirements)
-    info_table.add_row("File Path:", str(plugin.file_path))
+    info_table.add_row("[bold info]Name:[/bold info]", plugin.name)
     info_table.add_row(
-        "Status:", "[success]Valid ✓[/success]" if plugin.is_valid else "[error]Invalid ✗[/error]"
+        "[bold info]Type:[/bold info]", "Python" if plugin.plugin_type == "python" else "Shell"
+    )
+    info_table.add_row("[bold info]Version:[/bold info]", plugin.version)
+    info_table.add_row("[bold info]Description:[/bold info]", plugin.description)
+    info_table.add_row("[bold info]Requirements:[/bold info]", plugin.requirements)
+    info_table.add_row("[bold info]File Path:[/bold info]", str(plugin.file_path))
+    info_table.add_row(
+        "[bold info]Status:[/bold info]",
+        "[success]Valid ✓[/success]" if plugin.is_valid else "[error]Invalid ✗[/error]",
     )
 
     if not plugin.is_valid and plugin.validation_errors:

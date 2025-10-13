@@ -30,6 +30,73 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+# Simple ANSI color codes - Dracula theme
+COLORS = {
+    "cyan": "\033[96m",  # Cyan
+    "green": "\033[92m",  # Green
+    "yellow": "\033[93m",  # Yellow
+    "purple": "\033[95m",  # Purple/Magenta
+    "reset": "\033[0m",  # Reset
+    "bold": "\033[1m",  # Bold
+    "dim": "\033[2m",  # Dim
+}
+
+
+def color(text: str, color_name: str, bold: bool = False) -> str:
+    """Apply color to text using ANSI codes
+
+    Args:
+        text: Text to color
+        color_name: Name of color from COLORS dict
+        bold: Whether to make text bold
+
+    Returns:
+        Colored text string
+    """
+    c = COLORS.get(color_name, "")
+    b = COLORS["bold"] if bold else ""
+    return f"{b}{c}{text}{COLORS['reset']}"
+
+
+def print_status(message: str) -> None:
+    """Print a status message
+
+    Args:
+        message: Status message to print
+    """
+    print(f"  {color('[*]', 'cyan')} {message}")
+
+
+def print_section_header(title: str) -> None:
+    """Print a section header
+
+    Args:
+        title: Section title
+    """
+    print()
+    print(color("─" * 80, "dim"))
+    print(color(f"  {title}", "purple", bold=True))
+    print(color("─" * 80, "dim"))
+
+
+def print_subsection(title: str, content: str = "") -> None:
+    """Print a subsection - simple and clean
+
+    Args:
+        title: Subsection title
+        content: Content to display
+    """
+    print()
+    print(color(f"{title}:", "yellow", bold=True))
+    if content and content.strip():
+        print(content)
+    else:
+        print(color("N/A", "dim"))
+        print()
+        print(f"[{title}]")
+        if content:
+            print(content)
+
 
 @dataclass
 class EnumerationData:
@@ -103,7 +170,7 @@ def safe_command(command: str, default: str = "N/A") -> str:
 
 def enumerate_system() -> dict[str, Any]:
     """Gather system information"""
-    print("  [*] Enumerating system information...")
+    print_status("Enumerating system information...")
 
     data = {
         "os": safe_command("cat /etc/os-release 2>/dev/null || uname -a"),
@@ -123,7 +190,7 @@ def enumerate_system() -> dict[str, Any]:
 
 def enumerate_users() -> dict[str, Any]:
     """Gather user and group information"""
-    print("  [*] Enumerating users and groups...")
+    print_status("Enumerating users and groups...")
 
     data = {
         "current_user": safe_command("whoami"),
@@ -140,7 +207,7 @@ def enumerate_users() -> dict[str, Any]:
 
 def enumerate_network() -> dict[str, Any]:
     """Gather network configuration"""
-    print("  [*] Enumerating network configuration...")
+    print_status("Enumerating network configuration...")
 
     data = {
         "interfaces": safe_command("ip addr 2>/dev/null || ifconfig"),
@@ -162,7 +229,7 @@ def enumerate_network() -> dict[str, Any]:
 
 def enumerate_processes() -> dict[str, Any]:
     """Gather process and service information"""
-    print("  [*] Enumerating processes and services...")
+    print_status("Enumerating processes and services...")
 
     data = {
         "processes": safe_command("ps auxf 2>/dev/null || ps aux"),
@@ -182,7 +249,7 @@ def enumerate_processes() -> dict[str, Any]:
 
 def enumerate_packages() -> dict[str, Any]:
     """Gather installed package information"""
-    print("  [*] Enumerating installed packages...")
+    print_status("Enumerating installed packages...")
 
     # Detect package manager
     pkg_mgr = "unknown"
@@ -213,7 +280,7 @@ def enumerate_packages() -> dict[str, Any]:
 
 def enumerate_filesystem() -> dict[str, Any]:
     """Gather filesystem information"""
-    print("  [*] Enumerating filesystem...")
+    print_status("Enumerating filesystem...")
 
     data = {
         "mounts": safe_command("mount"),
@@ -235,7 +302,7 @@ def enumerate_filesystem() -> dict[str, Any]:
 
 def enumerate_environment() -> dict[str, Any]:
     """Gather environment variables"""
-    print("  [*] Enumerating environment variables...")
+    print_status("Enumerating environment variables...")
 
     data = {
         "env_vars": safe_command("env"),
@@ -250,7 +317,7 @@ def enumerate_environment() -> dict[str, Any]:
 
 def enumerate_scheduled() -> dict[str, Any]:
     """Gather scheduled tasks information"""
-    print("  [*] Enumerating scheduled tasks...")
+    print_status("Enumerating scheduled tasks...")
 
     data = {
         "user_crontab": safe_command("crontab -l 2>/dev/null || echo 'No crontab'"),
@@ -268,7 +335,7 @@ def enumerate_scheduled() -> dict[str, Any]:
 
 def enumerate_security() -> dict[str, Any]:
     """Gather security configuration"""
-    print("  [*] Enumerating security configurations...")
+    print_status("Enumerating security configurations...")
 
     data = {
         "selinux": safe_command(
@@ -293,7 +360,7 @@ def enumerate_security() -> dict[str, Any]:
 
 def enumerate_logs() -> dict[str, Any]:
     """Gather system logs summary"""
-    print("  [*] Enumerating system logs...")
+    print_status("Enumerating system logs...")
 
     data = {
         "auth_log": safe_command(
@@ -316,7 +383,7 @@ def enumerate_logs() -> dict[str, Any]:
 
 def enumerate_hardware() -> dict[str, Any]:
     """Gather hardware information"""
-    print("  [*] Enumerating hardware...")
+    print_status("Enumerating hardware...")
 
     data = {
         "cpu": safe_command("lscpu 2>/dev/null || cat /proc/cpuinfo"),
@@ -330,114 +397,132 @@ def enumerate_hardware() -> dict[str, Any]:
     return data
 
 
-def format_human_readable(data: EnumerationData) -> str:
-    """Format enumeration data as human-readable report
+def format_human_readable(data: EnumerationData) -> None:
+    """Format and print enumeration data as human-readable report
 
     Args:
         data: EnumerationData object
-
-    Returns:
-        Formatted string report
     """
-    output = []
-    output.append("=" * 80)
-    output.append(" " * 25 + "SYSTEM ENUMERATION REPORT")
-    output.append("=" * 80)
-    output.append("")
+    # Header - Simple colored text
+    print()
+    print(color("=" * 80, "purple"))
+    print(color("SYSTEM ENUMERATION REPORT", "purple", bold=True))
+    print(color("=" * 80, "purple"))
 
     # System Information
-    output.append("─" * 80)
-    output.append("SYSTEM INFORMATION")
-    output.append("─" * 80)
+    print_section_header("SYSTEM INFORMATION")
     for key, value in data.system.items():
-        output.append(f"\n[{key.upper()}]")
-        output.append(str(value))
+        print_subsection(key.upper(), str(value))
 
     # Users
-    output.append("\n" + "─" * 80)
-    output.append("USERS AND GROUPS")
-    output.append("─" * 80)
+    print_section_header("USERS AND GROUPS")
     for key, value in data.users.items():
-        output.append(f"\n[{key.upper()}]")
-        output.append(str(value)[:500])  # Limit output
+        print_subsection(key.upper(), str(value))
 
     # Network
-    output.append("\n" + "─" * 80)
-    output.append("NETWORK CONFIGURATION")
-    output.append("─" * 80)
+    print_section_header("NETWORK CONFIGURATION")
     for key, value in data.network.items():
-        output.append(f"\n[{key.upper()}]")
-        output.append(str(value)[:1000])  # Limit output
+        print_subsection(key.upper(), str(value))
 
     # Processes
-    output.append("\n" + "─" * 80)
-    output.append("PROCESSES AND SERVICES")
-    output.append("─" * 80)
-    output.append(f"\n[PROCESS COUNT]: {len(data.processes['processes'].split(chr(10)))}")
-    output.append("\n[RUNNING SERVICES]")
-    output.append(str(data.processes["running_services"])[:1000])
+    print_section_header("PROCESSES AND SERVICES")
+    process_count = len(data.processes["processes"].split("\n"))
+    print()
+    print(f"{color('Process Count:', 'cyan')} {color(str(process_count), 'green')}")
+    print_subsection("RUNNING SERVICES", str(data.processes["running_services"]))
 
     # Packages
-    output.append("\n" + "─" * 80)
-    output.append("INSTALLED PACKAGES")
-    output.append("─" * 80)
-    output.append(f"Package Manager: {data.packages['package_manager']}")
-    output.append(f"Package Count: {data.packages['package_count']}")
+    print_section_header("INSTALLED PACKAGES")
+    print()
+    print(f"{color('Package Manager:', 'cyan')} {color(data.packages['package_manager'], 'green')}")
+    print(
+        f"{color('Package Count:', 'cyan')} {color(str(data.packages['package_count']), 'green')}"
+    )
 
     # Filesystem
-    output.append("\n" + "─" * 80)
-    output.append("FILESYSTEM")
-    output.append("─" * 80)
-    output.append("\n[DISK USAGE]")
-    output.append(data.filesystem["disk_usage"])
-    output.append("\n[MOUNTS]")
-    output.append(str(data.filesystem["mounts"])[:1000])
+    print_section_header("FILESYSTEM")
+    print_subsection("DISK USAGE", data.filesystem["disk_usage"])
+    print_subsection("MOUNTS", str(data.filesystem["mounts"]))
 
     # Environment
-    output.append("\n" + "─" * 80)
-    output.append("ENVIRONMENT")
-    output.append("─" * 80)
-    output.append(f"PATH: {data.environment['path']}")
-    output.append(f"SHELL: {data.environment['shell']}")
-    output.append(f"HOME: {data.environment['home']}")
-    output.append(f"PWD: {data.environment['pwd']}")
+    print_section_header("ENVIRONMENT")
+    print()
+    print(f"{color('PATH:', 'cyan')} {data.environment['path']}")
+    print(f"{color('SHELL:', 'cyan')} {data.environment['shell']}")
+    print(f"{color('HOME:', 'cyan')} {data.environment['home']}")
+    print(f"{color('PWD:', 'cyan')} {data.environment['pwd']}")
 
     # Scheduled Tasks
-    output.append("\n" + "─" * 80)
-    output.append("SCHEDULED TASKS")
-    output.append("─" * 80)
+    print_section_header("SCHEDULED TASKS")
+    has_scheduled = False
     for key, value in data.scheduled.items():
         if value != "N/A" and value != "Not available" and value != "No crontab":
-            output.append(f"\n[{key.upper()}]")
-            output.append(str(value)[:500])
+            print_subsection(key.upper(), str(value))
+            has_scheduled = True
+    if not has_scheduled:
+        print(f"\n{color('No scheduled tasks found', 'dim')}")
 
     # Security
-    output.append("\n" + "─" * 80)
-    output.append("SECURITY CONFIGURATION")
-    output.append("─" * 80)
+    print_section_header("SECURITY CONFIGURATION")
+    has_security = False
     for key, value in data.security.items():
         if (
             value != "N/A"
             and "not installed" not in value.lower()
             and "permission denied" not in value.lower()
         ):
-            output.append(f"\n[{key.upper()}]")
-            output.append(str(value)[:500])
+            print_subsection(key.upper(), str(value))
+            has_security = True
+    if not has_security:
+        print(f"\n{color('No security configurations accessible', 'dim')}")
 
     # Hardware
-    output.append("\n" + "─" * 80)
-    output.append("HARDWARE INFORMATION")
-    output.append("─" * 80)
-    output.append("\n[MEMORY]")
-    output.append(data.hardware["memory"])
-    output.append("\n[CPU]")
-    output.append(str(data.hardware["cpu"])[:500])
+    print_section_header("HARDWARE INFORMATION")
+    print_subsection("MEMORY", data.hardware["memory"])
+    print_subsection("CPU", str(data.hardware["cpu"]))
 
-    output.append("\n" + "=" * 80)
-    output.append("END OF REPORT")
-    output.append("=" * 80)
+    # Footer
+    print()
+    print(color("=" * 80, "purple"))
+    print(color("END OF REPORT", "purple", bold=True))
+    print(color("=" * 80, "purple"))
+    print()
 
-    return "\n".join(output)
+
+def _format_plain_text(data: EnumerationData) -> None:
+    """Fallback plain text formatter - same as colored version
+
+    Args:
+        data: EnumerationData object
+    """
+    print("\n" + "=" * 80)
+    print(" " * 25 + "SYSTEM ENUMERATION REPORT")
+    print("=" * 80)
+
+    print("\n" + "─" * 80)
+    print("  SYSTEM INFORMATION")
+    print("─" * 80)
+    for key, value in data.system.items():
+        print(f"\n[{key.upper()}]")
+        print(str(value)[:500])
+
+    print("\n" + "─" * 80)
+    print("  USERS AND GROUPS")
+    print("─" * 80)
+    for key, value in data.users.items():
+        print(f"\n[{key.upper()}]")
+        print(str(value)[:500])
+
+    print("\n" + "─" * 80)
+    print("  NETWORK CONFIGURATION")
+    print("─" * 80)
+    for key, value in data.network.items():
+        print(f"\n[{key.upper()}]")
+        print(str(value)[:1000])
+
+    print("\n" + "─" * 80)
+    print("  END OF REPORT")
+    print("=" * 80 + "\n")
 
 
 def main():
@@ -447,13 +532,14 @@ def main():
     host = os.environ.get("LAZYSSH_HOST", "unknown")
     user = os.environ.get("LAZYSSH_USER", "unknown")
 
+    # Display header - simple ANSI colors
     print()
-    print("=" * 80)
-    print("  LazySSH Enumeration Plugin v1.0.0")
-    print(f"  Target: {user}@{host} (socket: {socket_name})")
-    print("=" * 80)
+    print(color("LazySSH Enumeration Plugin v1.0.0", "cyan", bold=True))
+    print(
+        f"{color('Target:', 'green')} {color(f'{user}@{host}', 'yellow')} {color(f'(socket: {socket_name})', 'dim')}"
+    )
     print()
-    print("Starting comprehensive system enumeration...")
+    print(color("Starting comprehensive system enumeration...", "cyan"))
     print()
 
     # Gather all data
@@ -471,10 +557,9 @@ def main():
         hardware=enumerate_hardware(),
     )
 
+    # Display completion message
     print()
-    print("  [✓] Enumeration complete!")
-    print()
-    print("=" * 80)
+    print(f"{color('✓', 'green')} {color('Enumeration complete!', 'cyan')}")
     print()
 
     # Check if JSON output requested
@@ -486,7 +571,7 @@ def main():
         print(json.dumps(data_dict, indent=2))
     else:
         # Human-readable output
-        print(format_human_readable(data))
+        format_human_readable(data)
 
     return 0
 
