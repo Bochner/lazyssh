@@ -815,16 +815,17 @@ def display_plugin_output(output: str, execution_time: float, success: bool = Tr
         execution_time: Time taken to execute plugin
         success: Whether plugin executed successfully
     """
-    # Display output in a panel
+    # Display output with a simple header and footer rule (no outer border)
     if output.strip():
-        panel = Panel(
-            output.strip(),
-            title="[panel.title]Plugin Output[/panel.title]",
-            border_style="success" if success else "error",
-            box=ROUNDED,
-            padding=(1, 2),
-        )
-        console.print(panel)
+        normalized = output.replace("\r\n", "\n").replace("\r", "\n").strip()
+        text = Text.from_ansi(normalized, justify="left")
+        text.no_wrap = False
+        text.overflow = "fold"
+
+        rule_style = "success" if success else "error"
+        console.rule("[panel.title]Plugin Output[/panel.title]", style=rule_style)
+        console.print(text)
+        console.rule(style=rule_style)
 
     # Display execution time
     time_style = "success" if success else "error"

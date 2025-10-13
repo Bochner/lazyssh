@@ -74,9 +74,8 @@ def print_section_header(title: str) -> None:
         title: Section title
     """
     print()
-    print(color("─" * 80, "dim"))
-    print(color(f"  {title}", "purple", bold=True))
-    print(color("─" * 80, "dim"))
+    # Minimal header to avoid conflicts with enclosing UI frames
+    print(color(f"› {title}", "purple", bold=True))
 
 
 def print_subsection(title: str, content: str = "") -> None:
@@ -405,9 +404,7 @@ def format_human_readable(data: EnumerationData) -> None:
     """
     # Header - Simple colored text
     print()
-    print(color("=" * 80, "purple"))
     print(color("SYSTEM ENUMERATION REPORT", "purple", bold=True))
-    print(color("=" * 80, "purple"))
 
     # System Information
     print_section_header("SYSTEM INFORMATION")
@@ -429,6 +426,9 @@ def format_human_readable(data: EnumerationData) -> None:
     process_count = len(data.processes["processes"].split("\n"))
     print()
     print(f"{color('Process Count:', 'cyan')} {color(str(process_count), 'green')}")
+    # Brief process list for quick survey
+    processes_preview = "\n".join(data.processes["processes"].splitlines()[:30])
+    print_subsection("PROCESSES (TOP 30)", processes_preview)
     print_subsection("RUNNING SERVICES", str(data.processes["running_services"]))
 
     # Packages
@@ -483,9 +483,7 @@ def format_human_readable(data: EnumerationData) -> None:
 
     # Footer
     print()
-    print(color("=" * 80, "purple"))
     print(color("END OF REPORT", "purple", bold=True))
-    print(color("=" * 80, "purple"))
     print()
 
 
