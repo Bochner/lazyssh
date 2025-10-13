@@ -93,6 +93,10 @@ lazyssh> plugin run uptime myserver
 ```
 See `docs/reference.md` for the full environment variable list and explore `docs/Plugin/example_template.py` for a more comprehensive template.
 
+### Plugin Requirements
+- **Python plugins (.py)**: Must be executable (`chmod +x`). Shebang (`#!/usr/bin/env python3`) is recommended but not required - plugins are executed via the Python interpreter.
+- **Shell plugins (.sh)**: Must be executable and include a shebang (`#!/bin/bash` or similar).
+
 ### Tips
 - Use `plugin info <name>` to verify metadata and execution permissions.
 - Plugins inherit your local environment (PATH, python modules, etc.).

@@ -193,4 +193,4 @@ def main(debug: bool, config: str | None) -> None:
 
 
 if __name__ == "__main__":
-    main()  # pragma: no cover
+    main()  # pragma: no cover  # pylint: disable=no-value-for-parameter

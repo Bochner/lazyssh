@@ -22,7 +22,7 @@ import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -383,7 +383,8 @@ def _build_snapshot(payloads: Sequence[Mapping[str, Any]], stderr: str) -> Enume
     if stderr.strip():
         warnings.append(f"Remote stderr: {stderr.strip()}")
 
-    return EnumerationSnapshot(collected_at=datetime.utcnow(), probes=probes, warnings=warnings)
+    # Use timezone-aware timestamp to avoid deprecation warnings and ensure UTC alignment
+    return EnumerationSnapshot(collected_at=datetime.now(UTC), probes=probes, warnings=warnings)
 
 
 def collect_remote_snapshot() -> EnumerationSnapshot:
@@ -417,16 +418,14 @@ def _extract_paths(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
-def _summarize_text(text: str, max_lines: int = 3, max_chars: int = 180) -> str:
-    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
-    if not lines:
-        return "No data"
-    snippet = "\n".join(lines[:max_lines])
-    if len(snippet) > max_chars:
-        snippet = snippet[: max_chars - 3] + "..."
-    if len(lines) > max_lines:
-        snippet += "\n..."
-    return snippet
+def _summarize_text(text: str) -> str:
+    """Return the probe output without truncation while handling empty values."""
+
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    stripped = normalized.strip("\n")
+    if stripped.strip():
+        return stripped
+    return "No data"
 
 
 def _format_count_label(count: int, singular: str, plural: str) -> str:
@@ -765,7 +764,13 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
         table = Table(box=box.MINIMAL_DOUBLE_HEAD, expand=True, show_header=True, padding=(0, 1))
         table.add_column("Check", style="accent", no_wrap=True)
         table.add_column("Summary", style="foreground", overflow="fold", ratio=5, min_width=48)
-        table.add_column("Status", style="dim", justify="center", no_wrap=True, width=5)
+        table.add_column(
+            "Status",
+            style="dim",
+            justify="center",
+            no_wrap=True,
+            width=8,
+        )
         for key, result in sorted(category_results.items()):
             summary = _summarize_text(result.stdout)
             status_style = "success" if result.status == 0 else "error"

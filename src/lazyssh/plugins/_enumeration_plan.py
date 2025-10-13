@@ -248,16 +248,16 @@ REMOTE_PROBES: tuple[RemoteProbe, ...] = (
     RemoteProbe(
         "logs",
         "auth_recent",
-        "journalctl -n 200 -u ssh --no-pager 2>/dev/null || "
-        "tail -n 200 /var/log/auth.log 2>/dev/null || "
-        "tail -n 200 /var/log/secure 2>/dev/null || echo 'Authentication logs unavailable'",
+        "journalctl -n 20 -u ssh --no-pager 2>/dev/null || "
+        "tail -n 20 /var/log/auth.log 2>/dev/null || "
+        "tail -n 20 /var/log/secure 2>/dev/null || echo 'Authentication logs unavailable'",
         timeout=6,
     ),
     RemoteProbe(
         "logs",
         "syslog_recent",
-        "journalctl -n 200 --no-pager 2>/dev/null || tail -n 200 /var/log/syslog 2>/dev/null || "
-        "tail -n 200 /var/log/messages 2>/dev/null || echo 'System logs unavailable'",
+        "journalctl -n 20 --no-pager 2>/dev/null || tail -n 20 /var/log/syslog 2>/dev/null || "
+        "tail -n 20 /var/log/messages 2>/dev/null || echo 'System logs unavailable'",
         timeout=6,
     ),
     RemoteProbe(
