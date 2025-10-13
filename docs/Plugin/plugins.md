@@ -26,6 +26,27 @@ Plugins are executable Python or shell scripts that run on your local machine an
 - Configuration management
 - Log analysis
 
+## Plugin Locations and Search Order
+
+LazySSH discovers plugins from multiple locations with the following precedence (first wins when names collide):
+
+1. Directories provided via `LAZYSSH_PLUGIN_DIRS` (colon-separated absolute paths, left to right)
+2. Default user directory: `~/.lazyssh/plugins`
+3. Packaged built-in directory: the installed `lazyssh/plugins/`
+
+Notes:
+- Non-existent directories are ignored without errors.
+- Only top-level files are considered; subdirectories are not searched by default.
+- Symlinks that resolve outside the base directory are skipped for safety.
+
+To set custom directories for the current shell session:
+
+```bash
+export LAZYSSH_PLUGIN_DIRS="/opt/lazyssh-plugins:/work/plugins"
+```
+
+To persist this configuration, add the export line to your shell profile (e.g., `~/.zshrc`).
+
 ## Plugin Structure
 
 A valid plugin must:

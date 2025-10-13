@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [1.5.1] - 2025-10-13
+
+### Added
+- User plugin directories with clear precedence and environment override
+  - Search order: `LAZYSSH_PLUGIN_DIRS` (left→right) → `~/.lazyssh/plugins` → packaged `plugins/`
+  - Non-existent directories are ignored without errors
+  - Safety: symlinks escaping base directories are skipped
+- Runtime enforcement that packaged plugins are executable post-install
+- Documentation updates for plugin locations and `LAZYSSH_PLUGIN_DIRS`
+
+### Tests
+- Coverage for env/user directory discovery, precedence, and non-existent dirs
+- Validation that runtime sets exec bit on packaged plugins
+
 ## [1.5.0] - 2025-10-13
 
 ### Added

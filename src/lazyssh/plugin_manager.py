@@ -47,6 +47,19 @@ class PluginManager:
         if APP_LOGGER:
             APP_LOGGER.debug(f"PluginManager initialized with directory: {self.plugins_dir}")
 
+        # Best-effort: ensure packaged built-in plugins are executable post-install
+        # This satisfies the requirement that built-ins are runnable immediately.
+        try:
+            for entry in (self.plugins_dir.iterdir() if self.plugins_dir.exists() else []):
+                if entry.is_file() and entry.suffix in [".py", ".sh"]:
+                    mode = entry.stat().st_mode
+                    # add user-executable bit if missing
+                    if not os.access(entry, os.X_OK):
+                        entry.chmod(mode | 0o100)
+        except Exception as e:
+            if APP_LOGGER:
+                APP_LOGGER.debug(f"Failed to enforce exec bit on built-in plugins: {e}")
+
     def discover_plugins(self, force_refresh: bool = False) -> dict[str, PluginMetadata]:
         """Discover all plugins in the plugins directory
 
@@ -61,46 +74,54 @@ class PluginManager:
 
         plugins: dict[str, PluginMetadata] = {}
 
-        if not self.plugins_dir.exists():
-            if APP_LOGGER:
-                APP_LOGGER.warning(f"Plugins directory does not exist: {self.plugins_dir}")
-            self._plugins_cache = plugins
-            return plugins
+        # Build ordered search paths: env -> user default -> packaged dir
+        search_paths: list[Path] = self._get_search_paths()
 
-        # Scan for .py and .sh files, ensuring we don't follow symlinks outside plugins_dir
-        base_dir = self.plugins_dir.resolve()
-        for entry in self.plugins_dir.iterdir():
-            if entry.name.startswith("_") or entry.name.startswith("."):
-                # Skip private files, __init__.py, and hidden files
+        for base in search_paths:
+            if not base.exists():
                 continue
 
-            # Resolve the candidate path while safely handling broken symlinks
             try:
-                resolved_path = entry.resolve(strict=False)
-            except Exception as e:
-                if APP_LOGGER:
-                    APP_LOGGER.debug(
-                        f"Skipping plugin entry due to resolution failure: {entry} ({e})"
-                    )
-                continue
-
-            # Ensure the resolved path is within the plugins directory to avoid path traversal via symlinks
-            try:
-                is_within = resolved_path == base_dir or resolved_path.is_relative_to(base_dir)
+                resolved_base = base.resolve()
             except Exception:
-                # Fallback conservative behavior if any unexpected error occurs
-                is_within = False
+                resolved_base = base
 
-            if not is_within:
-                if APP_LOGGER:
-                    APP_LOGGER.debug(
-                        f"Skipping plugin entry outside plugins_dir: {resolved_path} (base: {base_dir})"
+            for entry in base.iterdir():
+                if entry.name.startswith("_") or entry.name.startswith("."):
+                    continue
+
+                # If plugin with same name already discovered from higher-precedence path, skip
+                candidate_path = entry
+                if candidate_path.suffix not in [".py", ".sh"]:
+                    continue
+
+                # Resolve safely and ensure stays within its base directory
+                try:
+                    resolved_path = candidate_path.resolve(strict=False)
+                except Exception as e:
+                    if APP_LOGGER:
+                        APP_LOGGER.debug(
+                            f"Skipping plugin entry due to resolution failure: {candidate_path} ({e})"
+                        )
+                    continue
+
+                try:
+                    is_within = (
+                        resolved_path == resolved_base or resolved_path.is_relative_to(resolved_base)
                     )
-                continue
+                except Exception:
+                    is_within = False
 
-            if resolved_path.suffix in [".py", ".sh"]:
+                if not is_within:
+                    if APP_LOGGER:
+                        APP_LOGGER.debug(
+                            f"Skipping plugin entry outside base dir: {resolved_path} (base: {resolved_base})"
+                        )
+                    continue
+
+                # Extract metadata and honor precedence
                 metadata = self._extract_metadata(resolved_path)
-                if metadata:
+                if metadata and metadata.name not in plugins:
                     plugins[metadata.name] = metadata
 
         self._plugins_cache = plugins
@@ -109,6 +130,37 @@ class PluginManager:
             APP_LOGGER.debug(f"Discovered {len(plugins)} plugins")
 
         return plugins
+
+    def _get_search_paths(self) -> list[Path]:
+        """Compute ordered plugin search paths based on env and defaults.
+
+        Precedence:
+        1) LAZYSSH_PLUGIN_DIRS (colon-separated, absolute)
+        2) Default user dir: ~/.lazyssh/plugins
+        3) Packaged dir: self.plugins_dir
+        """
+        paths: list[Path] = []
+
+        # 1) Env-provided directories (left-to-right)
+        env_value = os.environ.get("LAZYSSH_PLUGIN_DIRS", "").strip()
+        if env_value:
+            for raw in env_value.split(":"):
+                raw = raw.strip()
+                if not raw:
+                    continue
+                p = Path(raw)
+                # Only accept absolute paths per spec; ignore others
+                if p.is_absolute():
+                    paths.append(p)
+
+        # 2) Default user directory
+        user_dir = Path.home() / ".lazyssh" / "plugins"
+        paths.append(user_dir)
+
+        # 3) Packaged directory
+        paths.append(self.plugins_dir)
+
+        return paths
 
     def _extract_metadata(self, plugin_file: Path) -> PluginMetadata | None:
         """Extract metadata from a plugin file
