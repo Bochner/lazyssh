@@ -306,9 +306,8 @@ def _decode_payload(payload: str, encoding: str) -> str:
             raw = base64.b64decode(payload.encode("ascii"), validate=False)
             return raw.decode("utf-8", errors="replace")
         except Exception:
-            return base64.b64decode(payload.encode("ascii"), validate=False).decode(
-                "utf-8", errors="replace"
-            )
+            # If base64 decoding fails, return the original payload as fallback
+            return payload
     if encoding == "hex":
         try:
             return bytes.fromhex(payload).decode("utf-8", errors="replace")
