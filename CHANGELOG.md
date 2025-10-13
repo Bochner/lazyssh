@@ -50,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `profile_ui_performance()` for UI performance profiling and recommendations
   - Cached table templates for repeated use scenarios
   - Batch rendering updates for efficient UI operations
+- **Enhanced SCP Mode Completion**: Improved tab completion behavior in SCP mode
+  - Filtered current directory from completion suggestions to reduce redundancy
+  - Added prevention of redundant directory changes when already in target directory
+  - Enhanced user experience with more relevant completion suggestions
+- **Console Instance Management**: Centralized console management system
+  - New `console_instance.py` module for unified console handling
+  - Centralized theme application across all UI components
+  - Improved performance with optimized console configuration
+  - Consistent styling and behavior across command mode, SCP mode, and terminal integration
 
 ### Changed
 - **GitHub Issue Templates**: Streamlined and simplified issue submission process
@@ -88,8 +97,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `command_mode.py` styling for command interface with consistent theme
 - Enhanced `__main__.py` startup messages with Dracula theme styling
 - Added performance benchmarking and optimization utilities
-
-## [1.4.1] - 2025-10-12
+- Created new `console_instance.py` module for centralized console management
+- Improved code formatting and removed trailing whitespace across all files
+- Enhanced SCP mode completion logic for better user experience
 
 ## [1.4.1] - 2025-10-12
 

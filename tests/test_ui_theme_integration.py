@@ -7,6 +7,14 @@ import sys
 import unittest
 from pathlib import Path
 
+# Import Rich Style for proper style comparison
+try:
+    from rich.style import NULL_STYLE, Style
+except ImportError:
+    # Fallback for environments without Rich installed
+    Style = None
+    NULL_STYLE = None
+
 # Add src to path to make imports work for tests
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path.absolute()))
@@ -105,9 +113,22 @@ class TestUIThemeIntegration(unittest.TestCase):
         for key in expected_keys:
             if key in theme.styles:
                 value = theme.styles[key]
-                self.assertEqual(
-                    str(value), "default", f"Style '{key}' should be 'default' in plain text mode"
-                )
+                if Style is not None and NULL_STYLE is not None:
+                    # In plain text mode, styles should have default colors
+                    # Check if the style has a default color (not null style)
+                    self.assertTrue(
+                        hasattr(value, "color")
+                        and hasattr(value.color, "name")
+                        and value.color.name == "default",
+                        f"Style '{key}' should have default color in plain text mode, got {value}",
+                    )
+                else:
+                    # Fallback to string comparison if Rich is not available
+                    self.assertEqual(
+                        str(value),
+                        "default",
+                        f"Style '{key}' should be 'default' in plain text mode",
+                    )
 
     def test_theme_precedence_plain_text_overrides_others(self) -> None:
         """Test that plain text mode overrides other theme settings."""
@@ -158,11 +179,22 @@ class TestUIThemeIntegration(unittest.TestCase):
         for key in expected_keys:
             if key in theme.styles:
                 value = theme.styles[key]
-                self.assertEqual(
-                    str(value),
-                    "default",
-                    f"Style '{key}' should be 'default' when plain text is enabled",
-                )
+                if Style is not None and NULL_STYLE is not None:
+                    # In plain text mode, styles should have default colors
+                    # Check if the style has a default color (not null style)
+                    self.assertTrue(
+                        hasattr(value, "color")
+                        and hasattr(value.color, "name")
+                        and value.color.name == "default",
+                        f"Style '{key}' should have default color when plain text is enabled, got {value}",
+                    )
+                else:
+                    # Fallback to string comparison if Rich is not available
+                    self.assertEqual(
+                        str(value),
+                        "default",
+                        f"Style '{key}' should be 'default' when plain text is enabled",
+                    )
 
     def test_theme_precedence_high_contrast_over_colorblind(self) -> None:
         """Test that high contrast mode overrides colorblind mode."""

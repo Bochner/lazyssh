@@ -150,17 +150,17 @@ def main(debug: bool, config: str | None) -> None:
 
         # Display warnings for optional missing dependencies
         if optional_missing:
-            console.print("\n[warning]Missing optional dependencies:[/warning]")
+            display_warning("Missing optional dependencies:")
             for dep in optional_missing:
-                console.print(f"  [dim]-[/dim] [number]{dep}[/number]")
-            console.print("[info]Native terminal method will be used as fallback.[/info]")
+                console.print(f"  - {dep}")
+            display_info("Native terminal method will be used as fallback.")
 
         # Exit only if required dependencies are missing
         if required_missing:
-            console.print("\n[error]Missing required dependencies:[/error]")
+            display_error("Missing required dependencies:")
             for dep in required_missing:
-                console.print(f"  [dim]-[/dim] [error]{dep}[/error]")
-            console.print("[info]Please install the required dependencies and try again.[/info]")
+                console.print(f"  - {dep}")
+            display_info("Please install the required dependencies and try again.")
             sys.exit(1)
 
         # Start in command mode (default interface)

@@ -697,7 +697,7 @@ def measure_render_time(func: Any) -> Any:
     return wrapper
 
 
-def create_efficient_progress_bar(total: int = 100) -> Progress:
+def create_efficient_progress_bar() -> Progress:
     """Create an efficient progress bar with minimal overhead."""
     config = get_ui_config()  # Get fresh configuration
     if config["no_animations"]:

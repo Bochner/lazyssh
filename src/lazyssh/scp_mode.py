@@ -93,7 +93,7 @@ def create_progress_bar(console_instance: Console) -> Progress:
 
 
 def create_multi_file_progress_bar(console_instance: Console) -> Progress:
-    """Create a progress bar for multi-file downloads with proper sizing."""
+    """Create a progress bar for multi-file downloads with proper sizing and smooth updates."""
     # Use Column ratios to control width allocation
     # Description gets 1/4 of width, bar gets 2/4, other columns get 1/4
     description_column = TextColumn("[info]{task.description}[/info]", table_column=Column(ratio=1))
@@ -113,6 +113,13 @@ def create_multi_file_progress_bar(console_instance: Console) -> Progress:
         TimeRemainingColumn(),
         console=console_instance,
         expand=True,
+        # Optimize for smoother updates and reduce blocking
+        refresh_per_second=20,  # Increase refresh rate for smoother progress
+        transient=False,  # Keep progress visible
+        # Reduce initial rendering overhead
+        disable=False,  # Ensure progress is enabled
+        # Optimize for large file transfers
+        speed_estimate_period=1.0,  # Update speed estimates every second
     )
 
 
@@ -970,16 +977,25 @@ class SCPMode:
                 )
 
                 # Since SCP doesn't provide progress feedback, we monitor remote file size
-                # We'll poll for completion instead
+                # We'll poll for completion instead with optimized timing
+                last_update_time = time.time()
+                update_interval = 0.1  # Update every 100ms for uploads
+
                 while process.poll() is None:
-                    # Just update time-based progress as an approximation
-                    # Actual progress can't be determined for uploads without server feedback
-                    elapsed = time.time() - start_time
-                    # Estimate progress based on time and file size
-                    # Using a reasonable upload rate estimate (10MB/s)
-                    est_progress = min(elapsed * 10, file_size_mb)  # Cap at total size
-                    progress.update(upload_task, completed=est_progress)
-                    time.sleep(0.1)
+                    current_time = time.time()
+                    # Only update if enough time has passed
+                    if current_time - last_update_time >= update_interval:
+                        # Just update time-based progress as an approximation
+                        # Actual progress can't be determined for uploads without server feedback
+                        elapsed = time.time() - start_time
+                        # Estimate progress based on time and file size
+                        # Using a reasonable upload rate estimate (10MB/s)
+                        est_progress = min(elapsed * 10, file_size_mb)  # Cap at total size
+                        progress.update(upload_task, completed=est_progress)
+                        last_update_time = current_time
+                    else:
+                        # Sleep for shorter intervals to reduce CPU usage
+                        time.sleep(0.01)
 
                 # Process is complete, set to 100%
                 progress.update(upload_task, completed=file_size_mb)
@@ -1123,20 +1139,47 @@ class SCPMode:
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
 
-                # Poll the local file size to show progress
+                # Poll the local file size to show progress with optimized caching
                 local_size = 0
+                last_update_time = time.time()
+                file_exists = False
+                # Start with longer intervals for large files
+                base_interval = 0.1 if file_size > 100 * 1024 * 1024 else 0.05
+                update_interval = base_interval
+
                 while process.poll() is None:
-                    local_file_path = Path(str(local_path)) if local_path else None
-                    if local_file_path and local_file_path.exists():
-                        try:
-                            new_size = local_file_path.stat().st_size
-                            if new_size > local_size:
-                                local_size = new_size
-                                # Convert to MB for the progress bar
-                                progress.update(download_task, completed=local_size / (1024 * 1024))
-                        except (OSError, FileNotFoundError):
-                            pass  # Ignore file access errors during download
-                    time.sleep(0.1)
+                    current_time = time.time()
+                    # Only check file size if enough time has passed
+                    if current_time - last_update_time >= update_interval:
+                        local_file_path = Path(str(local_path)) if local_path else None
+                        if local_file_path:
+                            # Only check existence if we haven't seen the file yet
+                            if not file_exists:
+                                file_exists = local_file_path.exists()
+
+                            if file_exists:
+                                try:
+                                    new_size = local_file_path.stat().st_size
+                                    if new_size > local_size:
+                                        local_size = new_size
+                                        # Convert to MB for the progress bar
+                                        progress.update(
+                                            download_task, completed=local_size / (1024 * 1024)
+                                        )
+
+                                        # Reduce polling interval as file grows
+                                        if local_size > 0 and file_size > 0:
+                                            progress_ratio = local_size / file_size
+                                            if progress_ratio > 0.5:
+                                                update_interval = base_interval * 0.5
+                                            elif progress_ratio > 0.1:
+                                                update_interval = base_interval * 0.7
+                                except (OSError, FileNotFoundError):
+                                    pass  # Ignore file access errors during download
+                        last_update_time = current_time
+                    else:
+                        # Sleep for shorter intervals to reduce CPU usage
+                        time.sleep(0.01)
 
                 # Process is complete, set to 100% if we know the file size
                 if file_size > 0:
@@ -1377,7 +1420,7 @@ class SCPMode:
                 display_error(f"No files match pattern: {pattern}")
                 return False
 
-            # Calculate total size of all files
+            # Calculate total size of all files efficiently
             total_size = 0
             file_sizes = {}
 
@@ -1391,25 +1434,54 @@ class SCPMode:
             table.add_column("Filename", style="table.row")
             table.add_column("Size", justify="right", style="accent")
 
-            # Add files to table
-            for filename in matched_files:
-                # Get file size
-                size_result = self._execute_ssh_command(
-                    f"stat -c %s {self.current_remote_dir}/{filename}"
-                )
-                if size_result and size_result.returncode == 0:
-                    try:
-                        size = int(size_result.stdout.strip())
-                        file_sizes[filename] = size
-                        total_size += size
+            # Batch file size queries for better performance
+            if matched_files:
+                # Create a single command to get sizes for all files
+                file_paths = [f"{self.current_remote_dir}/{filename}" for filename in matched_files]
+                size_command = f"stat -c '%n %s' {' '.join(file_paths)}"
 
-                        # Format size in human-readable format
-                        human_size = self._format_file_size(size)
-                        table.add_row(filename, human_size)
-                    except ValueError:
-                        table.add_row(filename, "unknown size")
+                size_result = self._execute_ssh_command(size_command)
+                if size_result and size_result.returncode == 0:
+                    # Parse the output: each line is "filename size"
+                    for line in size_result.stdout.strip().split("\n"):
+                        if line.strip():
+                            parts = line.strip().split(" ", 1)
+                            if len(parts) == 2:
+                                filename_with_path = parts[0]
+                                size_str = parts[1]
+                                # Extract just the filename from the full path
+                                filename = filename_with_path.split("/")[-1]
+                                try:
+                                    size = int(size_str)
+                                    file_sizes[filename] = size
+                                    total_size += size
+                                    # Format size in human-readable format
+                                    human_size = self._format_file_size(size)
+                                    table.add_row(filename, human_size)
+                                except ValueError:
+                                    table.add_row(filename, "unknown size")
+                            else:
+                                # Fallback for malformed output
+                                filename = filename_with_path.split("/")[-1]
+                                table.add_row(filename, "unknown size")
                 else:
-                    table.add_row(filename, "unknown size")
+                    # Fallback to individual queries if batch fails
+                    for filename in matched_files:
+                        size_result = self._execute_ssh_command(
+                            f"stat -c %s {self.current_remote_dir}/{filename}"
+                        )
+                        if size_result and size_result.returncode == 0:
+                            try:
+                                size = int(size_result.stdout.strip())
+                                file_sizes[filename] = size
+                                total_size += size
+                                # Format size in human-readable format
+                                human_size = self._format_file_size(size)
+                                table.add_row(filename, human_size)
+                            except ValueError:
+                                table.add_row(filename, "unknown size")
+                        else:
+                            table.add_row(filename, "unknown size")
 
             # Display the table
             console.print(table)
@@ -1468,20 +1540,57 @@ class SCPMode:
                             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                         )
 
-                        # Monitor progress
+                        # Give the download a moment to start before intensive monitoring
+                        # This prevents blocking during the initial file creation phase
+                        time.sleep(0.1)
+
+                        # Monitor progress with optimized polling and caching
                         downloaded_file = Path(local_file)
                         last_size = 0
-                        while process.poll() is None:
-                            if downloaded_file.exists():
-                                current_size = downloaded_file.stat().st_size
-                                # Update file progress
-                                progress.update(file_task, completed=current_size)
+                        last_update_time = time.time()
+                        file_exists = False
+                        # Start with longer intervals for large files, reduce as file grows
+                        base_interval = (
+                            0.1 if file_size > 100 * 1024 * 1024 else 0.05
+                        )  # 100MB threshold
+                        update_interval = base_interval
 
-                                # Update overall progress with the delta from last check
-                                if current_size > last_size:
-                                    progress.update(overall_task, advance=current_size - last_size)
-                                    last_size = current_size
-                            time.sleep(0.1)
+                        while process.poll() is None:
+                            current_time = time.time()
+                            # Only check file size if enough time has passed
+                            if current_time - last_update_time >= update_interval:
+                                # Only check existence if we haven't seen the file yet
+                                if not file_exists:
+                                    file_exists = downloaded_file.exists()
+
+                                if file_exists:
+                                    try:
+                                        current_size = downloaded_file.stat().st_size
+                                        # Update file progress
+                                        progress.update(file_task, completed=current_size)
+
+                                        # Update overall progress with the delta from last check
+                                        if current_size > last_size:
+                                            progress.update(
+                                                overall_task, advance=current_size - last_size
+                                            )
+                                            last_size = current_size
+
+                                            # Reduce polling interval as file grows for smoother updates
+                                            if current_size > 0 and file_size > 0:
+                                                progress_ratio = current_size / file_size
+                                                if progress_ratio > 0.5:  # More than 50% done
+                                                    update_interval = base_interval * 0.5
+                                                elif progress_ratio > 0.1:  # More than 10% done
+                                                    update_interval = base_interval * 0.7
+                                    except (OSError, FileNotFoundError):
+                                        # File might be temporarily inaccessible, continue
+                                        pass
+
+                                last_update_time = current_time
+                            else:
+                                # Sleep for shorter intervals to reduce CPU usage
+                                time.sleep(0.01)
 
                         # Complete the progress bar for this file
                         final_size = file_size
