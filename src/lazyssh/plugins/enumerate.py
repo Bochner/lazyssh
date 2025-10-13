@@ -160,7 +160,7 @@ def safe_command(command: str, default: str = "N/A") -> str:
     Returns:
         Command output or default value
     """
-    exit_code, stdout, stderr = run_remote_command(command)
+    exit_code, stdout, _ = run_remote_command(command)
     if exit_code == 0 and stdout.strip():
         return stdout.strip()
     return default

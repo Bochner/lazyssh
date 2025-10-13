@@ -818,7 +818,8 @@ def display_plugin_output(output: str, execution_time: float, success: bool = Tr
     # Display output with a simple header and footer rule (no outer border)
     if output.strip():
         normalized = output.replace("\r\n", "\n").replace("\r", "\n").strip()
-        text = Text.from_ansi(normalized, justify="left")
+        text = Text.from_ansi(normalized)
+        text.justify = "left"
         text.no_wrap = False
         text.overflow = "fold"
 

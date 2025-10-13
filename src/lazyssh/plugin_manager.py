@@ -1,10 +1,13 @@
 """Plugin manager for LazySSH - Discover, validate and execute plugins"""
 
 import os
+import select
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable, Iterator
 
 from .logging_module import APP_LOGGER
 from .models import SSHConnection
@@ -127,7 +130,7 @@ class PluginManager:
 
         # Try to read metadata from file
         try:
-            with open(plugin_file, "r", encoding="utf-8") as f:
+            with open(plugin_file, encoding="utf-8") as f:
                 # Read first 50 lines to find metadata
                 for _ in range(50):
                     line = f.readline()
@@ -178,7 +181,7 @@ class PluginManager:
             validation_errors.append("File does not exist")
             return False
 
-        # Check if file is executable
+        # Require executability and a shebang for all plugins (including .py)
         if not os.access(plugin_file, os.X_OK):
             validation_errors.append("File is not executable")
             return False
@@ -235,45 +238,109 @@ class PluginManager:
         env.update(self._prepare_plugin_env(connection))
 
         # Prepare command
-        cmd = [str(plugin.file_path)]
+        plugin_type = getattr(plugin, "plugin_type", None)
+        if plugin_type is None:
+            # Infer from file extension when not provided by mocked objects
+            plugin_type = "python" if str(plugin.file_path).endswith(".py") else "shell"
+
+        if plugin_type == "python":
+            cmd = [sys.executable, str(plugin.file_path)]
+        else:
+            cmd = [str(plugin.file_path)]
         if args:
             cmd.extend(args)
 
         if APP_LOGGER:
             APP_LOGGER.debug(f"Executing plugin: {plugin_name} with command: {' '.join(cmd)}")
 
-        # Execute plugin
+        # Execute plugin (streaming under the hood, while preserving combined output return)
         start_time = time.time()
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 cmd,
                 env=env,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=300,  # 5 minute timeout
+                bufsize=1,
             )
+
+            stdout_buffer: list[str] = []
+            stderr_buffer: list[str] = []
+
+            # File descriptors for select
+            assert process.stdout is not None
+            assert process.stderr is not None
+            stdout_fd = process.stdout.fileno()
+            stderr_fd = process.stderr.fileno()
+
+            # Global timeout of 5 minutes
+            timeout_seconds = 300
+            deadline = start_time + timeout_seconds
+
+            # Read until process terminates and pipes are exhausted
+            while True:
+                now = time.time()
+                remaining = max(0, deadline - now)
+                if remaining == 0:
+                    process.kill()
+                    execution_time = time.time() - start_time
+                    error_msg = (
+                        f"Plugin '{plugin_name}' timed out after {execution_time:.0f} seconds"
+                    )
+                    if APP_LOGGER:
+                        APP_LOGGER.error(error_msg)
+                    # Ensure we reap the process
+                    try:
+                        process.wait(timeout=5)
+                    except Exception:
+                        pass
+                    return False, error_msg, execution_time
+
+                rlist, _, _ = select.select([stdout_fd, stderr_fd], [], [], min(0.2, remaining))
+
+                read_any = False
+                if stdout_fd in rlist:
+                    line = process.stdout.readline()
+                    if line:
+                        stdout_buffer.append(line)
+                        read_any = True
+                if stderr_fd in rlist:
+                    line = process.stderr.readline()
+                    if line:
+                        stderr_buffer.append(line)
+                        read_any = True
+
+                # Break if process ended and no more data to read
+                if process.poll() is not None:
+                    # Drain any remaining data quickly
+                    remaining_out = process.stdout.read()
+                    if remaining_out:
+                        stdout_buffer.append(remaining_out)
+                    remaining_err = process.stderr.read()
+                    if remaining_err:
+                        stderr_buffer.append(remaining_err)
+                    break
+
+                # If nothing read this loop and process still running, continue until timeout or data
+                if not read_any:
+                    continue
+
             execution_time = time.time() - start_time
-
-            # Combine stdout and stderr
-            output = result.stdout
-            if result.stderr:
-                output += "\n" + result.stderr
-
-            success = result.returncode == 0
+            returncode = process.returncode if process.returncode is not None else 1
+            success = returncode == 0
 
             if APP_LOGGER:
                 APP_LOGGER.debug(
-                    f"Plugin {plugin_name} completed with exit code {result.returncode} in {execution_time:.2f}s"
+                    f"Plugin {plugin_name} completed with exit code {returncode} in {execution_time:.2f}s"
                 )
 
-            return success, output, execution_time
+            # Preserve existing behavior: combine stdout and stderr
+            output = "".join(stdout_buffer)
+            if stderr_buffer:
+                output += "\n" + "".join(stderr_buffer)
 
-        except subprocess.TimeoutExpired:
-            execution_time = time.time() - start_time
-            error_msg = f"Plugin '{plugin_name}' timed out after {execution_time:.0f} seconds"
-            if APP_LOGGER:
-                APP_LOGGER.error(error_msg)
-            return False, error_msg, execution_time
+            return success, output, execution_time
 
         except Exception as e:
             execution_time = time.time() - start_time
@@ -281,6 +348,146 @@ class PluginManager:
             if APP_LOGGER:
                 APP_LOGGER.error(error_msg)
             return False, error_msg, execution_time
+
+    def execute_plugin_streaming(
+        self,
+        plugin_name: str,
+        connection: SSHConnection,
+        args: list[str] | None = None,
+        *,
+        timeout: int = 300,
+        on_chunk: Callable[[tuple[str, str]], None] | None = None,
+    ) -> Iterator[tuple[str, str]]:
+        """Stream a plugin's stdout and stderr in real time.
+
+        Yields tuples of ("stdout"|"stderr", line) if no callback is provided.
+        If `on_chunk` is provided, it will be called for each tuple and the
+        generator will yield nothing.
+
+        The method enforces a total execution timeout and keeps stdout/stderr
+        separated internally for callers that want to aggregate.
+        """
+        plugin = self.get_plugin(plugin_name)
+        if not plugin:
+            message = f"Plugin '{plugin_name}' not found"
+            if on_chunk is None:
+                # Emit as stderr-style line
+                yield ("stderr", message + "\n")
+            else:
+                on_chunk(("stderr", message + "\n"))
+            return
+
+        if not plugin.is_valid:
+            errors = "\n".join(plugin.validation_errors)
+            message = f"Plugin '{plugin_name}' is invalid:\n{errors}"
+            if on_chunk is None:
+                yield ("stderr", message + "\n")
+            else:
+                on_chunk(("stderr", message + "\n"))
+            return
+
+        env = os.environ.copy()
+        env.update(self._prepare_plugin_env(connection))
+
+        plugin_type = getattr(plugin, "plugin_type", None)
+        if plugin_type is None:
+            plugin_type = "python" if str(plugin.file_path).endswith(".py") else "shell"
+
+        if plugin_type == "python":
+            cmd = [sys.executable, str(plugin.file_path)]
+        else:
+            cmd = [str(plugin.file_path)]
+        if args:
+            cmd.extend(args)
+
+        if APP_LOGGER:
+            APP_LOGGER.debug(f"Streaming plugin: {plugin_name} with command: {' '.join(cmd)}")
+
+        start_time = time.time()
+        try:
+            process = subprocess.Popen(
+                cmd,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            assert process.stdout is not None
+            assert process.stderr is not None
+
+            stdout_fd = process.stdout.fileno()
+            stderr_fd = process.stderr.fileno()
+
+            deadline = start_time + timeout
+
+            def emit(kind: str, data: str) -> None:
+                if not data:
+                    return
+                if on_chunk is None:
+                    # yield from inside nested fn is not allowed; we buffer and signal via outer scope
+                    nonlocal_yields.append((kind, data))
+                else:
+                    on_chunk((kind, data))
+
+            while True:
+                now = time.time()
+                remaining = max(0, deadline - now)
+                if remaining == 0:
+                    process.kill()
+                    break
+
+                rlist, _, _ = select.select([stdout_fd, stderr_fd], [], [], min(0.2, remaining))
+
+                nonlocal_yields: list[tuple[str, str]] = []
+                if stdout_fd in rlist:
+                    line = process.stdout.readline()
+                    if line:
+                        emit("stdout", line)
+                if stderr_fd in rlist:
+                    line = process.stderr.readline()
+                    if line:
+                        emit("stderr", line)
+
+                # Flush any pending yields for this iteration
+                if on_chunk is None and nonlocal_yields:
+                    yield from nonlocal_yields
+
+                if process.poll() is not None:
+                    # Drain remaining
+                    remaining_out = process.stdout.read()
+                    if remaining_out:
+                        if on_chunk is None:
+                            yield ("stdout", remaining_out)
+                        else:
+                            on_chunk(("stdout", remaining_out))
+                    remaining_err = process.stderr.read()
+                    if remaining_err:
+                        if on_chunk is None:
+                            yield ("stderr", remaining_err)
+                        else:
+                            on_chunk(("stderr", remaining_err))
+                    break
+
+        except Exception as e:
+            message = f"Failed to execute plugin '{plugin_name}': {e}\n"
+            if on_chunk is None:
+                yield ("stderr", message)
+            else:
+                on_chunk(("stderr", message))
+            return
+
+        finally:
+            execution_time = time.time() - start_time
+            if APP_LOGGER:
+                rc = None
+                try:
+                    rc = process.returncode  # type: ignore[name-defined]
+                except Exception:
+                    pass
+                APP_LOGGER.debug(
+                    f"Streaming plugin {plugin_name} finished (rc={rc}) in {execution_time:.2f}s"
+                )
 
     def _prepare_plugin_env(self, connection: SSHConnection) -> dict[str, str]:
         """Prepare environment variables for plugin execution
