@@ -32,33 +32,6 @@ from .models import SSHConnection
 ui_config = get_ui_config()
 
 
-def display_message_with_fallback(message: str, message_type: str = "info") -> None:
-    """Display a message with fallback for plain text mode."""
-    config = get_ui_config()  # Get fresh configuration
-    if config["plain_text"] or config["no_rich"]:
-        # Use simple text output for plain text mode
-        prefixes = {
-            "info": "INFO:",
-            "success": "SUCCESS:",
-            "error": "ERROR:",
-            "warning": "WARNING:",
-        }
-        prefix = prefixes.get(message_type, "INFO:")
-        print(f"{prefix} {message}")
-    else:
-        # Use Rich styling for normal mode
-        if message_type == "info":
-            display_info(message)
-        elif message_type == "success":
-            display_success(message)
-        elif message_type == "error":
-            display_error(message)
-        elif message_type == "warning":
-            display_warning(message)
-        else:
-            display_info(message)
-
-
 def display_banner() -> None:
     """Display the LazySSH banner with sophisticated styling"""
     # Create ASCII art for the logo

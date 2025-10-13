@@ -178,20 +178,26 @@ class TestPlainTextMode(unittest.TestCase):
 
     def test_display_message_with_fallback_plain_text(self) -> None:
         """Test display message with fallback in plain text mode."""
-        from lazyssh.ui import display_message_with_fallback
+        from lazyssh.console_instance import display_message_with_fallback
 
-        # Mock the ui_config to simulate plain text mode
-        with mock.patch("lazyssh.ui.ui_config", {"plain_text": True, "no_rich": False}):
+        # Mock the get_ui_config to simulate plain text mode
+        with mock.patch(
+            "lazyssh.console_instance.get_ui_config",
+            return_value={"plain_text": True, "no_rich": False},
+        ):
             with mock.patch("builtins.print") as mock_print:
                 display_message_with_fallback("Test message", "info")
                 mock_print.assert_called_once_with("INFO: Test message")
 
     def test_display_message_with_fallback_different_types(self) -> None:
         """Test display message with fallback for different message types."""
-        from lazyssh.ui import display_message_with_fallback
+        from lazyssh.console_instance import display_message_with_fallback
 
-        # Mock the ui_config to simulate plain text mode
-        with mock.patch("lazyssh.ui.ui_config", {"plain_text": True, "no_rich": False}):
+        # Mock the get_ui_config to simulate plain text mode
+        with mock.patch(
+            "lazyssh.console_instance.get_ui_config",
+            return_value={"plain_text": True, "no_rich": False},
+        ):
             with mock.patch("builtins.print") as mock_print:
                 # Test different message types
                 test_cases = [
@@ -210,13 +216,14 @@ class TestPlainTextMode(unittest.TestCase):
 
     def test_display_message_with_fallback_rich_mode(self) -> None:
         """Test display message with fallback in rich mode."""
-        from lazyssh.ui import display_message_with_fallback
+        from lazyssh.console_instance import display_message_with_fallback
 
         # Mock the get_ui_config to simulate rich mode
         with mock.patch(
-            "lazyssh.ui.get_ui_config", return_value={"plain_text": False, "no_rich": False}
+            "lazyssh.console_instance.get_ui_config",
+            return_value={"plain_text": False, "no_rich": False},
         ):
-            with mock.patch("lazyssh.ui.display_info") as mock_display_info:
+            with mock.patch("lazyssh.console_instance.display_info") as mock_display_info:
                 display_message_with_fallback("Test message", "info")
                 mock_display_info.assert_called_once_with("Test message")
 
