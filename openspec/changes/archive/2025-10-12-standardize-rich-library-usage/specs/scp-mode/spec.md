@@ -1,3 +1,5 @@
+# scp-mode Delta Specification
+
 ## ADDED Requirements
 
 ### Requirement: Enhanced SCP Mode Visual Design

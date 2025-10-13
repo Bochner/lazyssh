@@ -1,3 +1,5 @@
+# plugin-system Delta Specification
+
 ## ADDED Requirements
 ### Requirement: User Plugin Directories
 LazySSH SHALL support loading plugins from user-defined directories in addition to packaged built-ins.
@@ -35,5 +37,4 @@ Discovery SHALL avoid following symlinks outside declared plugin directories and
 #### Scenario: Symlink outside base is ignored
 - **WHEN** a symlink points outside a configured plugin directory  
 - **THEN** it SHALL be skipped and not loaded
-
 

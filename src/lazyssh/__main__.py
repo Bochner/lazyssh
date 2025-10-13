@@ -20,6 +20,7 @@ from lazyssh.console_instance import (
     display_warning,
 )
 from lazyssh.logging_module import APP_LOGGER, ensure_log_directory
+from lazyssh.plugin_manager import ensure_runtime_plugins_dir
 from lazyssh.ssh import SSHManager
 from lazyssh.ui import display_banner, display_saved_configs, display_ssh_status, display_tunnels
 
@@ -124,6 +125,9 @@ def main(debug: bool, config: str | None) -> None:
 
         # Initialize config file with examples if it doesn't exist
         initialize_config_file()
+
+        # Ensure runtime plugin directory exists (best-effort)
+        ensure_runtime_plugins_dir()
 
         # Display banner
         display_banner()

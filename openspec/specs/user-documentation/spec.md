@@ -1,37 +1,36 @@
 # user-documentation Specification
 
 ## Purpose
-TBD - created by archiving change refactor-documentation-structure. Update Purpose after archive.
+Define expectations for LazySSH's user-facing documentation structure, accuracy, completeness, and supporting GitHub issue templates.
+
 ## Requirements
 ### Requirement: Documentation Structure
-User-facing documentation SHALL be organized into clear layers with distinct purposes: quick-start overview, guided user journey, reference documentation, and specialized guides.
+User-facing documentation SHALL remain layered into quick start, guided journey, reference, and specialised guides, with each layer mapped to a single maintained file.
 
-#### Scenario: New user finds information quickly
-- **WHEN** a new user reads the README
-- **THEN** they can understand core features and run their first command within 5 minutes
+#### Scenario: Quick start stays in README
+- **WHEN** a new user reads `README.md`
+- **THEN** they see a concise overview plus installation & first-run steps
+- **AND** the README links directly to the deeper guides in `docs/`
 
-#### Scenario: User progresses from basics to advanced
-- **WHEN** a user follows the documentation in order (README → User Guide → Command Reference → Specialized Guides)
-- **THEN** they encounter information appropriate to their skill level at each stage
+#### Scenario: Guided journey lives in getting-started doc
+- **WHEN** a user opens `docs/getting-started.md`
+- **THEN** they find step-by-step workflows for connections, tunnels, file transfers, and saving configs without reference duplication from other files
 
-#### Scenario: Experienced user looks up specific command
-- **WHEN** an experienced user needs command syntax details
-- **THEN** they can find complete reference information without tutorial content
+#### Scenario: Reference and advanced material are isolated
+- **WHEN** a user consults `docs/reference.md` or `docs/guides.md`
+- **THEN** `docs/reference.md` provides scannable command/environment tables
+- **AND** `docs/guides.md` hosts advanced workflows (tunnelling, SCP, automation) without repeating quick-start content
 
 ### Requirement: Documentation Accuracy
-All documentation SHALL reflect current command syntax, feature availability, and system behavior as of the documented version.
+All documentation SHALL reflect current command syntax, feature availability, and system behaviour.
 
-#### Scenario: Commands work as documented
-- **WHEN** a user copies a command example from documentation
-- **THEN** the command executes successfully without syntax errors
+#### Scenario: README commands execute as written
+- **WHEN** a user copies any command example from `README.md`
+- **THEN** the command runs successfully with the current CLI (e.g. explicit `--config /path` usage)
 
-#### Scenario: Prerequisites are accurate
-- **WHEN** a user reviews installation prerequisites
-- **THEN** they see correct distinction between required and optional dependencies
-
-#### Scenario: Environment variables are correct
-- **WHEN** a user configures environment variables from documentation
-- **THEN** the variable names and values match actual implementation
+#### Scenario: Reference tables match implementation
+- **WHEN** a maintainer reviews `docs/reference.md`
+- **THEN** every listed command, flag, environment variable, and config key matches names found in `src/lazyssh`
 
 ### Requirement: Documentation Completeness
 All user-facing features present in the current release SHALL be documented with usage examples.
@@ -58,13 +57,13 @@ User-facing documentation SHALL prioritize clarity and scannability over compreh
 ### Requirement: Documentation Maintainability
 Documentation SHALL avoid redundancy and maintain a single source of truth for each concept.
 
-#### Scenario: Information is not duplicated
-- **WHEN** a feature is documented
-- **THEN** comprehensive details appear in only one primary location with cross-references from other documents
+#### Scenario: Command syntax centralised in one place
+- **WHEN** command syntax needs updating
+- **THEN** only `README.md` (for the quick example) and `docs/reference.md` require edits, with other docs linking instead of duplicating syntax
 
-#### Scenario: Updates are coordinated
-- **WHEN** a command or feature changes
-- **THEN** all documentation references can be identified and updated without hunting through unstructured prose
+#### Scenario: Environment variables have one canonical list
+- **WHEN** a new UI or plugin environment variable is introduced
+- **THEN** it is documented exactly once in the environment table within `docs/reference.md`
 
 ### Requirement: GitHub Issue Templates
 The project SHALL provide user-friendly GitHub issue templates that facilitate bug reports and feature requests with minimal friction while maintaining sufficient information quality for maintainers.

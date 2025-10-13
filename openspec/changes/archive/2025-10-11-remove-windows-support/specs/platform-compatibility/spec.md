@@ -1,3 +1,5 @@
+# platform-compatibility Delta Specification
+
 ## REMOVED Requirements
 
 ### Requirement: Cross-Platform Executable Detection

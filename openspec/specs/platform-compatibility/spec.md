@@ -1,7 +1,8 @@
 # platform-compatibility Specification
 
 ## Purpose
-TBD - created by archiving change add-windows-platform-support. Update Purpose after archive.
+Define how LazySSH checks for required and optional dependencies on supported Unix-like platforms and handles executable detection failures.
+
 ## Requirements
 ### Requirement: Platform-Agnostic Dependency Checking
 

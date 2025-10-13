@@ -1,22 +1,30 @@
 # plugin-system Specification
 
 ## Purpose
-TBD - created by archiving change add-plugin-system. Update Purpose after archive.
+Document LazySSH's plugin discovery, metadata handling, execution workflow, and safety requirements for built-in and user-provided plugins.
+
 ## Requirements
 ### Requirement: Plugin Discovery
-The system SHALL automatically discover plugins in the `src/lazyssh/plugins/` directory by scanning for executable Python (`.py`) and shell (`.sh`) files.
+The system SHALL automatically discover plugins from the following locations in order of precedence (first match wins):
 
-#### Scenario: List available plugins
-- **WHEN** user runs the `plugin list` command
-- **THEN** system displays all discovered plugins in a table with name, type (Python/Shell), and description
+1. Directories provided via `LAZYSSH_PLUGIN_DIRS` (left to right)
+2. Default user directory: `~/.lazyssh/plugins`
+3. Runtime directory: `/tmp/lazyssh/plugins`
+4. Packaged built-in directory: `lazyssh/plugins/` (installed with the package)
 
-#### Scenario: No plugins found
-- **WHEN** plugins directory is empty or contains no valid plugins
-- **THEN** system displays message "No plugins found" instead of empty table
+#### Scenario: Runtime directory included
+- **WHEN** plugin discovery runs
+- **THEN** the `/tmp/lazyssh/plugins` directory SHALL be included in the search order as specified
+- **AND** non-existent directories SHALL be ignored without error
 
-#### Scenario: Invalid plugin file
-- **WHEN** plugin file exists but lacks execute permissions or proper shebang
-- **THEN** system marks plugin as invalid and displays warning in plugin list
+### Requirement: Plugin Directory Creation
+The system SHALL ensure the existence of `/tmp/lazyssh/plugins` at program startup.
+
+#### Scenario: Create runtime plugin directory
+- **WHEN** the program starts
+- **THEN** the directory `/tmp/lazyssh/plugins` SHALL be created if it does not exist
+- **AND** permissions SHALL be set to `0700`
+- **AND** failures SHALL be logged without crashing the application
 
 ### Requirement: Plugin Metadata Extraction
 The system SHALL extract metadata from plugin files using structured comments at the beginning of the file.
@@ -178,10 +186,9 @@ The system SHALL warn users about plugin execution risks.
 - **WHEN** user runs built-in plugin (enumerate.py)
 - **THEN** no warning is displayed as built-in plugins are trusted
 
-### Requirement: Plugin Discovery Safety
+### Requirement: Discovery Safety
 Discovery SHALL avoid following symlinks outside declared plugin directories and SHALL handle broken symlinks gracefully without crashing. The search MUST be restricted to configured directories and only consider top-level files by default.
 
 #### Scenario: Symlink outside base is ignored
-- **WHEN** a symlink points outside a configured plugin directory  
+- **WHEN** a symlink points outside a configured plugin directory
 - **THEN** it SHALL be skipped and not loaded
-

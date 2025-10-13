@@ -2,15 +2,33 @@
 
 import os
 import select
+import stat
 import subprocess
 import sys
 import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator
 
 from .logging_module import APP_LOGGER
 from .models import SSHConnection
+
+RUNTIME_PLUGINS_DIR = Path("/tmp/lazyssh/plugins")
+
+
+def ensure_runtime_plugins_dir() -> None:
+    """Ensure the runtime plugins directory exists with 0700 permissions.
+
+    Best-effort creation; logs a warning on failure but does not raise.
+    """
+    try:
+        # Create directory tree if missing
+        RUNTIME_PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
+        # Enforce permissions 0700
+        RUNTIME_PLUGINS_DIR.chmod(0o700)
+    except Exception as e:
+        if APP_LOGGER:
+            APP_LOGGER.warning(f"Failed to ensure runtime plugins dir {RUNTIME_PLUGINS_DIR}: {e}")
 
 
 @dataclass
@@ -25,6 +43,7 @@ class PluginMetadata:
     plugin_type: str  # 'python' or 'shell'
     is_valid: bool
     validation_errors: list[str]
+    validation_warnings: list[str]
 
 
 class PluginManager:
@@ -50,7 +69,7 @@ class PluginManager:
         # Best-effort: ensure packaged built-in plugins are executable post-install
         # This satisfies the requirement that built-ins are runnable immediately.
         try:
-            for entry in (self.plugins_dir.iterdir() if self.plugins_dir.exists() else []):
+            for entry in self.plugins_dir.iterdir() if self.plugins_dir.exists() else []:
                 if entry.is_file() and entry.suffix in [".py", ".sh"]:
                     mode = entry.stat().st_mode
                     # add user-executable bit if missing
@@ -106,8 +125,8 @@ class PluginManager:
                     continue
 
                 try:
-                    is_within = (
-                        resolved_path == resolved_base or resolved_path.is_relative_to(resolved_base)
+                    is_within = resolved_path == resolved_base or resolved_path.is_relative_to(
+                        resolved_base
                     )
                 except Exception:
                     is_within = False
@@ -137,7 +156,8 @@ class PluginManager:
         Precedence:
         1) LAZYSSH_PLUGIN_DIRS (colon-separated, absolute)
         2) Default user dir: ~/.lazyssh/plugins
-        3) Packaged dir: self.plugins_dir
+        3) Runtime tmp dir: /tmp/lazyssh/plugins
+        4) Packaged dir: self.plugins_dir
         """
         paths: list[Path] = []
 
@@ -157,7 +177,10 @@ class PluginManager:
         user_dir = Path.home() / ".lazyssh" / "plugins"
         paths.append(user_dir)
 
-        # 3) Packaged directory
+        # 3) Runtime tmp directory
+        paths.append(RUNTIME_PLUGINS_DIR)
+
+        # 4) Packaged directory
         paths.append(self.plugins_dir)
 
         return paths
@@ -171,7 +194,8 @@ class PluginManager:
         Returns:
             PluginMetadata object or None if file cannot be read
         """
-        validation_errors = []
+        validation_errors: list[str] = []
+        validation_warnings: list[str] = []
         plugin_type = "python" if plugin_file.suffix == ".py" else "shell"
 
         # Default values
@@ -205,7 +229,9 @@ class PluginManager:
             validation_errors.append(f"Failed to read file: {e}")
 
         # Validate plugin
-        is_valid = self._validate_plugin(plugin_file, validation_errors)
+        is_valid = self._validate_plugin(
+            plugin_file, plugin_type, validation_errors, validation_warnings
+        )
 
         return PluginMetadata(
             name=name,
@@ -216,17 +242,26 @@ class PluginManager:
             plugin_type=plugin_type,
             is_valid=is_valid,
             validation_errors=validation_errors,
+            validation_warnings=validation_warnings,
         )
 
-    def _validate_plugin(self, plugin_file: Path, validation_errors: list[str]) -> bool:
-        """Validate a plugin file
+    def _validate_plugin(
+        self,
+        plugin_file: Path,
+        plugin_type: str,
+        validation_errors: list[str],
+        validation_warnings: list[str],
+    ) -> bool:
+        """Validate a plugin file.
 
         Args:
-            plugin_file: Path to the plugin file
-            validation_errors: List to append validation errors to
+            plugin_file: Path to the plugin file.
+            plugin_type: Plugin type identifier ("python" or "shell").
+            validation_errors: List to append validation errors to.
+            validation_warnings: List to append non-fatal validation warnings to.
 
         Returns:
-            True if plugin is valid, False otherwise
+            True if plugin is valid, False otherwise.
         """
         # Check if file exists
         if not plugin_file.exists():
@@ -234,17 +269,38 @@ class PluginManager:
             return False
 
         # Require executability and a shebang for all plugins (including .py)
-        if not os.access(plugin_file, os.X_OK):
-            validation_errors.append("File is not executable")
-            return False
+        executable = os.access(plugin_file, os.X_OK)
+
+        if not executable and plugin_type == "python":
+            try:
+                current_mode = plugin_file.stat().st_mode
+                plugin_file.chmod(current_mode | stat.S_IXUSR)
+                executable = os.access(plugin_file, os.X_OK)
+                if executable and APP_LOGGER:
+                    APP_LOGGER.debug("Repaired execute bit for python plugin %s", plugin_file)
+            except Exception as exc:
+                if APP_LOGGER:
+                    APP_LOGGER.debug("Failed to repair execute bit for %s: %s", plugin_file, exc)
+
+        if not executable:
+            if plugin_type == "python":
+                validation_warnings.append(
+                    "Executable bit missing; invoking via Python interpreter."
+                )
+            else:
+                validation_errors.append("File is not executable")
+                return False
 
         # Check for shebang
         try:
             with open(plugin_file, "rb") as f:
                 first_bytes = f.read(2)
                 if first_bytes != b"#!":
-                    validation_errors.append("Missing shebang (#!)")
-                    return False
+                    if plugin_type == "python":
+                        validation_warnings.append("Missing shebang; invoking via interpreter.")
+                    else:
+                        validation_errors.append("Missing shebang (#!)")
+                        return False
         except Exception as e:
             validation_errors.append(f"Failed to check shebang: {e}")
             return False

@@ -1,7 +1,8 @@
 # scp-mode Specification
 
 ## Purpose
-TBD - created by archiving change fix-scp-no-args. Update Purpose after archive.
+Detail LazySSH's interactive SCP mode behavior, including connection selection, performance optimizations, and Rich-based user experience requirements.
+
 ## Requirements
 ### Requirement: SCP Mode Entry Without Arguments
 

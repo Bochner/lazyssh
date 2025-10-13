@@ -1,640 +1,898 @@
 #!/usr/bin/env python3
 # PLUGIN_NAME: enumerate
-# PLUGIN_DESCRIPTION: Comprehensive system enumeration and reconnaissance
-# PLUGIN_VERSION: 1.0.0
+# PLUGIN_DESCRIPTION: Optimized system enumeration with priority findings summary
+# PLUGIN_VERSION: 2.0.0
 # PLUGIN_REQUIREMENTS: python3
 
-"""
-System Enumeration Plugin for LazySSH
+"""Optimized LazySSH system enumeration plugin.
 
-Performs comprehensive system reconnaissance including:
-- Operating system and kernel information
-- User accounts and groups
-- Network configuration
-- Running processes and services
-- Installed packages
-- Filesystem and mounts
-- Environment variables
-- Scheduled tasks (cron, systemd timers)
-- Security configurations
-- System logs
-- Hardware information
-
-Output is formatted as human-readable report or JSON.
+This version executes a single batched remote script to gather telemetry,
+parses structured probe output, computes priority findings, and renders a
+Dracula-themed Rich summary with a plain-text fallback and JSON parity.
 """
 
+from __future__ import annotations
+
+import base64
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-# Simple ANSI color codes - Dracula theme
-COLORS = {
-    "cyan": "\033[96m",  # Cyan
-    "green": "\033[92m",  # Green
-    "yellow": "\033[93m",  # Yellow
-    "purple": "\033[95m",  # Purple/Magenta
-    "reset": "\033[0m",  # Reset
-    "bold": "\033[1m",  # Bold
-    "dim": "\033[2m",  # Dim
+from lazyssh.console_instance import console, get_ui_config
+
+try:  # pragma: no cover - optional Rich import for fallback modes
+    from rich import box
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+except Exception:  # pragma: no cover - Rich disabled or unavailable
+    box = None  # type: ignore[assignment,misc]
+    Panel = None  # type: ignore[assignment,misc]
+    Table = None  # type: ignore[assignment,misc]
+    Text = None  # type: ignore[assignment,misc]
+
+try:  # pragma: no cover - logging module may be unavailable when packaged separately
+    from lazyssh.logging_module import APP_LOGGER, CONNECTION_LOG_DIR_TEMPLATE
+except Exception:  # pragma: no cover - provide safe fallbacks
+    APP_LOGGER = None  # type: ignore[assignment]
+    CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"
+
+from lazyssh.plugins._enumeration_plan import (
+    PRIORITY_HEURISTICS,
+    REMOTE_PROBES,
+    PriorityHeuristic,
+    RemoteProbe,
+)
+
+Severity = str  # alias for readability; values constrained to "high", "medium", "info"
+
+# Lookup tables to keep probe metadata handy at runtime
+PROBE_LOOKUP: dict[tuple[str, str], RemoteProbe] = {
+    (probe.category, probe.key): probe for probe in REMOTE_PROBES
+}
+HEURISTIC_LOOKUP: dict[str, PriorityHeuristic] = {h.key: h for h in PRIORITY_HEURISTICS}
+
+SELECTED_CATEGORY_ORDER: tuple[str, ...] = (
+    "system",
+    "users",
+    "network",
+    "filesystem",
+    "security",
+    "scheduled",
+    "processes",
+    "packages",
+    "environment",
+    "logs",
+    "hardware",
+)
+
+SEVERITY_STYLES: dict[str, str] = {
+    "high": "error",
+    "medium": "warning",
+    "info": "info",
 }
 
-
-def color(text: str, color_name: str, bold: bool = False) -> str:
-    """Apply color to text using ANSI codes
-
-    Args:
-        text: Text to color
-        color_name: Name of color from COLORS dict
-        bold: Whether to make text bold
-
-    Returns:
-        Colored text string
-    """
-    c = COLORS.get(color_name, "")
-    b = COLORS["bold"] if bold else ""
-    return f"{b}{c}{text}{COLORS['reset']}"
+DEFAULT_REMOTE_TIMEOUT = 240
 
 
-def print_status(message: str) -> None:
-    """Print a status message
+class RemoteExecutionError(RuntimeError):
+    """Raised when the batched remote script fails to execute."""
 
-    Args:
-        message: Status message to print
-    """
-    print(f"  {color('[*]', 'cyan')} {message}")
-
-
-def print_section_header(title: str) -> None:
-    """Print a section header
-
-    Args:
-        title: Section title
-    """
-    print()
-    # Minimal header to avoid conflicts with enclosing UI frames
-    print(color(f"› {title}", "purple", bold=True))
-
-
-def print_subsection(title: str, content: str = "") -> None:
-    """Print a subsection - simple and clean
-
-    Args:
-        title: Subsection title
-        content: Content to display
-    """
-    print()
-    print(color(f"{title}:", "yellow", bold=True))
-    if content and content.strip():
-        print(content)
-    else:
-        print(color("N/A", "dim"))
+    def __init__(self, message: str, stdout: str = "", stderr: str = "") -> None:
+        super().__init__(message)
+        self.stdout = stdout
+        self.stderr = stderr
 
 
 @dataclass
-class EnumerationData:
-    """Container for all enumeration results"""
+class ProbeOutput:
+    """Materialized result of a remote probe."""
 
-    system: dict[str, Any]
-    users: dict[str, Any]
-    network: dict[str, Any]
-    processes: dict[str, Any]
-    packages: dict[str, Any]
-    filesystem: dict[str, Any]
-    environment: dict[str, Any]
-    scheduled: dict[str, Any]
-    security: dict[str, Any]
-    logs: dict[str, Any]
-    hardware: dict[str, Any]
+    category: str
+    key: str
+    command: str
+    timeout: int
+    status: int
+    stdout: str
+    stderr: str
+    encoding: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "category": self.category,
+            "key": self.key,
+            "command": self.command,
+            "timeout": self.timeout,
+            "status": self.status,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "encoding": self.encoding,
+        }
 
 
-def run_remote_command(command: str, timeout: int = 30) -> tuple[int, str, str]:
-    """Execute a command on the remote host via SSH
+@dataclass
+class PriorityFinding:
+    """Structured representation of a heuristic summary."""
 
-    Args:
-        command: Shell command to execute
-        timeout: Command timeout in seconds
+    key: str
+    category: str
+    severity: Severity
+    headline: str
+    detail: str
+    evidence: list[str]
 
-    Returns:
-        Tuple of (exit_code, stdout, stderr)
-    """
-    socket_path = os.environ.get("LAZYSSH_SOCKET_PATH")
-    host = os.environ.get("LAZYSSH_HOST")
-    user = os.environ.get("LAZYSSH_USER")
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "key": self.key,
+            "category": self.category,
+            "severity": self.severity,
+            "headline": self.headline,
+            "detail": self.detail,
+            "evidence": self.evidence,
+        }
 
-    if socket_path is None or host is None or user is None:
-        print("ERROR: Missing required environment variables", file=sys.stderr)
-        sys.exit(1)
 
-    # At this point, mypy knows these are str (not Optional)
-    ssh_cmd: list[str] = [
-        "ssh",
-        "-S",
-        socket_path,
-        "-o",
-        "ControlMaster=no",
-        f"{user}@{host}",
-        command,
+@dataclass
+class EnumerationSnapshot:
+    """Aggregated data for a single enumeration run."""
+
+    collected_at: datetime
+    probes: dict[str, dict[str, ProbeOutput]]
+    warnings: list[str]
+
+
+def _get_env_or_fail(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RemoteExecutionError(f"Missing required environment variable: {name}")
+    return value
+
+
+def _shell_quote(value: str) -> str:
+    return shlex.quote(value)
+
+
+def build_remote_script(probes: Sequence[RemoteProbe]) -> str:
+    """Construct the batched shell script executed on the remote host."""
+
+    header_lines = [
+        "#!/bin/sh",
+        "set -eu",
+        "",
+        "ENCODER='base64'",
+        "if command -v base64 >/dev/null 2>&1; then",
+        "    ENCODER='base64'",
+        "elif command -v openssl >/dev/null 2>&1; then",
+        "    ENCODER='openssl'",
+        "elif command -v python3 >/dev/null 2>&1; then",
+        "    ENCODER='python3'",
+        "elif command -v python >/dev/null 2>&1; then",
+        "    ENCODER='python'",
+        "elif command -v xxd >/dev/null 2>&1; then",
+        "    ENCODER='hex'",
+        "else",
+        "    ENCODER='plain'",
+        "fi",
+        "",
+        "encode_stream() {",
+        '    case "$ENCODER" in',
+        "        base64)",
+        "            base64 | tr -d '\\n'",
+        "            ;;",
+        "        openssl)",
+        "            openssl base64 -A",
+        "            ;;",
+        "        python3)",
+        "            python3 - <<'PY'",
+        "import base64, sys",
+        "sys.stdout.write(base64.b64encode(sys.stdin.buffer.read()).decode())",
+        "PY",
+        "            ;;",
+        "        python)",
+        "            python - <<'PY'",
+        "import base64, sys",
+        "data = sys.stdin.buffer.read() if hasattr(sys.stdin, 'buffer') else sys.stdin.read().encode()",
+        "sys.stdout.write(base64.b64encode(data).decode())",
+        "PY",
+        "            ;;",
+        "        hex)",
+        "            xxd -p | tr -d '\\n'",
+        "            ;;",
+        "        *)",
+        "            cat",
+        "            ;;",
+        "    esac",
+        "}",
+        "",
+        "ENCODING_KIND='plain'",
+        'case "$ENCODER" in',
+        "    base64|openssl|python3|python)",
+        "        ENCODING_KIND='base64'",
+        "        ;;",
+        "    hex)",
+        "        ENCODING_KIND='hex'",
+        "        ;;",
+        "esac",
+        "",
+        "run_probe() {",
+        "    category=$1",
+        "    key=$2",
+        "    timeout_secs=$3",
+        "    tmp_cmd=$(mktemp)",
+        "    tmp_stdout=$(mktemp)",
+        "    tmp_stderr=$(mktemp)",
+        '    cat >"$tmp_cmd"',
+        '    chmod 600 "$tmp_cmd"',
+        "    set +e",
+        "    if command -v timeout >/dev/null 2>&1; then",
+        '        timeout "$timeout_secs" sh "$tmp_cmd" >"$tmp_stdout" 2>"$tmp_stderr"',
+        "    else",
+        '        sh "$tmp_cmd" >"$tmp_stdout" 2>"$tmp_stderr"',
+        "    fi",
+        "    status=$?",
+        "    set -e",
+        '    stdout_payload=$(encode_stream <"$tmp_stdout")',
+        '    stderr_payload=$(encode_stream <"$tmp_stderr")',
+        '    printf \'{"category":"%s","key":"%s","status":%s,"encoding":"%s","stdout":"%s","stderr":"%s"}\' "$category" "$key" "$status" "$ENCODING_KIND" "$stdout_payload" "$stderr_payload"',
+        "    echo",
+        '    rm -f "$tmp_cmd" "$tmp_stdout" "$tmp_stderr"',
+        "}",
+        "",
     ]
 
+    body_lines: list[str] = []
+    for index, probe in enumerate(probes):
+        heredoc = f"LAZYSSH_CMD_{index}"
+        body_lines.append(
+            f"run_probe {_shell_quote(probe.category)} {_shell_quote(probe.key)} {probe.timeout} <<'{heredoc}'"
+        )
+        body_lines.append(probe.command)
+        body_lines.append(heredoc)
+        body_lines.append("")
+
+    return "\n".join(header_lines + body_lines)
+
+
+def execute_remote_batch(
+    script: str, timeout: int = DEFAULT_REMOTE_TIMEOUT
+) -> tuple[int, str, str]:
+    """Send the batched script to the remote host over the existing control socket."""
+
+    socket_path = _get_env_or_fail("LAZYSSH_SOCKET_PATH")
+    host = _get_env_or_fail("LAZYSSH_HOST")
+    user = _get_env_or_fail("LAZYSSH_USER")
+    port = os.environ.get("LAZYSSH_PORT")
+
+    ssh_cmd: list[str] = ["ssh", "-S", socket_path, "-o", "ControlMaster=no"]
+    if port:
+        ssh_cmd.extend(["-p", port])
+    ssh_cmd.append(f"{user}@{host}")
+    ssh_cmd.extend(["sh", "-s"])
+
     try:
-        result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(  # noqa: S603,S607 - executed via controlled inputs
+            ssh_cmd,
+            input=script,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+        )
         return result.returncode, result.stdout, result.stderr
-    except subprocess.TimeoutExpired:
-        return 1, "", f"Command timed out after {timeout}s"
-    except Exception as e:
-        return 1, "", f"Error: {e}"
+    except subprocess.TimeoutExpired as exc:  # pragma: no cover - rare slow hosts
+        stdout_str = (
+            exc.stdout.decode("utf-8") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        )
+        stderr_str = (
+            exc.stderr.decode("utf-8") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+        )
+        raise RemoteExecutionError(
+            "Remote enumeration timed out", stdout=stdout_str, stderr=stderr_str
+        )
 
 
-def safe_command(command: str, default: str = "N/A") -> str:
-    """Run command and return output or default on failure
-
-    Args:
-        command: Shell command to execute
-        default: Default value if command fails
-
-    Returns:
-        Command output or default value
-    """
-    exit_code, stdout, _ = run_remote_command(command)
-    if exit_code == 0 and stdout.strip():
-        return stdout.strip()
-    return default
-
-
-def enumerate_system() -> dict[str, Any]:
-    """Gather system information"""
-    print_status("Enumerating system information...")
-
-    data = {
-        "os": safe_command("cat /etc/os-release 2>/dev/null || uname -a"),
-        "kernel": safe_command("uname -r"),
-        "hostname": safe_command("hostname"),
-        "uptime": safe_command("uptime"),
-        "date": safe_command("date"),
-        "timezone": safe_command("timedatectl 2>/dev/null || date +%Z"),
-        "architecture": safe_command("uname -m"),
-        "cpu_info": safe_command(
-            "lscpu 2>/dev/null || cat /proc/cpuinfo | grep 'model name' | head -1"
-        ),
-    }
-
-    return data
+def _decode_payload(payload: str, encoding: str) -> str:
+    if not payload:
+        return ""
+    if encoding == "base64":
+        try:
+            raw = base64.b64decode(payload.encode("ascii"), validate=False)
+            return raw.decode("utf-8", errors="replace")
+        except Exception:
+            return base64.b64decode(payload.encode("ascii"), validate=False).decode(
+                "utf-8", errors="replace"
+            )
+    if encoding == "hex":
+        try:
+            return bytes.fromhex(payload).decode("utf-8", errors="replace")
+        except ValueError:
+            return payload
+    return payload
 
 
-def enumerate_users() -> dict[str, Any]:
-    """Gather user and group information"""
-    print_status("Enumerating users and groups...")
-
-    data = {
-        "current_user": safe_command("whoami"),
-        "user_id": safe_command("id"),
-        "users": safe_command("cat /etc/passwd | cut -d: -f1"),
-        "groups": safe_command("cat /etc/group | cut -d: -f1"),
-        "sudoers": safe_command("cat /etc/sudoers 2>/dev/null || echo 'Permission denied'"),
-        "logged_in_users": safe_command("who"),
-        "last_logins": safe_command("last -n 10 2>/dev/null || echo 'Not available'"),
-    }
-
-    return data
-
-
-def enumerate_network() -> dict[str, Any]:
-    """Gather network configuration"""
-    print_status("Enumerating network configuration...")
-
-    data = {
-        "interfaces": safe_command("ip addr 2>/dev/null || ifconfig"),
-        "routing_table": safe_command("ip route 2>/dev/null || route -n"),
-        "listening_ports": safe_command(
-            "ss -tulnp 2>/dev/null || netstat -tulnp 2>/dev/null || echo 'Not available'"
-        ),
-        "active_connections": safe_command(
-            "ss -tunap 2>/dev/null || netstat -tunap 2>/dev/null || echo 'Not available'"
-        ),
-        "dns": safe_command("cat /etc/resolv.conf 2>/dev/null"),
-        "hosts": safe_command("cat /etc/hosts 2>/dev/null"),
-        "arp_table": safe_command("ip neigh 2>/dev/null || arp -an"),
-        "firewall_rules": safe_command("iptables -L -n 2>/dev/null || echo 'Permission denied'"),
-    }
-
-    return data
+def _parse_payload_lines(stdout: str) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for line in stdout.splitlines():
+        candidate = line.strip()
+        if not candidate:
+            continue
+        try:
+            payloads.append(cast(dict[str, Any], json.loads(candidate)))
+        except json.JSONDecodeError:
+            if APP_LOGGER:
+                APP_LOGGER.debug(
+                    "Skipping non-JSON line from remote enumerate batch: %s", candidate
+                )
+    return payloads
 
 
-def enumerate_processes() -> dict[str, Any]:
-    """Gather process and service information"""
-    print_status("Enumerating processes and services...")
+def _build_snapshot(payloads: Sequence[Mapping[str, Any]], stderr: str) -> EnumerationSnapshot:
+    probes: dict[str, dict[str, ProbeOutput]] = {}
+    warnings: list[str] = []
 
-    data = {
-        "processes": safe_command("ps auxf 2>/dev/null || ps aux"),
-        "systemd_services": safe_command(
-            "systemctl list-units --type=service --all 2>/dev/null || echo 'Systemd not available'"
-        ),
-        "running_services": safe_command(
-            "systemctl list-units --type=service --state=running 2>/dev/null || service --status-all 2>/dev/null || echo 'Not available'"
-        ),
-        "enabled_services": safe_command(
-            "systemctl list-unit-files --type=service --state=enabled 2>/dev/null || echo 'Not available'"
-        ),
-    }
+    for payload in payloads:
+        category = str(payload.get("category", ""))
+        key = str(payload.get("key", ""))
+        encoding = str(payload.get("encoding", "base64"))
+        status = int(payload.get("status", 0))
+        stdout_encoded = str(payload.get("stdout", ""))
+        stderr_encoded = str(payload.get("stderr", ""))
 
-    return data
+        probe_meta = PROBE_LOOKUP.get((category, key))
+        command = probe_meta.command if probe_meta else "<unknown>"
+        timeout = probe_meta.timeout if probe_meta else 0
 
+        try:
+            stdout_text = _decode_payload(stdout_encoded, encoding)
+        except Exception as exc:  # pragma: no cover - defensive
+            stdout_text = ""
+            warnings.append(f"Failed to decode stdout for {category}.{key}: {exc}")
+        try:
+            stderr_text = _decode_payload(stderr_encoded, encoding)
+        except Exception as exc:  # pragma: no cover - defensive
+            stderr_text = ""
+            warnings.append(f"Failed to decode stderr for {category}.{key}: {exc}")
 
-def enumerate_packages() -> dict[str, Any]:
-    """Gather installed package information"""
-    print_status("Enumerating installed packages...")
+        result = ProbeOutput(
+            category=category,
+            key=key,
+            command=command,
+            timeout=timeout,
+            status=status,
+            stdout=stdout_text,
+            stderr=stderr_text,
+            encoding=encoding,
+        )
+        probes.setdefault(category, {})[key] = result
 
-    # Detect package manager
-    pkg_mgr = "unknown"
-    packages = "N/A"
+        if status != 0 and stderr_text and APP_LOGGER:
+            APP_LOGGER.debug(
+                "Probe %s.%s exited %s: %s",
+                category,
+                key,
+                status,
+                stderr_text.splitlines()[0],
+            )
 
-    # Try different package managers
-    if safe_command("which dpkg") != "N/A":
-        pkg_mgr = "dpkg"
-        packages = safe_command("dpkg -l")
-    elif safe_command("which rpm") != "N/A":
-        pkg_mgr = "rpm"
-        packages = safe_command("rpm -qa")
-    elif safe_command("which pacman") != "N/A":
-        pkg_mgr = "pacman"
-        packages = safe_command("pacman -Q")
-    elif safe_command("which apk") != "N/A":
-        pkg_mgr = "apk"
-        packages = safe_command("apk list --installed")
+    if stderr.strip():
+        warnings.append(f"Remote stderr: {stderr.strip()}")
 
-    data = {
-        "package_manager": pkg_mgr,
-        "installed_packages": packages,
-        "package_count": len(packages.split("\n")) if packages != "N/A" else 0,
-    }
-
-    return data
-
-
-def enumerate_filesystem() -> dict[str, Any]:
-    """Gather filesystem information"""
-    print_status("Enumerating filesystem...")
-
-    data = {
-        "mounts": safe_command("mount"),
-        "disk_usage": safe_command("df -h"),
-        "block_devices": safe_command("lsblk 2>/dev/null || echo 'Not available'"),
-        "fstab": safe_command("cat /etc/fstab 2>/dev/null"),
-        "home_directories": safe_command("ls -la /home 2>/dev/null || echo 'Permission denied'"),
-        "tmp_files": safe_command("ls -la /tmp 2>/dev/null"),
-        "suid_files": safe_command(
-            "find / -perm -4000 -type f 2>/dev/null || echo 'Not available'"
-        ),
-        "writable_dirs": safe_command(
-            "find / -writable -type d 2>/dev/null || echo 'Not available'"
-        ),
-    }
-
-    return data
+    return EnumerationSnapshot(collected_at=datetime.utcnow(), probes=probes, warnings=warnings)
 
 
-def enumerate_environment() -> dict[str, Any]:
-    """Gather environment variables"""
-    print_status("Enumerating environment variables...")
-
-    data = {
-        "env_vars": safe_command("env"),
-        "path": safe_command("echo $PATH"),
-        "shell": safe_command("echo $SHELL"),
-        "home": safe_command("echo $HOME"),
-        "pwd": safe_command("pwd"),
-    }
-
-    return data
-
-
-def enumerate_scheduled() -> dict[str, Any]:
-    """Gather scheduled tasks information"""
-    print_status("Enumerating scheduled tasks...")
-
-    data = {
-        "user_crontab": safe_command("crontab -l 2>/dev/null || echo 'No crontab'"),
-        "system_cron": safe_command("cat /etc/crontab 2>/dev/null"),
-        "cron_d": safe_command("ls -la /etc/cron.d/ 2>/dev/null || echo 'Not available'"),
-        "cron_daily": safe_command("ls -la /etc/cron.daily/ 2>/dev/null || echo 'Not available'"),
-        "systemd_timers": safe_command(
-            "systemctl list-timers --all 2>/dev/null || echo 'Not available'"
-        ),
-        "at_jobs": safe_command("atq 2>/dev/null || echo 'Not available'"),
-    }
-
-    return data
+def collect_remote_snapshot() -> EnumerationSnapshot:
+    script = build_remote_script(REMOTE_PROBES)
+    exit_code, stdout, stderr = execute_remote_batch(script)
+    if exit_code != 0:
+        raise RemoteExecutionError(
+            f"Enumeration batch failed with exit code {exit_code}", stdout=stdout, stderr=stderr
+        )
+    payloads = _parse_payload_lines(stdout)
+    if not payloads:
+        raise RemoteExecutionError(
+            "Remote enumeration returned no data", stdout=stdout, stderr=stderr
+        )
+    return _build_snapshot(payloads, stderr)
 
 
-def enumerate_security() -> dict[str, Any]:
-    """Gather security configuration"""
-    print_status("Enumerating security configurations...")
-
-    data = {
-        "selinux": safe_command(
-            "sestatus 2>/dev/null || getenforce 2>/dev/null || echo 'SELinux not installed'"
-        ),
-        "apparmor": safe_command("aa-status 2>/dev/null || echo 'AppArmor not installed'"),
-        "firewall": safe_command(
-            "ufw status 2>/dev/null || firewall-cmd --state 2>/dev/null || echo 'No firewall detected'"
-        ),
-        "iptables": safe_command("iptables -L -n 2>/dev/null || echo 'Permission denied'"),
-        "fail2ban": safe_command(
-            "fail2ban-client status 2>/dev/null || echo 'Fail2ban not installed'"
-        ),
-        "ssh_config": safe_command(
-            "cat /etc/ssh/sshd_config 2>/dev/null || echo 'Permission denied'"
-        ),
-        "ssh_keys": safe_command("ls -la ~/.ssh/ 2>/dev/null || echo 'No SSH directory'"),
-    }
-
-    return data
+def _get_probe(snapshot: EnumerationSnapshot, category: str, key: str) -> ProbeOutput | None:
+    return snapshot.probes.get(category, {}).get(key)
 
 
-def enumerate_logs() -> dict[str, Any]:
-    """Gather system logs summary"""
-    print_status("Enumerating system logs...")
-
-    data = {
-        "auth_log": safe_command(
-            "cat /var/log/auth.log 2>/dev/null || cat /var/log/secure 2>/dev/null || echo 'Not available'"
-        ),
-        "syslog": safe_command(
-            "cat /var/log/syslog 2>/dev/null || cat /var/log/messages 2>/dev/null || echo 'Not available'"
-        ),
-        "kern_log": safe_command(
-            "cat /var/log/kern.log 2>/dev/null || cat /var/log/dmesg 2>/dev/null || echo 'Not available'"
-        ),
-        "failed_logins": safe_command("lastb -n 10 2>/dev/null || echo 'Not available'"),
-        "journal": safe_command(
-            "journalctl -n 20 --no-pager 2>/dev/null || echo 'Systemd journal not available'"
-        ),
-    }
-
-    return data
+def _first_nonempty_line(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return text.strip()
 
 
-def enumerate_hardware() -> dict[str, Any]:
-    """Gather hardware information"""
-    print_status("Enumerating hardware...")
-
-    data = {
-        "cpu": safe_command("lscpu 2>/dev/null || cat /proc/cpuinfo"),
-        "memory": safe_command("free -h"),
-        "meminfo": safe_command("cat /proc/meminfo"),
-        "pci_devices": safe_command("lspci 2>/dev/null || echo 'Not available'"),
-        "usb_devices": safe_command("lsusb 2>/dev/null || echo 'Not available'"),
-        "dmi_info": safe_command("dmidecode -t system 2>/dev/null || echo 'Permission denied'"),
-    }
-
-    return data
+def _extract_paths(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
 
 
-def format_human_readable(data: EnumerationData) -> None:
-    """Format and print enumeration data as human-readable report
+def _summarize_text(text: str, max_lines: int = 3, max_chars: int = 180) -> str:
+    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return "No data"
+    snippet = "\n".join(lines[:max_lines])
+    if len(snippet) > max_chars:
+        snippet = snippet[: max_chars - 3] + "..."
+    if len(lines) > max_lines:
+        snippet += "\n..."
+    return snippet
 
-    Args:
-        data: EnumerationData object
-    """
-    # Header - Simple colored text
-    print()
-    print(color("SYSTEM ENUMERATION REPORT", "purple", bold=True))
 
-    # System Information
-    print_section_header("SYSTEM INFORMATION")
-    for key, value in data.system.items():
-        print_subsection(key.upper(), str(value))
+def _format_count_label(count: int, singular: str, plural: str) -> str:
+    label = singular if count == 1 else plural
+    return f"{count} {label}"
 
-    # Users
-    print_section_header("USERS AND GROUPS")
-    for key, value in data.users.items():
-        print_subsection(key.upper(), str(value))
 
-    # Network
-    print_section_header("NETWORK CONFIGURATION")
-    for key, value in data.network.items():
-        print_subsection(key.upper(), str(value))
-
-    # Processes
-    print_section_header("PROCESSES AND SERVICES")
-    process_count = len(data.processes["processes"].split("\n"))
-    print()
-    print(f"{color('Process Count:', 'cyan')} {color(str(process_count), 'green')}")
-    # Full process list
-    print_subsection("PROCESSES", data.processes["processes"])
-    print_subsection("RUNNING SERVICES", str(data.processes["running_services"]))
-
-    # Packages
-    print_section_header("INSTALLED PACKAGES")
-    print()
-    print(f"{color('Package Manager:', 'cyan')} {color(data.packages['package_manager'], 'green')}")
-    print(
-        f"{color('Package Count:', 'cyan')} {color(str(data.packages['package_count']), 'green')}"
+def _evaluate_sudo_membership(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    id_probe = _get_probe(snapshot, "users", "id")
+    if not id_probe or not id_probe.stdout:
+        return None
+    normalized = id_probe.stdout.lower()
+    if "sudo" not in normalized and "wheel" not in normalized and "uid=0" not in normalized:
+        return None
+    detail = _first_nonempty_line(id_probe.stdout)
+    evidence: list[str] = [detail]
+    sudo_check = _get_probe(snapshot, "users", "sudo_check")
+    if sudo_check and sudo_check.stdout.strip():
+        evidence.append(_first_nonempty_line(sudo_check.stdout))
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=evidence,
     )
 
-    # Filesystem
-    print_section_header("FILESYSTEM")
-    print_subsection("DISK USAGE", data.filesystem["disk_usage"])
-    print_subsection("MOUNTS", str(data.filesystem["mounts"]))
 
-    # Environment
-    print_section_header("ENVIRONMENT")
-    print()
-    print(f"{color('PATH:', 'cyan')} {data.environment['path']}")
-    print(f"{color('SHELL:', 'cyan')} {data.environment['shell']}")
-    print(f"{color('HOME:', 'cyan')} {data.environment['home']}")
-    print(f"{color('PWD:', 'cyan')} {data.environment['pwd']}")
-
-    # Scheduled Tasks
-    print_section_header("SCHEDULED TASKS")
-    has_scheduled = False
-    for key, value in data.scheduled.items():
-        if value != "N/A" and value != "Not available" and value != "No crontab":
-            print_subsection(key.upper(), str(value))
-            has_scheduled = True
-    if not has_scheduled:
-        print(f"\n{color('No scheduled tasks found', 'dim')}")
-
-    # Security
-    print_section_header("SECURITY CONFIGURATION")
-    has_security = False
-    for key, value in data.security.items():
-        if (
-            value != "N/A"
-            and "not installed" not in value.lower()
-            and "permission denied" not in value.lower()
-        ):
-            print_subsection(key.upper(), str(value))
-            has_security = True
-    if not has_security:
-        print(f"\n{color('No security configurations accessible', 'dim')}")
-
-    # Hardware
-    print_section_header("HARDWARE INFORMATION")
-    print_subsection("MEMORY", data.hardware["memory"])
-    print_subsection("CPU", str(data.hardware["cpu"]))
-
-    # Footer
-    print()
-    print(color("END OF REPORT", "purple", bold=True))
-    print()
-
-
-def _format_plain_text(data: EnumerationData) -> None:
-    """Fallback plain text formatter - same as colored version
-
-    Args:
-        data: EnumerationData object
-    """
-    print("\n" + "=" * 80)
-    print(" " * 25 + "SYSTEM ENUMERATION REPORT")
-    print("=" * 80)
-
-    print("\n" + "─" * 80)
-    print("  SYSTEM INFORMATION")
-    print("─" * 80)
-    for key, value in data.system.items():
-        print(f"\n[{key.upper()}]")
-        print(str(value))
-
-    print("\n" + "─" * 80)
-    print("  USERS AND GROUPS")
-    print("─" * 80)
-    for key, value in data.users.items():
-        print(f"\n[{key.upper()}]")
-        print(str(value))
-
-    print("\n" + "─" * 80)
-    print("  NETWORK CONFIGURATION")
-    print("─" * 80)
-    for key, value in data.network.items():
-        print(f"\n[{key.upper()}]")
-        print(str(value))
-
-    print("\n" + "─" * 80)
-    print("  END OF REPORT")
-    print("=" * 80 + "\n")
-
-
-def main() -> int:
-    """Main plugin logic"""
-    # Lazy import to avoid heavy imports if not needed
-    try:
-        from lazyssh.logging_module import CONNECTION_LOG_DIR_TEMPLATE
-    except Exception:
-        CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"
-    # Get connection info
-    socket_name = os.environ.get("LAZYSSH_SOCKET", "unknown")
-    host = os.environ.get("LAZYSSH_HOST", "unknown")
-    user = os.environ.get("LAZYSSH_USER", "unknown")
-
-    # Display header - simple ANSI colors
-    print()
-    print(color("LazySSH Enumeration Plugin v1.0.0", "cyan", bold=True))
-    print(
-        f"{color('Target:', 'green')} {color(f'{user}@{host}', 'yellow')} {color(f'(socket: {socket_name})', 'dim')}"
-    )
-    print()
-    print(color("Starting comprehensive system enumeration...", "cyan"))
-    print()
-
-    # Gather all data
-    data = EnumerationData(
-        system=enumerate_system(),
-        users=enumerate_users(),
-        network=enumerate_network(),
-        processes=enumerate_processes(),
-        packages=enumerate_packages(),
-        filesystem=enumerate_filesystem(),
-        environment=enumerate_environment(),
-        scheduled=enumerate_scheduled(),
-        security=enumerate_security(),
-        logs=enumerate_logs(),
-        hardware=enumerate_hardware(),
+def _evaluate_passwordless_sudo(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    sudoers = _get_probe(snapshot, "users", "sudoers")
+    sudo_check = _get_probe(snapshot, "users", "sudo_check")
+    matches: list[str] = []
+    for probe in (sudoers, sudo_check):
+        if not probe or not probe.stdout:
+            continue
+        for line in probe.stdout.splitlines():
+            if "nopasswd" in line.lower():
+                matches.append(line.strip())
+    if not matches:
+        return None
+    detail = f"Found passwordless sudo entries (showing {min(len(matches), 3)})."
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=matches[:5],
     )
 
-    # Display completion message
-    print()
-    print(f"{color('✓', 'green')} {color('Enumeration complete!', 'cyan')}")
-    print()
 
-    # Determine output mode and render content
-    is_json = "--json" in sys.argv
-    if is_json:
-        import dataclasses
+def _evaluate_suid_binaries(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    suid = _get_probe(snapshot, "filesystem", "suid_files")
+    sgid = _get_probe(snapshot, "filesystem", "sgid_files")
+    suid_paths = _extract_paths(suid.stdout if suid else "")
+    sgid_paths = _extract_paths(sgid.stdout if sgid else "")
+    total = len(suid_paths) + len(sgid_paths)
+    if total == 0:
+        return None
+    detail = (
+        f"Identified {_format_count_label(len(suid_paths), 'SUID binary', 'SUID binaries')} and "
+        f"{_format_count_label(len(sgid_paths), 'SGID binary', 'SGID binaries')}"
+    )
+    evidence = (suid_paths + sgid_paths)[:6]
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=evidence,
+    )
 
-        data_dict = dataclasses.asdict(data)
-        rendered_output = json.dumps(data_dict, indent=2)
-        print(rendered_output)
+
+def _evaluate_world_writable(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "filesystem", "world_writable_dirs")
+    if not probe or not probe.stdout:
+        return None
+    dirs = _extract_paths(probe.stdout)
+    if not dirs:
+        return None
+    detail = f"World-writable directories outside temp paths: {len(dirs)} detected"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=dirs[:6],
+    )
+
+
+def _evaluate_exposed_services(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "network", "listening_services")
+    if not probe or not probe.stdout:
+        return None
+    exposed: list[str] = []
+    for line in probe.stdout.splitlines():
+        lowered = line.lower()
+        if any(boundary in lowered for boundary in ("0.0.0.0:", ":::", "*:")):
+            exposed.append(line.strip())
+    if not exposed:
+        return None
+    detail = f"Detected {len(exposed)} externally accessible listeners"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=exposed[:6],
+    )
+
+
+def _evaluate_weak_ssh(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    effective = _get_probe(snapshot, "security", "ssh_effective_config")
+    fallback = _get_probe(snapshot, "security", "ssh_config")
+    source = effective or fallback
+    if not source or not source.stdout:
+        return None
+    weak_lines: list[str] = []
+    patterns = (
+        r"^\s*permitrootlogin\s+yes",
+        r"^\s*passwordauthentication\s+yes",
+        r"^\s*permitemptypasswords\s+yes",
+        r"^\s*challengeresponseauthentication\s+yes",
+    )
+    for line in source.stdout.splitlines():
+        lowered = line.lower()
+        if any(re.search(pattern, lowered) for pattern in patterns):
+            weak_lines.append(line.strip())
+    if not weak_lines:
+        return None
+    detail = f"Insecure sshd directives detected ({len(weak_lines)} matches)"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=weak_lines[:5],
+    )
+
+
+def _evaluate_suspicious_scheduled(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probes = [
+        _get_probe(snapshot, "scheduled", "cron_user"),
+        _get_probe(snapshot, "scheduled", "cron_system"),
+        _get_probe(snapshot, "scheduled", "systemd_timers"),
+        _get_probe(snapshot, "scheduled", "cron_d"),
+        _get_probe(snapshot, "scheduled", "cron_daily"),
+        _get_probe(snapshot, "scheduled", "at_jobs"),
+    ]
+    keywords = (
+        "curl",
+        "wget",
+        "nc ",
+        "bash -c",
+        "python",
+        "perl",
+        "ruby",
+        "scp",
+        "ftp",
+        "socat",
+    )
+    suspicious: list[str] = []
+    for probe in probes:
+        if not probe or not probe.stdout:
+            continue
+        for line in probe.stdout.splitlines():
+            normalized = line.lower()
+            if any(keyword in normalized for keyword in keywords) or normalized.startswith(
+                "@reboot"
+            ):
+                suspicious.append(line.strip())
+    if not suspicious:
+        return None
+    detail = f"Suspicious scheduled tasks observed ({len(suspicious)} matches)"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=suspicious[:6],
+    )
+
+
+def _evaluate_kernel_drift(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    kernel_probe = _get_probe(snapshot, "system", "kernel")
+    pkg_probe = _get_probe(snapshot, "packages", "package_inventory")
+    if not kernel_probe or not kernel_probe.stdout or not pkg_probe or not pkg_probe.stdout:
+        return None
+    kernel_version = kernel_probe.stdout.strip()
+    if not kernel_version:
+        return None
+    if kernel_version in pkg_probe.stdout:
+        return None
+    manager = _get_probe(snapshot, "packages", "package_manager")
+    manager_name = manager.stdout.strip() if manager and manager.stdout else "unknown"
+    detail = f"Running kernel {kernel_version} not present in package inventory snapshot"
+    evidence = [f"Kernel: {kernel_version}", f"Package manager: {manager_name}"]
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=evidence,
+    )
+
+
+HEURISTIC_EVALUATORS = {
+    "sudo_membership": _evaluate_sudo_membership,
+    "passwordless_sudo": _evaluate_passwordless_sudo,
+    "suid_binaries": _evaluate_suid_binaries,
+    "world_writable_dirs": _evaluate_world_writable,
+    "exposed_network_services": _evaluate_exposed_services,
+    "weak_ssh_configuration": _evaluate_weak_ssh,
+    "suspicious_scheduled_tasks": _evaluate_suspicious_scheduled,
+    "kernel_drift": _evaluate_kernel_drift,
+}
+
+
+def generate_priority_findings(snapshot: EnumerationSnapshot) -> list[PriorityFinding]:
+    findings: list[PriorityFinding] = []
+    for heuristic in PRIORITY_HEURISTICS:
+        evaluator = HEURISTIC_EVALUATORS.get(heuristic.key)
+        if not evaluator:
+            continue
+        finding = evaluator(snapshot, heuristic)
+        if finding:
+            findings.append(finding)
+    return findings
+
+
+def render_plain(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFinding]) -> str:
+    lines: list[str] = []
+    lines.append("LazySSH Enumeration Summary")
+    lines.append("=" * 80)
+    lines.append(f"Collected: {snapshot.collected_at.isoformat(timespec='seconds')}")
+    lines.append("")
+    lines.append("Priority Findings:")
+    if not findings:
+        lines.append("- None detected by heuristics.")
     else:
-        # Generate a plain-text report for saving (non-colored)
-        lines: list[str] = []
-
+        for finding in findings:
+            lines.append(f"- [{finding.severity.upper()}] {finding.headline}")
+            lines.append(f"  {finding.detail}")
+            for evidence in finding.evidence[:4]:
+                lines.append(f"    • {evidence}")
+    if snapshot.warnings:
         lines.append("")
-        lines.append("SYSTEM ENUMERATION REPORT")
-
-        def add_section(header: str, mapping: dict[str, Any]) -> None:
-            lines.append("")
-            lines.append(f"[{header}]")
-            for key, value in mapping.items():
-                lines.append("")
-                lines.append(f"[{key.upper()}]")
-                lines.append(str(value))
-
-        add_section("SYSTEM INFORMATION", data.system)
-        add_section("USERS AND GROUPS", data.users)
-        add_section("NETWORK CONFIGURATION", data.network)
-        add_section("PROCESSES AND SERVICES", data.processes)
-        add_section("INSTALLED PACKAGES", data.packages)
-        add_section("FILESYSTEM", data.filesystem)
-        add_section("ENVIRONMENT", data.environment)
-        add_section("SCHEDULED TASKS", data.scheduled)
-        add_section("SECURITY CONFIGURATION", data.security)
-        add_section("HARDWARE INFORMATION", data.hardware)
-
+        lines.append("Warnings:")
+        for warning in snapshot.warnings:
+            lines.append(f"- {warning}")
+    lines.append("")
+    lines.append("Category Highlights:")
+    for category in SELECTED_CATEGORY_ORDER:
+        category_results = snapshot.probes.get(category)
+        if not category_results:
+            continue
+        lines.append(f"[{category.upper()}]")
+        for key, result in sorted(category_results.items()):
+            summary = _summarize_text(result.stdout)
+            lines.append(f"- {key}: {summary}")
+            if result.status != 0 and result.stderr.strip():
+                first_error = _first_nonempty_line(result.stderr)
+                lines.append(f"  ! exit {result.status}: {first_error}")
         lines.append("")
-        lines.append("END OF REPORT")
+    report = "\n".join(lines).rstrip() + "\n"
+    return report
 
-        rendered_output = "\n".join(lines)
 
-        # Human-readable display with colors in terminal
-        format_human_readable(data)
+def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFinding]) -> None:
+    if (
+        Table is None or Panel is None or Text is None or box is None
+    ):  # pragma: no cover - Rich unavailable
+        console.print(render_plain(snapshot, findings))
+        return
 
-    # Persist survey to standard logging location with timestamp
-    # Derive connection name
+    console.rule("[header]LazySSH Enumeration[/header]")
+
+    summary_table = Table(box=box.ROUNDED, expand=True, show_header=True, padding=(0, 1))
+    summary_table.add_column(
+        "Severity", justify="center", style="panel.title", no_wrap=True, width=9
+    )
+    summary_table.add_column("Finding", style="foreground", overflow="fold", ratio=2, min_width=24)
+    summary_table.add_column("Detail", style="dim", overflow="fold", ratio=3, min_width=32)
+
+    if findings:
+        for finding in findings:
+            style = SEVERITY_STYLES.get(finding.severity, "foreground")
+            summary_table.add_row(
+                f"[{style}]{finding.severity.upper()}[/]",
+                finding.headline,
+                finding.detail,
+            )
+    else:
+        summary_table.add_row(
+            "[info]INFO[/]", "No priority findings", "Heuristics did not flag elevated risk."
+        )
+
+    console.print(
+        Panel(
+            summary_table,
+            title="[panel.title]Priority Findings[/panel.title]",
+            border_style="border",
+            box=box.ROUNDED,
+            padding=(1, 2),
+            expand=True,
+        )
+    )
+
+    for category in SELECTED_CATEGORY_ORDER:
+        category_results = snapshot.probes.get(category)
+        if not category_results:
+            continue
+        table = Table(box=box.MINIMAL_DOUBLE_HEAD, expand=True, show_header=True, padding=(0, 1))
+        table.add_column("Check", style="accent", no_wrap=True)
+        table.add_column("Summary", style="foreground", overflow="fold", ratio=5, min_width=48)
+        table.add_column("Status", style="dim", justify="center", no_wrap=True, width=5)
+        for key, result in sorted(category_results.items()):
+            summary = _summarize_text(result.stdout)
+            status_style = "success" if result.status == 0 else "error"
+            status_icon = "✔" if result.status == 0 else "✖"
+            summary_text = Text(summary, style="foreground")
+            if result.status != 0 and result.stderr.strip():
+                first_error = _first_nonempty_line(result.stderr)
+                summary_text.append("\n", style="foreground")
+                summary_text.append(f"exit {result.status}: {first_error}", style="error")
+            table.add_row(
+                f"[accent]{key}[/accent]",
+                summary_text,
+                f"[{status_style}]{status_icon}[/]",
+            )
+        console.print(
+            Panel(
+                table,
+                title=f"[panel.title]{category.capitalize()}[/panel.title]",
+                border_style="border",
+                box=box.ROUNDED,
+                padding=(1, 2),
+                expand=True,
+            )
+        )
+
+    if snapshot.warnings:
+        console.print(
+            Panel(
+                "\n".join(snapshot.warnings),
+                title="[panel.title]Warnings[/panel.title]",
+                border_style="warning",
+                box=box.ROUNDED,
+                padding=(1, 2),
+                expand=True,
+            )
+        )
+
+
+def build_json_payload(
+    snapshot: EnumerationSnapshot, findings: Sequence[PriorityFinding], plain_report: str
+) -> dict[str, Any]:
+    categories: dict[str, dict[str, Any]] = {}
+    for category, mapping in snapshot.probes.items():
+        categories[category] = {key: probe.to_dict() for key, probe in mapping.items()}
+
+    return {
+        "collected_at": snapshot.collected_at.isoformat(timespec="seconds"),
+        "priority_findings": [finding.to_dict() for finding in findings],
+        "categories": categories,
+        "warnings": snapshot.warnings,
+        "summary_text": plain_report.strip(),
+        "probe_count": sum(len(mapping) for mapping in snapshot.probes.values()),
+    }
+
+
+def _resolve_log_dir() -> Path:
     connection_name = os.environ.get("LAZYSSH_CONNECTION_NAME") or os.environ.get(
         "LAZYSSH_SOCKET", "unknown"
     )
-    # If a path was provided, use the basename as a reasonable connection name
-    if "/" in connection_name:
+    if connection_name and "/" in connection_name:
         connection_name = Path(connection_name).name
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    ext = "json" if is_json else "txt"
-    log_dir = Path(CONNECTION_LOG_DIR_TEMPLATE.format(connection_name=connection_name))
+    template = CONNECTION_LOG_DIR_TEMPLATE or "/tmp/lazyssh/{connection_name}.d/logs"
+    path = Path(template.format(connection_name=connection_name))
     try:
-        log_dir.mkdir(parents=True, exist_ok=True)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
     except Exception:
-        # Best-effort fallback to default logs dir
-        log_dir = Path("/tmp/lazyssh/logs")
-        log_dir.mkdir(parents=True, exist_ok=True)
+        fallback = Path("/tmp/lazyssh/logs")
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
 
-    output_file = log_dir / f"survey_{timestamp}.{ext}"
+
+def write_artifacts(
+    snapshot: EnumerationSnapshot,
+    findings: Sequence[PriorityFinding],
+    plain_report: str,
+    json_payload: Mapping[str, Any],
+    is_json_output: bool,
+) -> tuple[Path, Path | None]:
+    log_dir = _resolve_log_dir()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    json_path = log_dir / f"survey_{timestamp}.json"
+    json_path.write_text(json.dumps(json_payload, indent=2), encoding="utf-8")
+
+    txt_path: Path | None = None
+    if not is_json_output:
+        txt_path = log_dir / f"survey_{timestamp}.txt"
+        txt_path.write_text(plain_report, encoding="utf-8")
+
+    return json_path, txt_path
+
+
+def main() -> int:
+    ui_config = get_ui_config()
+    use_plain = ui_config.get("plain_text") or ui_config.get("no_rich")
+    is_json_output = "--json" in sys.argv
+
     try:
-        output_file.write_text(rendered_output + "\n", encoding="utf-8")
-        print(
-            color(
-                f"Saved survey to {str(output_file)}",
-                "green",
-            )
-        )
-    except Exception as e:
-        print(color(f"Failed to save survey: {e}", "yellow"))
+        snapshot = collect_remote_snapshot()
+    except RemoteExecutionError as exc:
+        error_message = f"Enumeration failed: {exc}"
+        print(error_message, file=sys.stderr)
+        if exc.stderr:
+            print(exc.stderr, file=sys.stderr)
+        return 1
+
+    findings = generate_priority_findings(snapshot)
+    plain_report = render_plain(snapshot, findings)
+    json_payload = build_json_payload(snapshot, findings, plain_report)
+
+    if is_json_output:
+        sys.stdout.write(json.dumps(json_payload, indent=2))
+        sys.stdout.write("\n")
+    elif not use_plain:
+        render_rich(snapshot, findings)
+    else:
+        console.print(plain_report)
+
+    json_path, txt_path = write_artifacts(
+        snapshot, findings, plain_report, json_payload, is_json_output
+    )
+
+    if not is_json_output:
+        console.print(f"[success]Saved survey to {json_path}[/success]")
+        if txt_path:
+            console.print(f"[dim]Plain-text copy: {txt_path}[/dim]")
 
     return 0
 
@@ -643,11 +901,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\nEnumeration interrupted by user", file=sys.stderr)
+        print("\nEnumeration interrupted by user", file=sys.stderr)
         sys.exit(130)
-    except Exception as e:
-        print(f"\nERROR: {e}", file=sys.stderr)
-        import traceback
-
-        traceback.print_exc(file=sys.stderr)
-        sys.exit(1)

@@ -1,3 +1,5 @@
+# terminal-integration Delta Specification
+
 ## ADDED Requirements
 
 ### Requirement: Enhanced Terminal Integration Visual Design

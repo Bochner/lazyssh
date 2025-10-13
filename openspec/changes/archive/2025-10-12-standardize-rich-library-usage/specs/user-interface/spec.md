@@ -1,3 +1,5 @@
+# user-interface Delta Specification
+
 ## ADDED Requirements
 
 ### Requirement: Centralized Rich Console Management

@@ -83,6 +83,14 @@ def get_terminal_width() -> int:
         except ValueError:
             pass
 
+    # Try Python's terminal size detection
+    try:
+        size = shutil.get_terminal_size(fallback=(0, 0))
+        if size.columns > 0:
+            return size.columns
+    except (OSError, ValueError):
+        pass
+
     # Try tput command
     try:
         result = shutil.which("tput")
