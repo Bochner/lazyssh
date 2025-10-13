@@ -33,7 +33,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_parse_boolean_env_var_true_values(self) -> None:
         """Test parsing boolean environment variables with true values."""
-        from lazyssh.ui import parse_boolean_env_var
+        from lazyssh.console_instance import parse_boolean_env_var
 
         true_values = ["true", "TRUE", "True", "1", "yes", "YES", "on", "ON"]
         for value in true_values:
@@ -44,7 +44,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_parse_boolean_env_var_false_values(self) -> None:
         """Test parsing boolean environment variables with false values."""
-        from lazyssh.ui import parse_boolean_env_var
+        from lazyssh.console_instance import parse_boolean_env_var
 
         false_values = ["false", "FALSE", "0", "no", "NO", "off", "OFF", "", "invalid"]
         for value in false_values:
@@ -55,7 +55,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_parse_boolean_env_var_default(self) -> None:
         """Test parsing boolean environment variables with default values."""
-        from lazyssh.ui import parse_boolean_env_var
+        from lazyssh.console_instance import parse_boolean_env_var
 
         # Test with default True
         result = parse_boolean_env_var("NONEXISTENT_VAR", True)
@@ -67,7 +67,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_parse_integer_env_var_valid_values(self) -> None:
         """Test parsing integer environment variables with valid values."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         test_cases = [
             ("5", 5),
@@ -85,7 +85,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_parse_integer_env_var_invalid_values(self) -> None:
         """Test parsing integer environment variables with invalid values."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         invalid_values = ["invalid", "abc", "1.5", "", "  "]
         for value in invalid_values:
@@ -96,7 +96,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_parse_integer_env_var_default(self) -> None:
         """Test parsing integer environment variables with default values."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         result = parse_integer_env_var("NONEXISTENT_VAR", 7, 1, 10)
         self.assertEqual(result, 7)
@@ -138,7 +138,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_get_theme_for_config_default(self) -> None:
         """Test getting default theme."""
-        from lazyssh.ui import LAZYSSH_THEME, get_theme_for_config
+        from lazyssh.console_instance import LAZYSSH_THEME, get_theme_for_config
 
         config = {
             "high_contrast": False,
@@ -154,7 +154,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_get_theme_for_config_high_contrast(self) -> None:
         """Test getting high contrast theme."""
-        from lazyssh.ui import create_high_contrast_theme, get_theme_for_config
+        from lazyssh.console_instance import create_high_contrast_theme, get_theme_for_config
 
         config = {
             "high_contrast": True,
@@ -173,7 +173,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_get_theme_for_config_colorblind(self) -> None:
         """Test getting colorblind-friendly theme."""
-        from lazyssh.ui import create_colorblind_friendly_theme, get_theme_for_config
+        from lazyssh.console_instance import create_colorblind_friendly_theme, get_theme_for_config
 
         config = {
             "high_contrast": False,
@@ -192,7 +192,7 @@ class TestUIEnvironmentVariables(unittest.TestCase):
 
     def test_get_theme_for_config_plain_text(self) -> None:
         """Test getting plain text theme."""
-        from lazyssh.ui import get_theme_for_config
+        from lazyssh.console_instance import get_theme_for_config
 
         config = {
             "high_contrast": False,

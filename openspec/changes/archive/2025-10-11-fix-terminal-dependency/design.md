@@ -29,9 +29,9 @@ Python provides native capabilities for spawning interactive SSH sessions throug
 - **Why**: Allows the application to start with warnings for optional deps but hard fail for required deps
 - **Implementation**: Return `(required_missing, optional_missing)` tuple from `check_dependencies()`
 
-### 2. Native Terminal Implementation  
+### 2. Native Terminal Implementation
 - **Decision**: Use `os.execvp()` as the primary native terminal method
-- **Why**: 
+- **Why**:
   - Most direct approach - replaces current process with SSH
   - Preserves all terminal functionality (colors, raw mode, signals)
   - Minimal code (~10 lines)
@@ -68,14 +68,14 @@ Python provides native capabilities for spawning interactive SSH sessions throug
 ## Implementation Plan
 
 ### Phase 1: Fix Dependency Checking (Critical Bug Fix)
-1. Modify `check_dependencies()` to return `(required_missing, optional_missing)`  
+1. Modify `check_dependencies()` to return `(required_missing, optional_missing)`
 2. Update `__main__.py` to only exit on required missing dependencies
 3. Display warnings for optional missing dependencies
 4. Test that application starts without Terminator installed
 
 ### Phase 2: Implement Native Terminal
 1. Add configuration option for terminal method preference
-2. Implement native terminal using `os.execvp()` 
+2. Implement native terminal using `os.execvp()`
 3. Add detection logic for available terminal methods
 4. Update `open_terminal()` to try methods in order
 
@@ -101,4 +101,3 @@ Python provides native capabilities for spawning interactive SSH sessions throug
    - **Answer**: Replace current process for simplicity and direct SSH experience
 2. Should we support other terminal emulators (gnome-terminal, xterm, etc.)?
    - **Answer**: Not in this change - focus on native fallback. Can add in future if requested.
-

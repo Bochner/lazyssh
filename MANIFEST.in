@@ -16,4 +16,4 @@ exclude docs
 
 recursive-exclude .github *
 recursive-exclude docs *
-recursive-exclude test_env * 
+recursive-exclude test_env *

@@ -145,4 +145,3 @@ The system SHALL provide enhanced status displays for SCP mode operations using 
 - **THEN** the system SHALL display statistics using standardized Rich tables and panels
 - **AND** the statistics SHALL be clearly formatted and easy to understand
 - **AND** the display SHALL be visually consistent with other LazySSH information displays
-

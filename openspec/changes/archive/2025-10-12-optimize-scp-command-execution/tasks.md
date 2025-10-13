@@ -36,4 +36,3 @@
 - [x] 5.3 Test debug command toggle functionality
 - [x] 5.4 Measure SSH command reduction (before/after comparison)
 - [x] 5.5 Test on high-latency connections to verify improvement
-

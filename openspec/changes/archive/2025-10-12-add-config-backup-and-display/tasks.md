@@ -31,4 +31,3 @@
 - [x] 5.5 Verify configs display after commands
 - [x] 5.6 Test with empty config file
 - [x] 5.7 Run pre-commit checks
-

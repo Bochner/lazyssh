@@ -53,7 +53,7 @@ class TestPlainTextMode(unittest.TestCase):
 
     def test_plain_text_theme_creation(self) -> None:
         """Test plain text theme creation."""
-        from lazyssh.ui import get_theme_for_config
+        from lazyssh.console_instance import get_theme_for_config
 
         config = {
             "high_contrast": False,
@@ -103,7 +103,7 @@ class TestPlainTextMode(unittest.TestCase):
 
     def test_plain_text_theme_precedence(self) -> None:
         """Test that plain text theme takes precedence over other themes."""
-        from lazyssh.ui import get_theme_for_config
+        from lazyssh.console_instance import get_theme_for_config
 
         # Set multiple theme options
         config = {
@@ -235,7 +235,8 @@ class TestPlainTextMode(unittest.TestCase):
 
     def test_plain_text_mode_independence(self) -> None:
         """Test that plain text mode is independent of other settings."""
-        from lazyssh.ui import get_theme_for_config, get_ui_config
+        from lazyssh.console_instance import get_theme_for_config
+        from lazyssh.ui import get_ui_config
 
         # Set multiple environment variables
         os.environ["LAZYSSH_PLAIN_TEXT"] = "true"

@@ -27,4 +27,3 @@ The system SHALL allow users to enter SCP mode without providing a connection ar
 - **THEN** the system SHALL set the socket path to `/tmp/{connection_name}`
 - **AND** the socket path SHALL be available before calling the connect method
 - **AND** the connection SHALL succeed if the socket exists and is valid
-

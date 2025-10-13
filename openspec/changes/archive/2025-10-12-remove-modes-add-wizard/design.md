@@ -20,7 +20,7 @@ LazySSH currently operates in two distinct modes: "prompt mode" (menu-driven int
 
 **Decision: Replace modes with wizard command**
 - **Rationale**: Wizard provides guided workflows without the complexity of mode switching
-- **Alternatives considered**: 
+- **Alternatives considered**:
   - Keep both modes (rejected - prompt mode is obsolete)
   - Remove prompt mode only (rejected - still leaves mode concept)
   - Add wizard alongside modes (rejected - doesn't simplify the interface)

@@ -23,7 +23,7 @@ class TestRefreshRateBounds(unittest.TestCase):
 
     def test_refresh_rate_within_bounds(self) -> None:
         """Test refresh rate values within valid bounds."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         test_cases = [
             ("1", 1),
@@ -41,7 +41,7 @@ class TestRefreshRateBounds(unittest.TestCase):
 
     def test_refresh_rate_below_minimum(self) -> None:
         """Test refresh rate values below minimum."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         test_cases = [
             ("0", 1),  # Should be clamped to 1
@@ -57,7 +57,7 @@ class TestRefreshRateBounds(unittest.TestCase):
 
     def test_refresh_rate_above_maximum(self) -> None:
         """Test refresh rate values above maximum."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         test_cases = [
             ("11", 10),  # Should be clamped to 10
@@ -73,7 +73,7 @@ class TestRefreshRateBounds(unittest.TestCase):
 
     def test_refresh_rate_invalid_values(self) -> None:
         """Test refresh rate with invalid values."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         invalid_values = [
             "invalid",
@@ -94,7 +94,7 @@ class TestRefreshRateBounds(unittest.TestCase):
 
     def test_refresh_rate_default_value(self) -> None:
         """Test refresh rate default value when not set."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         # Ensure environment variable is not set
         if "LAZYSSH_REFRESH_RATE" in os.environ:
@@ -105,7 +105,7 @@ class TestRefreshRateBounds(unittest.TestCase):
 
     def test_refresh_rate_edge_cases(self) -> None:
         """Test refresh rate edge cases."""
-        from lazyssh.ui import parse_integer_env_var
+        from lazyssh.console_instance import parse_integer_env_var
 
         # Test with different min/max bounds
         test_cases = [

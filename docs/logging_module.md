@@ -43,7 +43,7 @@ The LazySSH logging module provides robust logging capabilities throughout the a
 | `lazyssh_YYYYMMDD.log` | General application events, startup, configuration |
 | `lazyssh.ssh_YYYYMMDD.log` | SSH connection creation/termination, command execution, tunnel management |
 | `lazyssh.command_YYYYMMDD.log` | Command mode operations, user input, command execution |
-| `lazyssh.scp_YYYYMMDD.log` | SCP transfers, remote file operations | 
+| `lazyssh.scp_YYYYMMDD.log` | SCP transfers, remote file operations |
 | `<connection_name>.d/logs/connection.log` | All activity specific to the connection including commands and file transfers |
 
 ## Configuration and Usage
@@ -182,4 +182,4 @@ The logging module is implemented in `src/lazyssh/logging_module.py` and provide
 - `update_transfer_stats`: Updates and logs file transfer statistics
 - `format_size`: Formats byte sizes into human-readable strings
 
-The module also maintains a global `transfer_stats` dictionary that tracks transfer statistics for each connection. 
+The module also maintains a global `transfer_stats` dictionary that tracks transfer statistics for each connection.

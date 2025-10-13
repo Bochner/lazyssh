@@ -68,4 +68,4 @@ You can run all style checks with:
 4. Run all tests and linting
 5. Submit a pull request
 
-Thank you for contributing to LazySSH! 
+Thank you for contributing to LazySSH!

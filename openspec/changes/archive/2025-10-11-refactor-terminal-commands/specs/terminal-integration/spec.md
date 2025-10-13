@@ -124,4 +124,3 @@ The system SHALL allow users to query and modify the terminal method preference 
 - **AND** `<arg>` is one of: `auto`, `terminator`, or `native`
 - **THEN** the system SHALL display a helpful error: "To change terminal method, use: terminal <method>"
 - **AND** no terminal session SHALL be opened
-

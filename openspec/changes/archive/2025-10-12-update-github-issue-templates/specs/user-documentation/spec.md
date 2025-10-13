@@ -9,7 +9,7 @@ The project SHALL provide user-friendly GitHub issue templates that facilitate b
 - **AND** optional fields are clearly marked as such
 - **AND** field descriptions are concise and helpful
 
-#### Scenario: Feature request submission  
+#### Scenario: Feature request submission
 - **WHEN** a user wants to request a new feature
 - **THEN** they can complete the feature request template with core information (description, use case)
 - **AND** priority and alternatives are optional fields

@@ -24,25 +24,12 @@ from .config import (
     save_config,
     validate_config_name,
 )
-from .logging_module import (  # noqa: F401
-    APP_LOGGER,
-    CMD_LOGGER,
-    log_ssh_command,
-    set_debug_mode,
-)
+from .console_instance import console, display_error, display_info, display_success, display_warning
+from .logging_module import APP_LOGGER, CMD_LOGGER, log_ssh_command, set_debug_mode  # noqa: F401
 from .models import SSHConnection
 from .scp_mode import SCPMode
 from .ssh import SSHManager
-from .ui import (
-    console,
-    display_error,
-    display_info,
-    display_saved_configs,
-    display_ssh_status,
-    display_success,
-    display_tunnels,
-    display_warning,
-)
+from .ui import display_saved_configs, display_ssh_status, display_tunnels
 
 
 class LazySSHCompleter(Completer):

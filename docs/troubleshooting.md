@@ -474,7 +474,7 @@ lazyssh> tunc myserver r 8080 localhost 80
    lazyssh> save-config prod-server
    lazyssh> save-config server_1
    lazyssh> save-config webserver01
-   
+
    # Invalid names (avoid)
    # server.name  (no dots)
    # my server    (no spaces)
@@ -611,7 +611,7 @@ lazyssh> tunc myserver r 8080 localhost 80
 
 **This is by design, not a bug.**
 
-**Explanation**: 
+**Explanation**:
 Config files are stored in `/tmp/lazyssh/` which is cleared on system reboot for security reasons.
 
 **Solutions if you need persistence**:
@@ -621,7 +621,7 @@ Config files are stored in `/tmp/lazyssh/` which is cleared on system reboot for
    # Create permanent config directory
    mkdir -p ~/.config/lazyssh
    cp /tmp/lazyssh/connections.conf ~/.config/lazyssh/
-   
+
    # Use custom path
    lazyssh --config ~/.config/lazyssh/connections.conf
    ```
@@ -653,7 +653,7 @@ Config files are stored in `/tmp/lazyssh/` which is cleared on system reboot for
    # Force color output
    export TERM=xterm-256color
    export COLORTERM=truecolor
-   
+
    # Restart LazySSH
    lazyssh
    ```

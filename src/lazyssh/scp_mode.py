@@ -29,6 +29,7 @@ from rich.table import Column
 from rich.text import Text
 from rich.tree import Tree
 
+from .console_instance import console, display_error, display_info, display_success
 from .logging_module import get_connection_logger  # noqa: F401
 from .logging_module import (
     SCP_LOGGER,
@@ -40,14 +41,7 @@ from .logging_module import (
 )
 from .models import SSHConnection
 from .ssh import SSHManager
-from .ui import (
-    console,
-    create_standard_table,
-    display_error,
-    display_info,
-    display_success,
-    get_console,
-)
+from .ui import create_standard_table, get_console
 
 # Cache and throttling configuration
 CACHE_TTL_SECONDS = 30

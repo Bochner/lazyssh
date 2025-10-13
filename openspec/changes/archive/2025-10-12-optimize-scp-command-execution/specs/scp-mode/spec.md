@@ -94,4 +94,3 @@ The system SHALL minimize the number of SSH commands executed during normal SCP 
 - **AND** a user performs operations that benefit from caching
 - **THEN** the system SHALL log cache hit and miss events
 - **AND** the logs SHALL include timestamps and cache entry information
-

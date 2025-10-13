@@ -1,6 +1,5 @@
 """UI utilities for LazySSH"""
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -15,161 +14,49 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
-from rich.theme import Theme
 
 from . import __version__
-from .models import SSHConnection
-
-# Centralized Dracula theme definition
-LAZYSSH_THEME = Theme(
-    {
-        # Core Dracula colors
-        "info": "#8be9fd",  # Cyan - for info messages and function names
-        "warning": "#f1fa8c",  # Yellow - for warnings and variables
-        "error": "#ff5555",  # Red - for errors and danger messages
-        "success": "#50fa7b",  # Green - for success messages and strings
-        "header": "#bd93f9",  # Purple - for headers and operators
-        "accent": "#8be9fd",  # Cyan - for accents and highlights
-        "dim": "#6272a4",  # Comment - for muted text and secondary info
-        "highlight": "#ff79c6",  # Pink - for keywords and special commands
-        "border": "#6272a4",  # Comment - for borders
-        "table.header": "#bd93f9",  # Purple - for table headers
-        "table.row": "#f8f8f2",  # Foreground - for table rows
-        "panel.title": "#bd93f9",  # Purple - for panel titles
-        "panel.subtitle": "#6272a4",  # Comment - for panel subtitles
-        # Additional Dracula colors for specific use cases
-        "keyword": "#ff79c6",  # Pink - for keywords like if, for, return
-        "operator": "#bd93f9",  # Purple - for operators and special symbols
-        "string": "#50fa7b",  # Green - for strings
-        "variable": "#f8f8f2",  # Foreground - for variables
-        "number": "#ffb86c",  # Orange - for numbers and constants
-        "comment": "#6272a4",  # Comment - for comments and muted text
-        "foreground": "#f8f8f2",  # Foreground - for default text
-        "background": "#282a36",  # Background - for main background
-        # Progress bar specific colors
-        "progress.description": "#8be9fd",  # Cyan - for progress descriptions
-        "progress.percentage": "#f8f8f2",  # Foreground - for percentage text
-        "progress.bar": "#6272a4",  # Comment - for progress bar background
-        "progress.bar.complete": "#50fa7b",  # Green - for completed portion
-    }
+from .console_instance import (
+    LAZYSSH_THEME,
+    console,
+    create_console_with_config,
+    display_error,
+    display_info,
+    display_success,
+    display_warning,
+    get_ui_config,
 )
-
-
-# Environment variable parsing functions
-def parse_boolean_env_var(var_name: str, default: bool = False) -> bool:
-    """Parse a boolean environment variable."""
-    value = os.getenv(var_name)
-    if value is None:
-        return default
-    return value.lower() in ("true", "1", "yes", "on")
-
-
-def parse_integer_env_var(var_name: str, default: int, min_val: int = 1, max_val: int = 10) -> int:
-    """Parse an integer environment variable with bounds checking."""
-    value = os.getenv(var_name, "")
-    try:
-        int_value = int(value)
-        return max(min_val, min(max_val, int_value))
-    except (ValueError, TypeError):
-        return default
-
-
-def get_ui_config() -> dict[str, Any]:
-    """Get UI configuration from environment variables."""
-    return {
-        "high_contrast": parse_boolean_env_var("LAZYSSH_HIGH_CONTRAST", False),
-        "no_rich": parse_boolean_env_var("LAZYSSH_NO_RICH", False),
-        "refresh_rate": parse_integer_env_var("LAZYSSH_REFRESH_RATE", 4, 1, 10),
-        "no_animations": parse_boolean_env_var("LAZYSSH_NO_ANIMATIONS", False),
-        "colorblind_mode": parse_boolean_env_var("LAZYSSH_COLORBLIND_MODE", False),
-        "plain_text": parse_boolean_env_var("LAZYSSH_PLAIN_TEXT", False),
-    }
-
-
-def get_theme_for_config(config: dict[str, Any]) -> Theme:
-    """Get the appropriate theme based on configuration."""
-    if config["plain_text"]:
-        # Return a minimal theme for plain text mode
-        return Theme(
-            {
-                "info": "default",
-                "warning": "default",
-                "error": "default",
-                "success": "default",
-                "header": "default",
-                "accent": "default",
-                "dim": "default",
-                "highlight": "default",
-                "border": "default",
-                "table.header": "default",
-                "table.row": "default",
-                "panel.title": "default",
-                "panel.subtitle": "default",
-                "keyword": "default",
-                "operator": "default",
-                "string": "default",
-                "variable": "default",
-                "number": "default",
-                "comment": "default",
-                "foreground": "default",
-                "background": "default",
-                "progress.description": "default",
-                "progress.percentage": "default",
-                "progress.bar": "default",
-                "progress.bar.complete": "default",
-            }
-        )
-    elif config["high_contrast"]:
-        return create_high_contrast_theme()
-    elif config["colorblind_mode"]:
-        return create_colorblind_friendly_theme()
-    else:
-        return LAZYSSH_THEME
-
-
-def get_terminal_width() -> int:
-    """Get the terminal width with fallbacks."""
-    # Try environment variable first
-    if "COLUMNS" in os.environ:
-        try:
-            return int(os.environ["COLUMNS"])
-        except ValueError:
-            pass
-
-    # Try tput command
-    try:
-        import shutil
-
-        result = shutil.which("tput")
-        if result:
-            import subprocess
-
-            cols = subprocess.check_output(["tput", "cols"], text=True).strip()
-            return int(cols)
-    except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
-        pass
-
-    # Fallback to a reasonable default
-    return 80
-
-
-def create_console_with_config(config: dict[str, Any]) -> Console:
-    """Create a console instance with configuration applied."""
-    theme = get_theme_for_config(config)
-
-    return Console(
-        theme=theme,
-        force_terminal=not config["no_rich"],
-        legacy_windows=False,
-        color_system="auto" if not (config["no_rich"] or config["plain_text"]) else None,
-        width=get_terminal_width(),
-        height=None,  # Auto-detect height
-    )
-
+from .models import SSHConnection
 
 # Initialize UI configuration and console
 ui_config = get_ui_config()
-console = create_console_with_config(ui_config)
+
+
+def display_message_with_fallback(message: str, message_type: str = "info") -> None:
+    """Display a message with fallback for plain text mode."""
+    config = get_ui_config()  # Get fresh configuration
+    if config["plain_text"] or config["no_rich"]:
+        # Use simple text output for plain text mode
+        prefixes = {
+            "info": "INFO:",
+            "success": "SUCCESS:",
+            "error": "ERROR:",
+            "warning": "WARNING:",
+        }
+        prefix = prefixes.get(message_type, "INFO:")
+        print(f"{prefix} {message}")
+    else:
+        # Use Rich styling for normal mode
+        if message_type == "info":
+            display_info(message)
+        elif message_type == "success":
+            display_success(message)
+        elif message_type == "error":
+            display_error(message)
+        elif message_type == "warning":
+            display_warning(message)
+        else:
+            display_info(message)
 
 
 def display_banner() -> None:
@@ -226,22 +113,6 @@ def display_menu(options: dict[str, str]) -> None:
 def get_user_input(prompt_text: str) -> str:
     result: str = Prompt.ask(f"[info]{prompt_text}[/info]")
     return result
-
-
-def display_error(message: str) -> None:
-    console.print(f"[error]Error:[/error] {message}")
-
-
-def display_success(message: str) -> None:
-    console.print(f"[success]Success:[/success] {message}")
-
-
-def display_info(message: str) -> None:
-    console.print(f"[info]{message}[/info]")
-
-
-def display_warning(message: str) -> None:
-    console.print(f"[warning]Warning:[/warning] {message}")
 
 
 def display_ssh_status(
@@ -680,72 +551,6 @@ def update_live_connections(live: Live, connections: dict[str, SSHConnection]) -
 # Accessibility and Readability Functions
 
 
-def create_high_contrast_theme() -> Theme:
-    """Create a high contrast theme for better accessibility using Dracula colors."""
-    return Theme(
-        {
-            "info": "#8be9fd",  # Cyan - bright for high contrast
-            "warning": "#f1fa8c",  # Yellow - bright for visibility
-            "error": "#ff5555",  # Red - bright for errors
-            "success": "#50fa7b",  # Green - bright for success
-            "header": "#bd93f9",  # Purple - bright for headers
-            "accent": "#8be9fd",  # Cyan - bright for accents
-            "dim": "#f8f8f2",  # Foreground - bright instead of dim
-            "highlight": "#ff79c6",  # Pink - bright for highlights
-            "border": "#f8f8f2",  # Foreground - bright borders
-            "table.header": "#bd93f9",  # Purple - bright headers
-            "table.row": "#f8f8f2",  # Foreground - bright text
-            "panel.title": "#bd93f9",  # Purple - bright titles
-            "panel.subtitle": "#f8f8f2",  # Foreground - bright subtitles
-            "keyword": "#ff79c6",  # Pink - bright keywords
-            "operator": "#bd93f9",  # Purple - bright operators
-            "string": "#50fa7b",  # Green - bright strings
-            "variable": "#f8f8f2",  # Foreground - bright variables
-            "number": "#ffb86c",  # Orange - bright numbers
-            "comment": "#f8f8f2",  # Foreground - bright comments
-            "foreground": "#f8f8f2",  # Foreground - bright text
-            # Progress bar specific colors
-            "progress.description": "#8be9fd",  # Cyan - for progress descriptions
-            "progress.percentage": "#f8f8f2",  # Foreground - for percentage text
-            "progress.bar": "#f8f8f2",  # Foreground - bright progress bar background
-            "progress.bar.complete": "#50fa7b",  # Green - for completed portion
-        }
-    )
-
-
-def create_colorblind_friendly_theme() -> Theme:
-    """Create a colorblind-friendly theme using Dracula colors with enhanced differentiation."""
-    return Theme(
-        {
-            "info": "#8be9fd",  # Cyan - distinct from other colors
-            "warning": "#f1fa8c",  # Yellow - distinct warning color
-            "error": "#ff5555",  # Red - distinct error color
-            "success": "#50fa7b",  # Green - distinct success color
-            "header": "#bd93f9",  # Purple - distinct header color
-            "accent": "#8be9fd",  # Cyan - accent color
-            "dim": "#6272a4",  # Comment - muted but readable
-            "highlight": "#ff79c6",  # Pink - distinct highlight color
-            "border": "#6272a4",  # Comment - subtle borders
-            "table.header": "#bd93f9",  # Purple - distinct headers
-            "table.row": "#f8f8f2",  # Foreground - readable text
-            "panel.title": "#bd93f9",  # Purple - distinct titles
-            "panel.subtitle": "#6272a4",  # Comment - readable subtitles
-            "keyword": "#ff79c6",  # Pink - distinct keywords
-            "operator": "#bd93f9",  # Purple - distinct operators
-            "string": "#50fa7b",  # Green - distinct strings
-            "variable": "#f8f8f2",  # Foreground - readable variables
-            "number": "#ffb86c",  # Orange - distinct numbers
-            "comment": "#6272a4",  # Comment - readable comments
-            "foreground": "#f8f8f2",  # Foreground - readable text
-            # Progress bar specific colors
-            "progress.description": "#8be9fd",  # Cyan - for progress descriptions
-            "progress.percentage": "#f8f8f2",  # Foreground - for percentage text
-            "progress.bar": "#6272a4",  # Comment - progress bar background
-            "progress.bar.complete": "#50fa7b",  # Green - for completed portion
-        }
-    )
-
-
 def create_readable_table(title: str = "", show_header: bool = True) -> Table:
     """Create a table optimized for readability and accessibility."""
     table = Table(
@@ -781,21 +586,6 @@ def create_accessible_panel(content: str, title: str = "", panel_type: str = "in
     )
 
 
-def display_accessible_message(message: str, message_type: str = "info") -> None:
-    """Display a message with accessibility considerations."""
-    # Add clear prefixes for screen readers
-    prefixes = {
-        "info": "INFO:",
-        "success": "SUCCESS:",
-        "error": "ERROR:",
-        "warning": "WARNING:",
-    }
-
-    prefix = prefixes.get(message_type, "INFO:")
-    styled_message = f"[{message_type}]{prefix}[/{message_type}] {message}"
-    console.print(styled_message)
-
-
 def create_status_with_indicators(status: str, message: str) -> str:
     """Create status indicators with both color and text for accessibility."""
     status_indicators = {
@@ -829,33 +619,6 @@ def create_fallback_display(content: str) -> None:
 
     clean_content = re.sub(r"\[/?[^\]]*\]", "", content)
     print(clean_content)
-
-
-def display_message_with_fallback(message: str, message_type: str = "info") -> None:
-    """Display a message with fallback for plain text mode."""
-    config = get_ui_config()  # Get fresh configuration
-    if config["plain_text"] or config["no_rich"]:
-        # Use simple text output for plain text mode
-        prefixes = {
-            "info": "INFO:",
-            "success": "SUCCESS:",
-            "error": "ERROR:",
-            "warning": "WARNING:",
-        }
-        prefix = prefixes.get(message_type, "INFO:")
-        print(f"{prefix} {message}")
-    else:
-        # Use Rich styling for normal mode
-        if message_type == "info":
-            display_info(message)
-        elif message_type == "success":
-            display_success(message)
-        elif message_type == "error":
-            display_error(message)
-        elif message_type == "warning":
-            display_warning(message)
-        else:
-            display_info(message)
 
 
 # Performance Testing and Optimization Functions

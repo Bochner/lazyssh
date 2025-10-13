@@ -30,7 +30,7 @@ This inconsistency leads to:
 ## Impact
 
 - Affected specs: user-interface, scp-mode, terminal-integration
-- Affected code: 
+- Affected code:
   - `src/lazyssh/ui.py` - Core UI utilities and styling
   - `src/lazyssh/scp_mode.py` - SCP mode interface and progress bars
   - `src/lazyssh/command_mode.py` - Command mode interface and prompts

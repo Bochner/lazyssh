@@ -180,7 +180,7 @@ cleanup_and_exit() {
     deactivate 2>/dev/null || true
     print_info "Removing virtual environment..."
     rm -rf "$VENV_DIR"
-    
+
     # Clean up Python cache files
     print_info "Cleaning up Python cache files..."
     find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -195,7 +195,7 @@ cleanup_and_exit() {
     find . -type d -name "htmlcov" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name "dist" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name "build" -exec rm -rf {} + 2>/dev/null || true
-    
+
     print_success "Cleanup complete"
     exit "$exit_code"
 }
@@ -209,7 +209,7 @@ trap 'cleanup_and_exit 1' ERR INT TERM
 
 if [ $AUTO_FIX -eq 1 ] || [ $DRY_RUN -eq 1 ]; then
     print_section "Auto-Fix Phase"
-    
+
     # Fix 1: Python 3.11+ code optimization with pyupgrade
     print_info "Running pyupgrade for Python 3.11+ optimizations..."
     if [ $DRY_RUN -eq 1 ]; then
@@ -223,7 +223,7 @@ if [ $AUTO_FIX -eq 1 ] || [ $DRY_RUN -eq 1 ]; then
             print_success "Code already optimized for Python 3.11+"
         fi
     fi
-    
+
     # Fix 2: Auto-format imports with isort
     print_info "Auto-formatting imports with isort..."
     if [ $DRY_RUN -eq 1 ]; then
@@ -243,7 +243,7 @@ if [ $AUTO_FIX -eq 1 ] || [ $DRY_RUN -eq 1 ]; then
             print_success "Import ordering already correct"
         fi
     fi
-    
+
     # Fix 3: Auto-format code with Black
     print_info "Auto-formatting code with Black..."
     if [ $DRY_RUN -eq 1 ]; then
@@ -263,7 +263,7 @@ if [ $AUTO_FIX -eq 1 ] || [ $DRY_RUN -eq 1 ]; then
             print_success "Code formatting already correct"
         fi
     fi
-    
+
     if [ $DRY_RUN -eq 0 ] && [ $FIXES_APPLIED -gt 0 ]; then
         echo ""
         print_success "Applied $FIXES_APPLIED automatic fixes"
@@ -335,7 +335,7 @@ rm -f /tmp/mypy_check.log
 
 if [ $SKIP_TESTS -eq 0 ]; then
     print_section "Testing"
-    
+
     print_info "Running pytest..."
     if [ -d "tests" ] && [ "$(find tests -name "test_*.py" | wc -l || echo 0)" -gt 0 ]; then
         if pytest -xvs tests 2>&1 | tee /tmp/pytest.log; then
@@ -358,7 +358,7 @@ fi
 
 if [ $SKIP_BUILD -eq 0 ]; then
     print_section "Build Verification"
-    
+
     # Check 1: Build package
     print_info "Building package..."
     if python -m build 2>&1 | tee /tmp/build.log; then
@@ -368,7 +368,7 @@ if [ $SKIP_BUILD -eq 0 ]; then
         cat /tmp/build.log
     fi
     rm -f /tmp/build.log
-    
+
     # Check 2: Verify package with twine
     print_info "Verifying package with twine..."
     if twine check dist/* 2>&1 | tee /tmp/twine.log; then
@@ -393,7 +393,7 @@ print_info "Checking Python version requirement in pyproject.toml..."
 if [ -f "pyproject.toml" ]; then
     PYPROJECT_PYTHON_REQ=$(grep -E "requires-python|python_requires" pyproject.toml || true)
     [ $VERBOSE -eq 1 ] && echo "  $PYPROJECT_PYTHON_REQ"
-    
+
     if ! grep -q ">=3.11" pyproject.toml; then
         print_warning "Python requirement in pyproject.toml should be >=3.11"
     else

@@ -11,23 +11,17 @@ from rich.prompt import Confirm
 
 from lazyssh import check_dependencies
 from lazyssh.command_mode import CommandMode
-from lazyssh.config import (
-    initialize_config_file,
-    load_configs,
+from lazyssh.config import initialize_config_file, load_configs
+from lazyssh.console_instance import (
+    console,
+    display_error,
+    display_info,
+    display_success,
+    display_warning,
 )
 from lazyssh.logging_module import APP_LOGGER, ensure_log_directory
 from lazyssh.ssh import SSHManager
-from lazyssh.ui import (
-    console,
-    display_banner,
-    display_error,
-    display_info,
-    display_saved_configs,
-    display_ssh_status,
-    display_success,
-    display_tunnels,
-    display_warning,
-)
+from lazyssh.ui import display_banner, display_saved_configs, display_ssh_status, display_tunnels
 
 # Initialize the SSH manager for the application
 ssh_manager = SSHManager()

@@ -207,7 +207,7 @@ typecheck:
 # Comprehensive Checking
 #============================================================================
 
-check: 
+check:
 	@echo -e "$(BLUE)Running comprehensive code quality checks...$(NC)"
 	@echo ""
 	@echo -e "$(BLUE)=== Step 1/5: Format Check ===$(NC)"

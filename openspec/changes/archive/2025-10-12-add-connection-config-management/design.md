@@ -136,7 +136,7 @@ socket_name = "dev-db"
 
 **Risk:** SSH private key paths stored in plain text config file
 
-**Mitigation:** 
+**Mitigation:**
 - Only store paths to keys, not the keys themselves
 - Document security best practices in user guide
 - File permissions set to 600 (owner read/write only)
@@ -217,4 +217,3 @@ If issues arise, feature can be disabled by:
 
 5. Should config name be case-sensitive?
    - **Answer:** Yes, maintain case sensitivity for consistency with Unix conventions.
-

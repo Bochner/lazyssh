@@ -56,4 +56,4 @@ body:
       options:
         - label: I'm willing to submit a pull request for this feature
         - label: I can help with testing
-        - label: I can help with documentation 
+        - label: I can help with documentation

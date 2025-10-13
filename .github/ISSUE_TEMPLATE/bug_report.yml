@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for reporting a bug! Please provide the essential details below.
-  
+
   - type: textarea
     id: description
     attributes:
@@ -46,4 +46,4 @@ body:
     attributes:
       label: Error logs (optional)
       description: Any error messages or logs that might help
-      render: shell 
+      render: shell

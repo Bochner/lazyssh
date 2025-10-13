@@ -37,4 +37,3 @@
 - [x] 6.5 Test tab completion for `terminal` command shows only method names
 - [x] 6.6 Test that `close` and `open` commands work symmetrically
 - [x] 6.7 Verify terminal method display in status table
-

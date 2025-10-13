@@ -6,9 +6,9 @@ from pathlib import Path
 from rich.prompt import Confirm
 
 from .config import get_terminal_method
+from .console_instance import console, display_error, display_info, display_success, display_warning
 from .logging_module import SSH_LOGGER, log_ssh_connection, log_tunnel_creation
 from .models import SSHConnection
-from .ui import console, display_error, display_info, display_success, display_warning
 
 
 class SSHManager:

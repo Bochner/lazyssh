@@ -28,4 +28,3 @@
 - [x] 5.1 Run openspec validate to ensure spec compliance
 - [x] 5.2 Verify all documentation is consistent
 - [x] 5.3 Confirm no remaining Windows references in user-facing documentation
-

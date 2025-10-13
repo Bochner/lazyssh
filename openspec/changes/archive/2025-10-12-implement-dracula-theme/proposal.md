@@ -18,7 +18,7 @@ The current LazySSH application uses a basic color theme that doesn't provide th
 ## Impact
 
 - Affected specs: user-interface
-- Affected code: 
+- Affected code:
   - `src/lazyssh/ui.py` - Main theme definition and UI components
   - `src/lazyssh/ssh.py` - SSH command display and status messages
   - `src/lazyssh/scp_mode.py` - File transfer interface styling

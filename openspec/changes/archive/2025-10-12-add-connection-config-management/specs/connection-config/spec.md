@@ -281,4 +281,3 @@ The system SHALL log all configuration management operations for debugging and a
 
 - **WHEN** a configuration operation fails
 - **THEN** the system SHALL log the error with full details including stack trace for debugging
-

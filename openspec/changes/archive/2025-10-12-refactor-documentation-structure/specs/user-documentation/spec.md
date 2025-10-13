@@ -64,4 +64,3 @@ Documentation SHALL avoid redundancy and maintain a single source of truth for e
 #### Scenario: Updates are coordinated
 - **WHEN** a command or feature changes
 - **THEN** all documentation references can be identified and updated without hunting through unstructured prose
-

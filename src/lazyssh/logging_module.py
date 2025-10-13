@@ -75,8 +75,7 @@ def ensure_log_directory(log_dir: Path | str | None = None) -> bool:
             log_dir.mkdir(parents=True, exist_ok=True)
             log_dir.chmod(0o700)  # Secure permissions
         except Exception as e:
-            # Import here to avoid circular imports
-            from .ui import display_error
+            from .console_instance import display_error
 
             display_error(f"Error creating log directory: {e}")
             return False

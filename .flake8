@@ -2,4 +2,4 @@
 max-line-length = 100
 exclude = .git,__pycache__,build,dist
 ignore = C901,W503,E501
-max-complexity = 15 
+max-complexity = 15

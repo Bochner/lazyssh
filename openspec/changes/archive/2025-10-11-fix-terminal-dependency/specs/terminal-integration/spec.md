@@ -98,4 +98,3 @@ The system SHALL maintain backward compatibility with existing Terminator termin
 - **AND** SSH socket paths SHALL be honored
 - **AND** custom shell specifications SHALL be preserved
 - **AND** SSH connection options SHALL be passed correctly
-

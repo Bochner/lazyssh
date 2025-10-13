@@ -9,6 +9,6 @@ art>=5.9
 paramiko>=3.0.0  # Requires Python 3.8+
 tomli-w>=1.0.0  # For writing TOML config files (reading uses built-in tomllib in Python 3.11+)
 # System dependencies:
-# openssh-client - Required for SSH functionality 
+# openssh-client - Required for SSH functionality
 # terminator - for terminal emulation
 # Requires Python 3.11 or higher

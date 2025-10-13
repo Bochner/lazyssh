@@ -32,7 +32,8 @@ class TestUIThemeIntegration(unittest.TestCase):
 
     def test_theme_switching_high_contrast(self) -> None:
         """Test theme switching to high contrast mode."""
-        from lazyssh.ui import create_high_contrast_theme, get_theme_for_config, get_ui_config
+        from lazyssh.console_instance import create_high_contrast_theme, get_theme_for_config
+        from lazyssh.ui import get_ui_config
 
         # Set high contrast environment variable
         os.environ["LAZYSSH_HIGH_CONTRAST"] = "true"
@@ -47,7 +48,8 @@ class TestUIThemeIntegration(unittest.TestCase):
 
     def test_theme_switching_colorblind_mode(self) -> None:
         """Test theme switching to colorblind-friendly mode."""
-        from lazyssh.ui import create_colorblind_friendly_theme, get_theme_for_config, get_ui_config
+        from lazyssh.console_instance import create_colorblind_friendly_theme, get_theme_for_config
+        from lazyssh.ui import get_ui_config
 
         # Set colorblind mode environment variable
         os.environ["LAZYSSH_COLORBLIND_MODE"] = "true"
@@ -62,7 +64,8 @@ class TestUIThemeIntegration(unittest.TestCase):
 
     def test_theme_switching_plain_text(self) -> None:
         """Test theme switching to plain text mode."""
-        from lazyssh.ui import get_theme_for_config, get_ui_config
+        from lazyssh.console_instance import get_theme_for_config
+        from lazyssh.ui import get_ui_config
 
         # Set plain text environment variable
         os.environ["LAZYSSH_PLAIN_TEXT"] = "true"
@@ -108,7 +111,8 @@ class TestUIThemeIntegration(unittest.TestCase):
 
     def test_theme_precedence_plain_text_overrides_others(self) -> None:
         """Test that plain text mode overrides other theme settings."""
-        from lazyssh.ui import get_theme_for_config, get_ui_config
+        from lazyssh.console_instance import get_theme_for_config
+        from lazyssh.ui import get_ui_config
 
         # Set multiple theme environment variables
         os.environ["LAZYSSH_HIGH_CONTRAST"] = "true"
@@ -162,7 +166,8 @@ class TestUIThemeIntegration(unittest.TestCase):
 
     def test_theme_precedence_high_contrast_over_colorblind(self) -> None:
         """Test that high contrast mode overrides colorblind mode."""
-        from lazyssh.ui import create_high_contrast_theme, get_theme_for_config, get_ui_config
+        from lazyssh.console_instance import create_high_contrast_theme, get_theme_for_config
+        from lazyssh.ui import get_ui_config
 
         # Set both high contrast and colorblind mode
         os.environ["LAZYSSH_HIGH_CONTRAST"] = "true"
@@ -254,7 +259,8 @@ class TestUIThemeIntegration(unittest.TestCase):
 
     def test_theme_consistency_across_calls(self) -> None:
         """Test that theme selection is consistent across multiple calls."""
-        from lazyssh.ui import get_theme_for_config, get_ui_config
+        from lazyssh.console_instance import get_theme_for_config
+        from lazyssh.ui import get_ui_config
 
         # Set environment variables
         os.environ["LAZYSSH_HIGH_CONTRAST"] = "true"

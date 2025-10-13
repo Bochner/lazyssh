@@ -14,9 +14,8 @@ LazySSH currently crashes on Windows immediately after displaying the banner bec
 ## Impact
 
 - **Affected specs**: New capability `platform-compatibility`
-- **Affected code**: 
+- **Affected code**:
   - `src/lazyssh/__init__.py` (lines 69-86: `_check_executable` function)
   - `src/lazyssh/ssh.py` (line 288: terminator path check)
 - **Breaking changes**: None
 - **Benefits**: Enables LazySSH to run on Windows natively with minimal code changes, following Python best practices
-

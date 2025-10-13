@@ -157,4 +157,3 @@ The system SHALL allow users to query and modify the terminal method preference 
 - **AND** the user changes the terminal method setting
 - **THEN** existing terminal sessions SHALL continue using their original method
 - **AND** only new terminal sessions SHALL use the updated method
-

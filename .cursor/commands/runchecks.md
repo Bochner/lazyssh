@@ -5,4 +5,3 @@ description: Run all pre-commit checks and auto-fix formatting issues (black, is
 ```bash
 bash pre-commit-check.sh --verbose
 ```
-
