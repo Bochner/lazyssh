@@ -17,6 +17,7 @@ LazySSH simplifies SSH connection management with an elegant CLI interface. It h
 - **Dynamic Proxy**: Set up SOCKS proxy for secure browsing
 - **SCP Mode**: Transfer files securely with rich visualization and progress tracking
 - **Terminal Integration**: Open terminal sessions directly with runtime method switching
+- **Plugin System**: Extend functionality with custom Python or shell scripts
 - **Wizard Workflows**: Guided interactive workflows for complex operations
 - **Rich Visual Elements**: Color coding, progress bars, and tree visualizations
 
@@ -56,6 +57,10 @@ lazyssh> open myserver
 # Transfer files (SCP mode)
 lazyssh> scp myserver
 
+# Use plugins for automation
+lazyssh> plugin list                    # List available plugins
+lazyssh> plugin run enumerate myserver  # Run system enumeration
+
 # Use wizard for guided workflows
 lazyssh> wizard lazyssh
 lazyssh> wizard tunnel
@@ -66,6 +71,77 @@ scp myserver:/home/user> tree
 # Download files
 scp myserver:/home/user> get config.json
 ```
+
+## Plugin System
+
+LazySSH features an extensible plugin system that allows you to run custom Python or shell scripts through established SSH connections. This enables automation, reconnaissance, and custom workflows without leaving LazySSH.
+
+### Built-in Plugins
+
+#### Enumerate Plugin
+
+Performs comprehensive system enumeration including:
+- OS and kernel information
+- User accounts and groups
+- Network configuration (interfaces, routes, listening ports)
+- Running processes and services
+- Installed packages (apt/yum/pacman)
+- Filesystem information and mounts
+- Environment variables
+- Scheduled tasks (cron, systemd timers)
+- Security configurations (firewall, SELinux/AppArmor)
+- System logs
+- Hardware information
+
+```bash
+lazyssh> plugin run enumerate myserver
+```
+
+### Using Plugins
+
+```bash
+# List all available plugins
+lazyssh> plugin list
+
+# Get detailed information about a plugin
+lazyssh> plugin info enumerate
+
+# Run a plugin on an established connection
+lazyssh> plugin run <plugin-name> <socket-name>
+```
+
+### Creating Custom Plugins
+
+Plugins are simple Python or shell scripts that can execute commands through SSH control sockets. See `src/lazyssh/plugins/README.md` for a comprehensive plugin development guide.
+
+**Quick Example:**
+
+```python
+#!/usr/bin/env python3
+# PLUGIN_NAME: my-plugin
+# PLUGIN_DESCRIPTION: My custom automation script
+# PLUGIN_VERSION: 1.0.0
+
+import os
+import subprocess
+import sys
+
+# LazySSH provides connection info via environment variables
+host = os.environ.get("LAZYSSH_HOST")
+user = os.environ.get("LAZYSSH_USER")
+socket_path = os.environ.get("LAZYSSH_SOCKET_PATH")
+
+# Execute commands on remote host using SSH control socket
+cmd = ["ssh", "-S", socket_path, "-o", "ControlMaster=no",
+       f"{user}@{host}", "your-command-here"]
+
+result = subprocess.run(cmd, capture_output=True, text=True)
+print(result.stdout)
+```
+
+Place your plugin in `src/lazyssh/plugins/`, make it executable (`chmod +x`), and it will be automatically discovered.
+
+For detailed plugin development instructions, examples, and best practices, see the [Plugin Development Guide](src/lazyssh/plugins/README.md).
 
 ## Documentation
 

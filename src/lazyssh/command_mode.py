@@ -27,9 +27,17 @@ from .config import (
 from .console_instance import console, display_error, display_info, display_success, display_warning
 from .logging_module import APP_LOGGER, CMD_LOGGER, log_ssh_command, set_debug_mode  # noqa: F401
 from .models import SSHConnection
+from .plugin_manager import PluginManager
 from .scp_mode import SCPMode
 from .ssh import SSHManager
-from .ui import display_saved_configs, display_ssh_status, display_tunnels
+from .ui import (
+    display_plugin_info,
+    display_plugin_output,
+    display_plugins,
+    display_saved_configs,
+    display_ssh_status,
+    display_tunnels,
+)
 
 
 class LazySSHCompleter(Completer):
@@ -287,12 +295,46 @@ class LazySSHCompleter(Completer):
                     if not word_before_cursor or workflow.startswith(word_before_cursor):
                         yield Completion(workflow, start_position=-len(word_before_cursor))
 
+        # Handle completion for plugin command
+        elif command == "plugin":
+            arg_position = len(words) - 1
+            if text.endswith(" "):
+                arg_position += 1
+
+            if arg_position == 1:
+                # First argument: subcommand (list, run, info) or plugin name for default run
+                subcommands = ["list", "run", "info"]
+                for subcmd in subcommands:
+                    if not word_before_cursor or subcmd.startswith(word_before_cursor):
+                        yield Completion(subcmd, start_position=-len(word_before_cursor))
+            elif arg_position == 2:
+                # Second argument depends on subcommand
+                if len(words) >= 2:
+                    subcommand = words[1]
+                    if subcommand in ["run", "info"]:
+                        # Suggest plugin names
+                        plugins = self.command_mode.plugin_manager.discover_plugins()
+                        for plugin_name in plugins.keys():
+                            if not word_before_cursor or plugin_name.startswith(word_before_cursor):
+                                yield Completion(
+                                    plugin_name, start_position=-len(word_before_cursor)
+                                )
+            elif arg_position == 3:
+                # Third argument for 'plugin run': socket name
+                if len(words) >= 2 and words[1] == "run":
+                    for conn_name in self.command_mode._get_connection_completions():
+                        if not word_before_cursor or conn_name.startswith(word_before_cursor):
+                            yield Completion(conn_name, start_position=-len(word_before_cursor))
+
 
 class CommandMode:
     def __init__(self, ssh_manager: SSHManager) -> None:
         """Initialize Command Mode interface"""
         # Initialize the SSH Manager
         self.ssh_manager = ssh_manager
+
+        # Initialize the Plugin Manager
+        self.plugin_manager = PluginManager()
 
         # Define available commands
         self.commands = {
@@ -316,6 +358,7 @@ class CommandMode:
             "close": self.cmd_close,
             "clear": self.cmd_clear,
             "wizard": self.cmd_wizard,
+            "plugin": self.cmd_plugin,
         }
 
         # Initialize history
@@ -1012,6 +1055,25 @@ class CommandMode:
             display_info("  [success]save-config my-server[/success]")
             display_info("  [success]backup-config[/success]\n")
 
+            display_info("[header]Plugin Management:[/header]")
+            display_info(
+                "  [highlight]plugin[/highlight]                    - List available plugins"
+            )
+            display_info(
+                "  [highlight]plugin list[/highlight]               - List all available plugins"
+            )
+            display_info(
+                "  [highlight]plugin run[/highlight] [number]<name>[/number] [number]<socket>[/number]    - Execute plugin on connection"
+            )
+            display_info(
+                "  [highlight]plugin info[/highlight] [number]<name>[/number]           - Show plugin details"
+            )
+
+            display_info("[dim]Examples:[/dim]")
+            display_info("  [success]plugin list[/success]")
+            display_info("  [success]plugin run enumerate myserver[/success]")
+            display_info("  [success]plugin info enumerate[/success]\n")
+
             display_info("[header]System Commands:[/header]")
             display_info("  [highlight]list[/highlight]    - Show all connections and tunnels")
             display_info(
@@ -1228,6 +1290,54 @@ class CommandMode:
             )
             display_info(
                 "  [success]wizard tunnel[/success]   [dim]# Start guided tunnel creation[/dim]"
+            )
+        elif cmd == "plugin":
+            display_info("[header]\nPlugin management and execution:[/header]")
+            display_info(
+                "[number]Usage:[/number] [highlight]plugin[/highlight] [[number]<subcommand>[/number]] [[number]<args>[/number]]"
+            )
+            display_info("[header]Subcommands:[/header]")
+            display_info(
+                "  [highlight]list[/highlight]              - List all available plugins (default)"
+            )
+            display_info(
+                "  [highlight]run[/highlight] [number]<name>[/number] [number]<socket>[/number]  - Execute plugin on a connection"
+            )
+            display_info(
+                "  [highlight]info[/highlight] [number]<name>[/number]          - Display detailed plugin information"
+            )
+            display_info("\n[header]Description:[/header]")
+            display_info("  Plugins extend LazySSH functionality by allowing you to run custom")
+            display_info("  Python or shell scripts through established SSH connections.")
+            display_info("  Plugins receive connection information via environment variables.")
+            display_info("\n[header]Environment Variables Available to Plugins:[/header]")
+            display_info("  [highlight]LAZYSSH_SOCKET[/highlight]            - Control socket name")
+            display_info("  [highlight]LAZYSSH_HOST[/highlight]              - Remote host address")
+            display_info("  [highlight]LAZYSSH_PORT[/highlight]              - SSH port")
+            display_info("  [highlight]LAZYSSH_USER[/highlight]              - SSH username")
+            display_info(
+                "  [highlight]LAZYSSH_SOCKET_PATH[/highlight]       - Full path to control socket"
+            )
+            display_info(
+                "  [highlight]LAZYSSH_SSH_KEY[/highlight]           - SSH key path (if used)"
+            )
+            display_info("  [highlight]LAZYSSH_PLUGIN_API_VERSION[/highlight] - Plugin API version")
+            display_info("\n[header]Built-in Plugins:[/header]")
+            display_info(
+                "  [highlight]enumerate[/highlight]  - Comprehensive system enumeration and reconnaissance"
+            )
+            display_info("\n[header]Examples:[/header]")
+            display_info(
+                "  [success]plugin[/success]                     [dim]# List all plugins[/dim]"
+            )
+            display_info(
+                "  [success]plugin list[/success]                [dim]# List all plugins[/dim]"
+            )
+            display_info(
+                "  [success]plugin run enumerate myserver[/success]  [dim]# Run enumeration on myserver[/dim]"
+            )
+            display_info(
+                "  [success]plugin info enumerate[/success]      [dim]# Show enumerate plugin details[/dim]"
             )
         else:
             display_error(f"Unknown command: {cmd}")
@@ -1749,3 +1859,116 @@ class CommandMode:
             if CMD_LOGGER:
                 CMD_LOGGER.error(f"Error in wizard tunnel: {str(e)}")
             return False
+
+    def cmd_plugin(self, args: list[str]) -> bool:
+        """Handle plugin command
+
+        Args:
+            args: Command arguments
+
+        Returns:
+            True on success, False otherwise
+        """
+        if not args:
+            # No subcommand, default to list
+            return self._plugin_list()
+
+        subcommand = args[0].lower()
+
+        if subcommand == "list":
+            return self._plugin_list()
+        elif subcommand == "run":
+            if len(args) < 3:
+                display_error("Usage: plugin run <plugin_name> <socket_name>")
+                return False
+            plugin_name = args[1]
+            socket_name = args[2]
+            return self._plugin_run(plugin_name, socket_name)
+        elif subcommand == "info":
+            if len(args) < 2:
+                display_error("Usage: plugin info <plugin_name>")
+                return False
+            plugin_name = args[1]
+            return self._plugin_info(plugin_name)
+        else:
+            display_error(f"Unknown plugin subcommand: {subcommand}")
+            display_info("Available subcommands: list, run, info")
+            return False
+
+    def _plugin_list(self) -> bool:
+        """List all available plugins"""
+        plugins = self.plugin_manager.discover_plugins()
+        display_plugins(plugins)
+        return True
+
+    def _plugin_info(self, plugin_name: str) -> bool:
+        """Display detailed information about a plugin
+
+        Args:
+            plugin_name: Name of the plugin
+
+        Returns:
+            True on success, False if plugin not found
+        """
+        plugin = self.plugin_manager.get_plugin(plugin_name)
+        if not plugin:
+            display_error(f"Plugin '{plugin_name}' not found")
+            display_info("Run 'plugin list' to see available plugins")
+            return False
+
+        display_plugin_info(plugin)
+        return True
+
+    def _plugin_run(self, plugin_name: str, socket_name: str) -> bool:
+        """Execute a plugin on a connection
+
+        Args:
+            plugin_name: Name of the plugin to run
+            socket_name: Name of the SSH socket/connection
+
+        Returns:
+            True on success, False otherwise
+        """
+        # Find the connection
+        connection = None
+        for socket_path, conn in self.ssh_manager.connections.items():
+            if Path(socket_path).name == socket_name:
+                connection = conn
+                break
+
+        if not connection:
+            display_error(f"Socket '{socket_name}' not found")
+            # Show available connections
+            if self.ssh_manager.connections:
+                display_info("Available connections:")
+                for socket_path in self.ssh_manager.connections.keys():
+                    name = Path(socket_path).name
+                    console.print(f"  • {name}")
+            else:
+                display_info("No active connections. Create one with 'lazyssh' command")
+            return False
+
+        # Check if plugin exists
+        plugin = self.plugin_manager.get_plugin(plugin_name)
+        if not plugin:
+            display_error(f"Plugin '{plugin_name}' not found")
+            display_info("Run 'plugin list' to see available plugins")
+            return False
+
+        # Execute plugin
+        display_info(f"Executing plugin '{plugin_name}' on connection '{socket_name}'...")
+        console.print()
+
+        success, output, execution_time = self.plugin_manager.execute_plugin(
+            plugin_name, connection
+        )
+
+        # Display output
+        display_plugin_output(output, execution_time, success)
+
+        if success:
+            display_success(f"Plugin '{plugin_name}' completed successfully")
+        else:
+            display_error(f"Plugin '{plugin_name}' failed")
+
+        return success

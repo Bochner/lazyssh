@@ -717,3 +717,112 @@ def profile_ui_performance() -> None:
         console.print("[info]Consider using caching or reducing update frequency[/info]")
     else:
         console.print("\n[success]All components performing well![/success]")
+
+
+def display_plugins(plugins: dict[str, Any]) -> None:
+    """Display available plugins in a formatted table
+
+    Args:
+        plugins: Dictionary of plugin name to PluginMetadata objects
+    """
+    if not plugins:
+        display_info("No plugins found")
+        return
+
+    table = create_standard_table()
+    table.add_column("Name", style="info", no_wrap=True)
+    table.add_column("Type", style="accent", justify="center")
+    table.add_column("Description", style="table.row")
+    table.add_column("Status", style="success", justify="center")
+
+    for plugin_name, plugin in sorted(plugins.items()):
+        # Determine plugin type display
+        plugin_type = "🐍 Python" if plugin.plugin_type == "python" else "🐚 Shell"
+
+        # Determine status
+        if plugin.is_valid:
+            status = "✓ Valid"
+            status_style = "success"
+        else:
+            status = "✗ Invalid"
+            status_style = "error"
+
+        # Add row to table
+        table.add_row(
+            plugin_name,
+            plugin_type,
+            plugin.description[:60] + "..." if len(plugin.description) > 60 else plugin.description,
+            f"[{status_style}]{status}[/{status_style}]",
+        )
+
+    panel = Panel(
+        table,
+        title="[panel.title]Available Plugins[/panel.title]",
+        border_style="border",
+        box=ROUNDED,
+        padding=(1, 2),
+    )
+
+    console.print(panel)
+
+
+def display_plugin_info(plugin: Any) -> None:
+    """Display detailed information about a plugin
+
+    Args:
+        plugin: PluginMetadata object
+    """
+    # Create info table
+    info_table = Table.grid(padding=(0, 2))
+    info_table.add_column(style="info bold", justify="right")
+    info_table.add_column(style="table.row")
+
+    info_table.add_row("Name:", plugin.name)
+    info_table.add_row("Type:", "Python" if plugin.plugin_type == "python" else "Shell")
+    info_table.add_row("Version:", plugin.version)
+    info_table.add_row("Description:", plugin.description)
+    info_table.add_row("Requirements:", plugin.requirements)
+    info_table.add_row("File Path:", str(plugin.file_path))
+    info_table.add_row(
+        "Status:", "[success]Valid ✓[/success]" if plugin.is_valid else "[error]Invalid ✗[/error]"
+    )
+
+    if not plugin.is_valid and plugin.validation_errors:
+        info_table.add_row("")
+        info_table.add_row("[error]Validation Errors:[/error]", "")
+        for error in plugin.validation_errors:
+            info_table.add_row("", f"[error]• {error}[/error]")
+
+    panel = Panel(
+        info_table,
+        title=f"[panel.title]Plugin: {plugin.name}[/panel.title]",
+        border_style="border",
+        box=ROUNDED,
+        padding=(1, 2),
+    )
+
+    console.print(panel)
+
+
+def display_plugin_output(output: str, execution_time: float, success: bool = True) -> None:
+    """Display plugin execution output with formatting
+
+    Args:
+        output: Plugin output text
+        execution_time: Time taken to execute plugin
+        success: Whether plugin executed successfully
+    """
+    # Display output in a panel
+    if output.strip():
+        panel = Panel(
+            output.strip(),
+            title="[panel.title]Plugin Output[/panel.title]",
+            border_style="success" if success else "error",
+            box=ROUNDED,
+            padding=(1, 2),
+        )
+        console.print(panel)
+
+    # Display execution time
+    time_style = "success" if success else "error"
+    console.print(f"\n[{time_style}]Execution time: {execution_time:.2f}s[/{time_style}]")
