@@ -2,6 +2,7 @@
 
 import os
 import select
+import shutil
 import stat
 import subprocess
 import sys
@@ -226,7 +227,7 @@ class PluginManager:
                         elif "PLUGIN_REQUIREMENTS:" in line:
                             requirements = line.split("PLUGIN_REQUIREMENTS:", 1)[1].strip()
         except Exception as e:
-            validation_errors.append(f"Failed to read file: {e}")
+            validation_warnings.append(f"Failed to read file: {e}")
 
         # Validate plugin
         is_valid = self._validate_plugin(
@@ -302,8 +303,11 @@ class PluginManager:
                         validation_errors.append("Missing shebang (#!)")
                         return False
         except Exception as e:
-            validation_errors.append(f"Failed to check shebang: {e}")
-            return False
+            if plugin_type == "python":
+                validation_warnings.append(f"Failed to check shebang: {e}")
+            else:
+                validation_errors.append(f"Failed to check shebang: {e}")
+                return False
 
         return True
 
@@ -624,5 +628,13 @@ class PluginManager:
 
         if connection.shell:
             env["LAZYSSH_SHELL"] = connection.shell
+
+        # Propagate the active terminal width so Rich-based plugins can render properly.
+        try:
+            columns = shutil.get_terminal_size(fallback=(0, 0)).columns
+        except OSError:
+            columns = 0
+        if columns:
+            env["COLUMNS"] = str(columns)
 
         return env

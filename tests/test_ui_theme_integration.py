@@ -6,14 +6,20 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
 
 # Import Rich Style for proper style comparison
+NULL_STYLE: Any
+RichStyle: type[Any] | None
 try:
-    from rich.style import NULL_STYLE, Style
-except ImportError:
-    # Fallback for environments without Rich installed
-    Style = None
+    from rich.style import NULL_STYLE as _NULL_STYLE
+    from rich.style import Style as _RichStyle
+
+    NULL_STYLE = _NULL_STYLE
+    RichStyle = _RichStyle
+except ImportError:  # pragma: no cover - Rich is an optional dependency for tests
     NULL_STYLE = None
+    RichStyle = None
 
 # Add src to path to make imports work for tests
 src_path = Path(__file__).parent.parent / "src"
@@ -112,14 +118,14 @@ class TestUIThemeIntegration(unittest.TestCase):
         }
         for key in expected_keys:
             if key in theme.styles:
-                value = theme.styles[key]
-                if Style is not None and NULL_STYLE is not None:
-                    # In plain text mode, styles should have default colors
-                    # Check if the style has a default color (not null style)
-                    self.assertTrue(
-                        hasattr(value, "color")
-                        and hasattr(value.color, "name")
-                        and value.color.name == "default",
+                value: Any = theme.styles[key]
+                if RichStyle is not None and NULL_STYLE is not None:
+                    # In plain text mode, styles should keep the default color value
+                    color = getattr(value, "color", None)
+                    color_name = getattr(color, "name", "default")
+                    self.assertEqual(
+                        color_name,
+                        "default",
                         f"Style '{key}' should have default color in plain text mode, got {value}",
                     )
                 else:
@@ -178,14 +184,14 @@ class TestUIThemeIntegration(unittest.TestCase):
         }
         for key in expected_keys:
             if key in theme.styles:
-                value = theme.styles[key]
-                if Style is not None and NULL_STYLE is not None:
-                    # In plain text mode, styles should have default colors
-                    # Check if the style has a default color (not null style)
-                    self.assertTrue(
-                        hasattr(value, "color")
-                        and hasattr(value.color, "name")
-                        and value.color.name == "default",
+                value: Any = theme.styles[key]
+                if RichStyle is not None and NULL_STYLE is not None:
+                    # In plain text mode, styles should keep the default color value
+                    color = getattr(value, "color", None)
+                    color_name = getattr(color, "name", "default")
+                    self.assertEqual(
+                        color_name,
+                        "default",
                         f"Style '{key}' should have default color when plain text is enabled, got {value}",
                     )
                 else:
