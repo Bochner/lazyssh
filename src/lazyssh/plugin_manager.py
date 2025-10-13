@@ -64,14 +64,39 @@ class PluginManager:
             self._plugins_cache = plugins
             return plugins
 
-        # Scan for .py and .sh files
-        for plugin_file in self.plugins_dir.iterdir():
-            if plugin_file.name.startswith("_") or plugin_file.name.startswith("."):
+        # Scan for .py and .sh files, ensuring we don't follow symlinks outside plugins_dir
+        base_dir = self.plugins_dir.resolve()
+        for entry in self.plugins_dir.iterdir():
+            if entry.name.startswith("_") or entry.name.startswith("."):
                 # Skip private files, __init__.py, and hidden files
                 continue
 
-            if plugin_file.suffix in [".py", ".sh"]:
-                metadata = self._extract_metadata(plugin_file)
+            # Resolve the candidate path while safely handling broken symlinks
+            try:
+                resolved_path = entry.resolve(strict=False)
+            except Exception as e:
+                if APP_LOGGER:
+                    APP_LOGGER.debug(
+                        f"Skipping plugin entry due to resolution failure: {entry} ({e})"
+                    )
+                continue
+
+            # Ensure the resolved path is within the plugins directory to avoid path traversal via symlinks
+            try:
+                is_within = resolved_path == base_dir or resolved_path.is_relative_to(base_dir)
+            except Exception:
+                # Fallback conservative behavior if any unexpected error occurs
+                is_within = False
+
+            if not is_within:
+                if APP_LOGGER:
+                    APP_LOGGER.debug(
+                        f"Skipping plugin entry outside plugins_dir: {resolved_path} (base: {base_dir})"
+                    )
+                continue
+
+            if resolved_path.suffix in [".py", ".sh"]:
+                metadata = self._extract_metadata(resolved_path)
                 if metadata:
                     plugins[metadata.name] = metadata
 

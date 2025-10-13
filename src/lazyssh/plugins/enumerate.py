@@ -93,10 +93,6 @@ def print_subsection(title: str, content: str = "") -> None:
         print(content)
     else:
         print(color("N/A", "dim"))
-        print()
-        print(f"[{title}]")
-        if content:
-            print(content)
 
 
 @dataclass

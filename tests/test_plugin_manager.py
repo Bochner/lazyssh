@@ -59,7 +59,7 @@ def test_validation_requires_shebang_and_exec_bit(tmp_path: Path) -> None:
     assert any("shebang" in e.lower() for e in meta.validation_errors)
 
 
-def test_execute_plugin_passes_env_and_captures_output(tmp_path: Path, monkeypatch) -> None:
+def test_execute_plugin_passes_env_and_captures_output(tmp_path: Path) -> None:
     plugins_dir = tmp_path / "plugins"
     plugins_dir.mkdir(parents=True, exist_ok=True)
 
