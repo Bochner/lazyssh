@@ -24,7 +24,7 @@ jobs:
         set -e
         python -m pip install --upgrade pip
         pip install -e ".[dev]" || { echo "Failed to install package dependencies"; exit 1; }
-        pip install pyupgrade typing_extensions || { echo "Failed to install additional tools"; exit 1; }
+        pip install flake8 pyupgrade typing_extensions || { echo "Failed to install additional tools"; exit 1; }
         # Verify flake8 is installed and available
         which flake8 || { echo "flake8 not found in PATH after installation"; exit 1; }
 

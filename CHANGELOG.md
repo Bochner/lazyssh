@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.5.0] - 2025-10-13
+
 ### Added
 - **Plugin System**: Extensible plugin architecture for custom automation and workflows
   - Plugin discovery and validation system
