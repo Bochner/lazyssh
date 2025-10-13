@@ -360,10 +360,11 @@ class CommandMode:
             "plugin": self.cmd_plugin,
         }
 
-        # Initialize history
-        self.history_dir = Path.home() / ".lazyssh"
+        # Initialize history in /tmp/lazyssh
+        self.history_dir = Path("/tmp/lazyssh")
         if not self.history_dir.exists():
             self.history_dir.mkdir(parents=True, exist_ok=True)
+            self.history_dir.chmod(0o700)
         self.history_file = self.history_dir / "command_history"
 
         # Log initialization

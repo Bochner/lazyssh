@@ -1,7 +1,8 @@
 # connection-config Specification
 
 ## Purpose
-TBD - created by archiving change add-connection-config-management. Update Purpose after archive.
+Describe how LazySSH persists, displays, and manages reusable SSH connection configurations, covering prompts, commands, and status integrations.
+
 ## Requirements
 ### Requirement: Configuration File Storage
 
@@ -153,26 +154,21 @@ The system SHALL provide commands to manually save and delete configurations.
 - **THEN** the system SHALL display available configuration names as completion suggestions
 
 ### Requirement: CLI Configuration Flag
-
 The system SHALL accept a `--config` command-line flag to load a configuration file on startup.
 
-#### Scenario: Launch with default config file
-
-- **WHEN** LazySSH is launched with `--config` flag and no path argument
-- **THEN** the system SHALL load `/tmp/lazyssh/connections.conf`
-- **AND** SHALL display the configurations table
-- **AND** SHALL not automatically connect
+#### Scenario: Launch with explicit default config path
+- **WHEN** LazySSH is launched with `--config /tmp/lazyssh/connections.conf`
+- **AND** the file exists
+- **THEN** the system SHALL load the file
+- **AND** SHALL display the configurations table without auto-connecting
 
 #### Scenario: Launch with custom config file path
-
 - **WHEN** LazySSH is launched with `--config /path/to/custom.conf`
 - **THEN** the system SHALL load the specified configuration file
 - **AND** SHALL display the configurations table
 
 #### Scenario: Launch with non-existent config file
-
-- **WHEN** LazySSH is launched with `--config` flag
-- **AND** the specified file does not exist
+- **WHEN** LazySSH is launched with `--config /path/to/missing.conf`
 - **THEN** the system SHALL display a warning "Configuration file not found"
 - **AND** SHALL continue normal operation without loaded configurations
 

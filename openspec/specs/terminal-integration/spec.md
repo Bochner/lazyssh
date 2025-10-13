@@ -1,7 +1,8 @@
 # terminal-integration Specification
 
 ## Purpose
-TBD - created by archiving change fix-terminal-dependency. Update Purpose after archive.
+Capture LazySSH's terminal integration capabilities, covering method selection, runtime management, compatibility, and Rich-powered feedback.
+
 ## Requirements
 ### Requirement: Native Python Terminal Support
 

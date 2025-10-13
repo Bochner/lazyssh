@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2025-10-13
+
+### Added
+- User plugin directories with clear precedence and environment override
+  - Search order: `LAZYSSH_PLUGIN_DIRS` (left→right) → `~/.lazyssh/plugins` → packaged `plugins/`
+  - Non-existent directories are ignored without errors
+  - Safety: symlinks escaping base directories are skipped
+- Runtime enforcement that packaged plugins are executable post-install
+- Documentation updates for plugin locations and `LAZYSSH_PLUGIN_DIRS`
+- Introduced severity-ranked priority findings to the `enumerate` plugin covering sudo membership, passwordless sudo rules, SUID/SGID binaries, world-writable paths, exposed services, weak SSH settings, suspicious schedulers, and kernel drift, rendered through Rich panels with a plain-text fallback and included in the JSON artifacts.
+
+### Changed
+- Refactored `enumerate` to execute a single batched remote script defined in `_enumeration_plan.py`, reducing round trips, capturing stdout/stderr metadata per probe, and persisting both JSON and plain-text survey outputs under the connection log directory.
+- Hardened plugin discovery by ensuring `/tmp/lazyssh/plugins` exists with 0700 permissions, repairing missing execute bits on packaged Python plugins when possible, falling back to interpreter execution with warnings, and surfacing validation warnings in `plugin info`.
+- Moved command and SCP history files to `/tmp/lazyssh` with secure permissions and added a `shutil.get_terminal_size` fallback when determining terminal width.
+
+### Tests
+- Coverage for env/user directory discovery, precedence, and non-existent dirs
+- Validation that runtime sets exec bit on packaged plugins
+- Added targeted coverage for plugin manager permission repair, directory precedence, runtime directory provisioning, and warning propagation.
+- Added unit tests exercising the enumeration priority findings pipeline and JSON payload structure.
+
+### Documentation
+- Reworked user documentation with a streamlined README plus new `docs/getting-started.md`, `docs/reference.md`, `docs/guides.md`, and `docs/maintainers.md`, alongside refreshed troubleshooting guidance aligned with the updated workflows.
 
 ## [1.5.0] - 2025-10-13
 

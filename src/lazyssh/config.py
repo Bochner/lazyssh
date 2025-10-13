@@ -119,7 +119,7 @@ def initialize_config_file(config_path: str | None = None) -> bool:
 #
 # Usage:
 #   1. Save a connection after establishing it (prompted automatically)
-#   2. Load configurations: lazyssh --config
+#   2. Load configurations: lazyssh --config /tmp/lazyssh/connections.conf
 #   3. Connect to saved config: use 'connect <name>' command
 #   4. View saved configs: use 'config' or 'configs' command
 #

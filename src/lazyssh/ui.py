@@ -790,6 +790,13 @@ def display_plugin_info(plugin: Any) -> None:
         "[success]Valid ✓[/success]" if plugin.is_valid else "[error]Invalid ✗[/error]",
     )
 
+    warnings = getattr(plugin, "validation_warnings", None)
+    if warnings:
+        info_table.add_row("")
+        info_table.add_row("[warning]Validation Warnings:[/warning]", "")
+        for warning in warnings:
+            info_table.add_row("", f"[warning]• {warning}[/warning]")
+
     if not plugin.is_valid and plugin.validation_errors:
         info_table.add_row("")
         info_table.add_row("[error]Validation Errors:[/error]", "")

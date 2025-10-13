@@ -474,9 +474,11 @@ class SCPMode:
             self.log_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.chmod(0o700)  # Secure permissions
 
-        # Set up history file
-        self.history_dir = Path.home() / ".lazyssh"
-        self.history_dir.mkdir(parents=True, exist_ok=True)
+        # Set up history file in /tmp/lazyssh
+        self.history_dir = Path("/tmp/lazyssh")
+        if not self.history_dir.exists():
+            self.history_dir.mkdir(parents=True, exist_ok=True)
+            self.history_dir.chmod(0o700)
         self.history_file = self.history_dir / "scp_history"
 
         # Initialize directories
