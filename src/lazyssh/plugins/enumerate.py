@@ -27,6 +27,8 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 
@@ -287,12 +289,12 @@ def enumerate_filesystem() -> dict[str, Any]:
         "block_devices": safe_command("lsblk 2>/dev/null || echo 'Not available'"),
         "fstab": safe_command("cat /etc/fstab 2>/dev/null"),
         "home_directories": safe_command("ls -la /home 2>/dev/null || echo 'Permission denied'"),
-        "tmp_files": safe_command("ls -la /tmp 2>/dev/null | head -20"),
+        "tmp_files": safe_command("ls -la /tmp 2>/dev/null"),
         "suid_files": safe_command(
-            "find / -perm -4000 -type f 2>/dev/null | head -50 || echo 'Not available'"
+            "find / -perm -4000 -type f 2>/dev/null || echo 'Not available'"
         ),
         "writable_dirs": safe_command(
-            "find / -writable -type d 2>/dev/null | head -30 || echo 'Not available'"
+            "find / -writable -type d 2>/dev/null || echo 'Not available'"
         ),
     }
 
@@ -363,13 +365,13 @@ def enumerate_logs() -> dict[str, Any]:
 
     data = {
         "auth_log": safe_command(
-            "tail -20 /var/log/auth.log 2>/dev/null || tail -20 /var/log/secure 2>/dev/null || echo 'Not available'"
+            "cat /var/log/auth.log 2>/dev/null || cat /var/log/secure 2>/dev/null || echo 'Not available'"
         ),
         "syslog": safe_command(
-            "tail -20 /var/log/syslog 2>/dev/null || tail -20 /var/log/messages 2>/dev/null || echo 'Not available'"
+            "cat /var/log/syslog 2>/dev/null || cat /var/log/messages 2>/dev/null || echo 'Not available'"
         ),
         "kern_log": safe_command(
-            "tail -20 /var/log/kern.log 2>/dev/null || tail -20 /var/log/dmesg 2>/dev/null || echo 'Not available'"
+            "cat /var/log/kern.log 2>/dev/null || cat /var/log/dmesg 2>/dev/null || echo 'Not available'"
         ),
         "failed_logins": safe_command("lastb -n 10 2>/dev/null || echo 'Not available'"),
         "journal": safe_command(
@@ -387,7 +389,7 @@ def enumerate_hardware() -> dict[str, Any]:
     data = {
         "cpu": safe_command("lscpu 2>/dev/null || cat /proc/cpuinfo"),
         "memory": safe_command("free -h"),
-        "meminfo": safe_command("cat /proc/meminfo | head -20"),
+        "meminfo": safe_command("cat /proc/meminfo"),
         "pci_devices": safe_command("lspci 2>/dev/null || echo 'Not available'"),
         "usb_devices": safe_command("lsusb 2>/dev/null || echo 'Not available'"),
         "dmi_info": safe_command("dmidecode -t system 2>/dev/null || echo 'Permission denied'"),
@@ -426,9 +428,8 @@ def format_human_readable(data: EnumerationData) -> None:
     process_count = len(data.processes["processes"].split("\n"))
     print()
     print(f"{color('Process Count:', 'cyan')} {color(str(process_count), 'green')}")
-    # Brief process list for quick survey
-    processes_preview = "\n".join(data.processes["processes"].splitlines()[:30])
-    print_subsection("PROCESSES (TOP 30)", processes_preview)
+    # Full process list
+    print_subsection("PROCESSES", data.processes["processes"]) 
     print_subsection("RUNNING SERVICES", str(data.processes["running_services"]))
 
     # Packages
@@ -478,7 +479,7 @@ def format_human_readable(data: EnumerationData) -> None:
 
     # Hardware
     print_section_header("HARDWARE INFORMATION")
-    print_subsection("MEMORY", data.hardware["memory"])
+    print_subsection("MEMORY", data.hardware["memory"]) 
     print_subsection("CPU", str(data.hardware["cpu"]))
 
     # Footer
@@ -502,21 +503,21 @@ def _format_plain_text(data: EnumerationData) -> None:
     print("─" * 80)
     for key, value in data.system.items():
         print(f"\n[{key.upper()}]")
-        print(str(value)[:500])
+        print(str(value))
 
     print("\n" + "─" * 80)
     print("  USERS AND GROUPS")
     print("─" * 80)
     for key, value in data.users.items():
         print(f"\n[{key.upper()}]")
-        print(str(value)[:500])
+        print(str(value))
 
     print("\n" + "─" * 80)
     print("  NETWORK CONFIGURATION")
     print("─" * 80)
     for key, value in data.network.items():
         print(f"\n[{key.upper()}]")
-        print(str(value)[:1000])
+        print(str(value))
 
     print("\n" + "─" * 80)
     print("  END OF REPORT")
@@ -525,6 +526,11 @@ def _format_plain_text(data: EnumerationData) -> None:
 
 def main():
     """Main plugin logic"""
+    # Lazy import to avoid heavy imports if not needed
+    try:
+        from lazyssh.logging_module import CONNECTION_LOG_DIR_TEMPLATE
+    except Exception:
+        CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"
     # Get connection info
     socket_name = os.environ.get("LAZYSSH_SOCKET", "unknown")
     host = os.environ.get("LAZYSSH_HOST", "unknown")
@@ -560,16 +566,78 @@ def main():
     print(f"{color('✓', 'green')} {color('Enumeration complete!', 'cyan')}")
     print()
 
-    # Check if JSON output requested
-    if "--json" in sys.argv:
-        # Convert dataclass to dict
+    # Determine output mode and render content
+    is_json = "--json" in sys.argv
+    if is_json:
         import dataclasses
 
         data_dict = dataclasses.asdict(data)
-        print(json.dumps(data_dict, indent=2))
+        rendered_output = json.dumps(data_dict, indent=2)
+        print(rendered_output)
     else:
-        # Human-readable output
+        # Generate a plain-text report for saving (non-colored)
+        lines: list[str] = []
+
+        lines.append("")
+        lines.append("SYSTEM ENUMERATION REPORT")
+
+        def add_section(header: str, mapping: dict[str, Any]) -> None:
+            lines.append("")
+            lines.append(f"[{header}]")
+            for key, value in mapping.items():
+                lines.append("")
+                lines.append(f"[{key.upper()}]")
+                lines.append(str(value))
+
+        add_section("SYSTEM INFORMATION", data.system)
+        add_section("USERS AND GROUPS", data.users)
+        add_section("NETWORK CONFIGURATION", data.network)
+        add_section("PROCESSES AND SERVICES", data.processes)
+        add_section("INSTALLED PACKAGES", data.packages)
+        add_section("FILESYSTEM", data.filesystem)
+        add_section("ENVIRONMENT", data.environment)
+        add_section("SCHEDULED TASKS", data.scheduled)
+        add_section("SECURITY CONFIGURATION", data.security)
+        add_section("HARDWARE INFORMATION", data.hardware)
+
+        lines.append("")
+        lines.append("END OF REPORT")
+
+        rendered_output = "\n".join(lines)
+
+        # Human-readable display with colors in terminal
         format_human_readable(data)
+
+    # Persist survey to standard logging location with timestamp
+    # Derive connection name
+    connection_name = os.environ.get("LAZYSSH_CONNECTION_NAME") or os.environ.get(
+        "LAZYSSH_SOCKET", "unknown"
+    )
+    # If a path was provided, use the basename as a reasonable connection name
+    if "/" in connection_name:
+        connection_name = os.path.basename(connection_name)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ext = "json" if is_json else "txt"
+    log_dir = Path(CONNECTION_LOG_DIR_TEMPLATE.format(connection_name=connection_name))
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # Best-effort fallback to default logs dir
+        log_dir = Path("/tmp/lazyssh/logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+    output_file = log_dir / f"survey_{timestamp}.{ext}"
+    try:
+        output_file.write_text(rendered_output + "\n", encoding="utf-8")
+        print(
+            color(
+                f"Saved survey to {str(output_file)}",
+                "green",
+            )
+        )
+    except Exception as e:
+        print(color(f"Failed to save survey: {e}", "yellow"))
 
     return 0
 
