@@ -27,9 +27,9 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Any
 
 # Simple ANSI color codes - Dracula theme
@@ -130,11 +130,12 @@ def run_remote_command(command: str, timeout: int = 30) -> tuple[int, str, str]:
     host = os.environ.get("LAZYSSH_HOST")
     user = os.environ.get("LAZYSSH_USER")
 
-    if not all([socket_path, host, user]):
+    if socket_path is None or host is None or user is None:
         print("ERROR: Missing required environment variables", file=sys.stderr)
         sys.exit(1)
 
-    ssh_cmd = [
+    # At this point, mypy knows these are str (not Optional)
+    ssh_cmd: list[str] = [
         "ssh",
         "-S",
         socket_path,
@@ -429,7 +430,7 @@ def format_human_readable(data: EnumerationData) -> None:
     print()
     print(f"{color('Process Count:', 'cyan')} {color(str(process_count), 'green')}")
     # Full process list
-    print_subsection("PROCESSES", data.processes["processes"]) 
+    print_subsection("PROCESSES", data.processes["processes"])
     print_subsection("RUNNING SERVICES", str(data.processes["running_services"]))
 
     # Packages
@@ -479,7 +480,7 @@ def format_human_readable(data: EnumerationData) -> None:
 
     # Hardware
     print_section_header("HARDWARE INFORMATION")
-    print_subsection("MEMORY", data.hardware["memory"]) 
+    print_subsection("MEMORY", data.hardware["memory"])
     print_subsection("CPU", str(data.hardware["cpu"]))
 
     # Footer
@@ -524,7 +525,7 @@ def _format_plain_text(data: EnumerationData) -> None:
     print("=" * 80 + "\n")
 
 
-def main():
+def main() -> int:
     """Main plugin logic"""
     # Lazy import to avoid heavy imports if not needed
     try:
@@ -615,7 +616,7 @@ def main():
     )
     # If a path was provided, use the basename as a reasonable connection name
     if "/" in connection_name:
-        connection_name = os.path.basename(connection_name)
+        connection_name = Path(connection_name).name
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     ext = "json" if is_json else "txt"

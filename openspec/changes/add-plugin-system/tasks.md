@@ -70,23 +70,23 @@
   - [x] 5.2.1 Add plugin system section to README.md
   - [x] 5.2.2 Add plugin command examples
   - [x] 5.2.3 Document the enumerate plugin and its output
-  - [ ] 5.2.4 Add plugins section to command reference docs
-  - [ ] 5.2.5 Add FAQ section for common plugin questions
+  - [x] 5.2.4 Add plugins section to command reference docs
+  - [x] 5.2.5 Add FAQ section for common plugin questions
 
 ## 6. Testing
 
-- [ ] 6.1 Write unit tests for plugin manager
-  - [ ] 6.1.1 Test plugin discovery with various scenarios
-  - [ ] 6.1.2 Test plugin validation logic
-  - [ ] 6.1.3 Test plugin execution with mock SSH connections
-  - [ ] 6.1.4 Test error handling for invalid plugins
-  - [ ] 6.1.5 Test plugin metadata extraction
+- [x] 6.1 Write unit tests for plugin manager
+  - [x] 6.1.1 Test plugin discovery with various scenarios
+  - [x] 6.1.2 Test plugin validation logic
+  - [x] 6.1.3 Test plugin execution with mock SSH connections
+  - [x] 6.1.4 Test error handling for invalid plugins
+  - [x] 6.1.5 Test plugin metadata extraction
 
-- [ ] 6.2 Write integration tests
-  - [ ] 6.2.1 Test plugin command in command mode
+- [x] 6.2 Write integration tests
+  - [x] 6.2.1 Test plugin command in command mode
   - [ ] 6.2.2 Test enumerate plugin on test system
   - [ ] 6.2.3 Test plugin execution with real SSH connection
-  - [ ] 6.2.4 Test plugin output formatting
+  - [x] 6.2.4 Test plugin output formatting
 
 - [ ] 6.3 Manual testing
   - [ ] 6.3.1 Test with various plugin types (Python, Shell)

@@ -14,7 +14,9 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
+from . import console_instance as console_instance
 from . import logging_module
+from . import ui as ui
 from .config import (
     backup_config,
     config_exists,
@@ -31,9 +33,6 @@ from .plugin_manager import PluginManager
 from .scp_mode import SCPMode
 from .ssh import SSHManager
 from .ui import (
-    display_plugin_info,
-    display_plugin_output,
-    display_plugins,
     display_saved_configs,
     display_ssh_status,
     display_tunnels,
@@ -1898,7 +1897,8 @@ class CommandMode:
     def _plugin_list(self) -> bool:
         """List all available plugins"""
         plugins = self.plugin_manager.discover_plugins()
-        display_plugins(plugins)
+        # Call through module attribute to allow tests to monkeypatch lazyssh.ui.display_plugins
+        ui.display_plugins(plugins)
         return True
 
     def _plugin_info(self, plugin_name: str) -> bool:
@@ -1912,11 +1912,12 @@ class CommandMode:
         """
         plugin = self.plugin_manager.get_plugin(plugin_name)
         if not plugin:
-            display_error(f"Plugin '{plugin_name}' not found")
+            # Call through module attribute to allow tests to monkeypatch lazyssh.console_instance.display_error
+            console_instance.display_error(f"Plugin '{plugin_name}' not found")
             display_info("Run 'plugin list' to see available plugins")
             return False
 
-        display_plugin_info(plugin)
+        ui.display_plugin_info(plugin)
         return True
 
     def _plugin_run(self, plugin_name: str, socket_name: str) -> bool:
@@ -1964,7 +1965,7 @@ class CommandMode:
         )
 
         # Display output
-        display_plugin_output(output, execution_time, success)
+        ui.display_plugin_output(output, execution_time, success)
 
         if success:
             display_success(f"Plugin '{plugin_name}' completed successfully")

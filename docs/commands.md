@@ -6,6 +6,8 @@ This document provides a comprehensive reference for all LazySSH commands, their
 - [Command Mode Commands](#command-mode-commands)
 - [SCP Mode Commands](#scp-mode-commands)
 - [Tab Completion](#tab-completion)
+- [Plugin Commands](#plugin-commands)
+- [Plugin FAQ](#plugin-faq)
 
 ## Command Mode Commands
 
@@ -599,3 +601,75 @@ LazySSH features intelligent tab completion in both command and SCP modes:
 - **Remote Files**: Automatically suggests remote files when using `get`, `ls`, etc.
 - **Local Files**: Suggests local files when using `put`, `lls`, etc.
 - **Directory Paths**: Offers path completion for `cd` and similar commands
+
+## Plugin Commands
+
+LazySSH includes a plugin system to run local scripts against an existing SSH connection using the control socket. See `docs/Plugin/plugins.md` for developer details.
+
+### `plugin`
+
+Lists available plugins. Same as `plugin list`.
+
+**Syntax:**
+```
+plugin
+```
+
+### `plugin list`
+
+Shows all discovered plugins from `src/lazyssh/plugins/`.
+
+**Syntax:**
+```
+plugin list
+```
+
+### `plugin info`
+
+Shows metadata and validation status for a plugin.
+
+**Syntax:**
+```
+plugin info <name>
+```
+
+**Example:**
+```bash
+plugin info enumerate
+```
+
+### `plugin run`
+
+Executes a plugin on an existing connection, exposing connection context to the plugin via environment variables such as `LAZYSSH_SOCKET_PATH`, `LAZYSSH_HOST`, `LAZYSSH_USER`, `LAZYSSH_PORT`, and `LAZYSSH_SSH_KEY`.
+
+**Syntax:**
+```
+plugin run <name> <connection_name>
+```
+
+**Examples:**
+```bash
+plugin run enumerate myserver
+plugin run diskcheck myserver
+```
+
+Environment variables available to plugins (summary): `LAZYSSH_SOCKET`, `LAZYSSH_SOCKET_PATH`, `LAZYSSH_HOST`, `LAZYSSH_PORT`, `LAZYSSH_USER`, `LAZYSSH_SSH_KEY`, `LAZYSSH_PLUGIN_API_VERSION`.
+
+See `docs/Plugin/plugins.md` for a full reference and examples.
+
+## Plugin FAQ
+
+**Where do plugins live?**
+- `src/lazyssh/plugins/` alongside built-ins; make scripts executable and add a shebang.
+
+**Which languages are supported?**
+- Python (`.py`) and shell (`.sh`).
+
+**How do plugins get connection info?**
+- Via environment variables set by LazySSH; see the list above and `docs/Plugin/plugins.md`.
+
+**How do I run the built-in enumerate plugin?**
+- `plugin run enumerate <connection_name>`.
+
+**Is there a security model?**
+- Plugins run with your user privileges. Review third‑party plugins before running.
