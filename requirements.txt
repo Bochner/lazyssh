@@ -1,12 +1,12 @@
 colorama>=0.4.6
-rich>=13.0.0
-click>=8.0.0
-pexpect>=4.8.0
-python-dotenv>=1.0.0
-prompt_toolkit>=3.0.39,<3.1.0
-wcwidth>=0.2.5
-art>=5.9
-paramiko>=3.0.0  # Requires Python 3.8+
+rich>=13.9.4
+click>=8.1.7
+pexpect>=4.9.0
+python-dotenv>=1.0.1
+prompt_toolkit>=3.0.48
+wcwidth>=0.2.13
+art>=6.3
+paramiko>=3.5.0  # Requires Python 3.8+
 tomli-w>=1.0.0  # For writing TOML config files (reading uses built-in tomllib in Python 3.11+)
 # System dependencies:
 # openssh-client - Required for SSH functionality

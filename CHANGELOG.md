@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2025-10-13
+
+### Changed
+- Updated supported Python versions: requires Python 3.11+ and validated on Python 3.13
+- Refreshed runtime dependencies to latest compatible releases
+  - colorama >= 0.4.6
+  - rich >= 13.9.4
+  - click >= 8.1.7
+  - pexpect >= 4.9.0
+  - python-dotenv >= 1.0.1
+  - prompt_toolkit >= 3.0.48
+  - wcwidth >= 0.2.13
+  - art >= 6.3
+  - paramiko >= 3.5.0
+  - tomli-w >= 1.0.0
+
+### Development
+- Upgraded development tooling and minimum versions (black, isort, flake8, pylint, mypy, pytest, build, wheel, twine)
+- Updated formatter, linter, and type-check targets for Python 3.11+
+
+### Technical Improvements
+- Aligned project metadata and package version to 1.5.0 in `pyproject.toml` and `lazyssh.__init__`
+- Updated platform compatibility specification to reflect Python 3.13 validation and clarified dependency checking behavior on Unix-like platforms
+
 ## [1.4.2] - 2025-10-12
 
 ### Added
