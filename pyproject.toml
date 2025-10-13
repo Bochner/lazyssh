@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lazyssh"
-version = "1.4.1"
+version = "1.4.2"
 description = "A comprehensive SSH toolkit for managing connections and tunnels"
 readme = "README.md"
 authors = [
@@ -85,4 +85,4 @@ disallow_incomplete_defs = false
 
 [tool.coverage.run]
 source = ["src"]
-omit = ["tests/*"] 
+omit = ["tests/*"]

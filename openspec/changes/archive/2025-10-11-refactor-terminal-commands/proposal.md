@@ -23,4 +23,3 @@ The current `terminal` command has dual functionality - it both opens terminals 
   - Documentation files (user guides, command reference)
 - Breaking change: Users using `terminal <ssh_id>` will need to switch to `open <ssh_id>`
 - Migration path: Clear error messages guiding users to use `open` command instead
-

@@ -46,10 +46,10 @@ Users want to be able to open terminal sessions, work in them, close them, and r
 def open_terminal_native(self, socket_path: str) -> bool:
     # Build SSH command
     ssh_args = ["ssh", "-tt", "-S", socket_path, f"{username}@{host}"]
-    
+
     # Run SSH as subprocess and wait for it to complete
     result = subprocess.run(ssh_args)
-    
+
     return result.returncode == 0
 ```
 
@@ -116,7 +116,7 @@ class SSHManager:
     def __init__(self):
         self.connections = {}
         self.terminal_method = get_terminal_method()  # Initialize from env/config
-    
+
     def set_terminal_method(self, method: TerminalMethod):
         """Change terminal method at runtime"""
         self.terminal_method = method
@@ -137,7 +137,7 @@ class SSHManager:
 ## Risks / Trade-offs
 
 ### Risk 1: Native terminal subprocess might not handle all terminal features correctly
-**Mitigation:** 
+**Mitigation:**
 - Use `-tt` flag for forced TTY allocation
 - Test with common use cases (vim, tmux, color output, etc.)
 - Document any known limitations
@@ -189,4 +189,3 @@ If issues arise, users can:
 3. **Should we show terminal method in banner or startup message?**
    - Yes, but as low-priority enhancement
    - Add to status display first, banner can come later
-

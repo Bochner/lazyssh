@@ -32,4 +32,4 @@ repos:
     hooks:
     -   id: mypy
         additional_dependencies: [types-all]
-        args: ["--ignore-missing-imports"] 
+        args: ["--ignore-missing-imports"]

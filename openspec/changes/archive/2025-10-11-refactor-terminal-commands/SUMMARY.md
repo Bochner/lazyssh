@@ -35,7 +35,7 @@ terminal <method> # Set method (auto, native, terminator)
 5. `SUMMARY.md` - This file
 
 ### Key Implementation Details
-- **Prompt Toolkit Integration**: Tasks 1.4-1.5 ensure the `open` command uses `LazySSHCompleter` 
+- **Prompt Toolkit Integration**: Tasks 1.4-1.5 ensure the `open` command uses `LazySSHCompleter`
 - **Established Sessions**: Uses `_get_connection_completions()` to populate active SSH connections
 - **Tab Completion**: Same mechanism as `close`, `tunnel`, and `scp` commands
 
@@ -58,7 +58,7 @@ terminal <method> # Set method (auto, native, terminator)
 I've reviewed the code for the terminal method display issue you mentioned:
 
 **✅ Code is Correct:**
-1. **ui.py (lines 91-116)**: 
+1. **ui.py (lines 91-116)**:
    - `display_ssh_status()` accepts `terminal_method: str = "auto"` parameter
    - Line 98: "Terminal Method" column exists
    - Line 111: Column is populated with `terminal_method` value
@@ -115,4 +115,3 @@ Task 5.1-5.3 in `tasks.md` includes verifying the terminal method display and fi
    - If no: There might be a version/installation issue
 
 Would you like me to proceed with implementing this proposal, or would you like to investigate the display issue first?
-

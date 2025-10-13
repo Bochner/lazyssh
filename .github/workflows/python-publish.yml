@@ -26,28 +26,28 @@ jobs:
         pip install pyupgrade typing_extensions || { echo "Failed to install additional tools"; exit 1; }
         # Verify flake8 is installed and available
         which flake8 || { echo "flake8 not found in PATH after installation"; exit 1; }
-    
+
     - name: Check Python 3.11+ code optimizations
       run: |
         pyupgrade --py311-plus $(find src -name "*.py")
-    
+
     - name: Check formatting with Black
       run: |
         black --check --line-length 100 --target-version py311 src tests
-    
+
     - name: Check imports with isort
       run: |
         isort --check-only --profile black src tests
-    
+
     - name: Lint with flake8
       run: |
         flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 src tests --count --max-complexity=10 --max-line-length=100 --statistics
-    
+
     - name: Type check with mypy (stricter settings)
       run: |
         mypy --python-version 3.11 --disallow-untyped-defs --disallow-incomplete-defs --ignore-missing-imports src
-    
+
     - name: Check for non-pathlib path operations
       run: |
         echo "Checking for os.path usage that should use pathlib instead..."
@@ -56,11 +56,11 @@ jobs:
           echo "::warning::Found $OSPATH_COUNT instances of os.path usage that could be replaced with pathlib"
           grep -r "os\.path\." --include="*.py" src | head -10
         fi
-    
+
     - name: Test basic import
       run: |
         python -c "import lazyssh; print(f'Successfully imported lazyssh version {lazyssh.__version__}')"
-    
+
     # Build and verify
     - name: Build package
       run: |
@@ -72,7 +72,7 @@ jobs:
         python -m build
         # Verify package
         twine check dist/*
-    
+
     # Publish to PyPI (only for releases)
     - name: Publish to PyPI
       if: github.event_name == 'release'
@@ -81,7 +81,7 @@ jobs:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN }}
         skip-existing: true
-    
+
     # Always publish to Test PyPI
     - name: Publish to Test PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
@@ -89,4 +89,4 @@ jobs:
         user: __token__
         password: ${{ secrets.TEST_PYPI_API_TOKEN }}
         repository-url: https://test.pypi.org/legacy/
-        skip-existing: true 
+        skip-existing: true

@@ -13,12 +13,11 @@ Terminator is currently marked as optional in the code but causes the program to
 
 ## Impact
 
-- Affected specs: 
+- Affected specs:
   - `platform-compatibility` (existing) - Modified dependency checking behavior
   - `terminal-integration` (new) - New native terminal capability
 - Affected code:
   - `src/lazyssh/__init__.py` - Dependency checking logic
-  - `src/lazyssh/__main__.py` - Startup dependency validation  
+  - `src/lazyssh/__main__.py` - Startup dependency validation
   - `src/lazyssh/ssh.py` - Terminal opening logic
   - `src/lazyssh/config.py` - Terminal configuration options
-

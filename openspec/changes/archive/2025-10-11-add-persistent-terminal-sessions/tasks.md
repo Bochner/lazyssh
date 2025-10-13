@@ -67,4 +67,3 @@
 - [x] 8.2 Add error message if SSH process fails to start
 - [x] 8.3 Handle invalid terminal method gracefully
 - [x] 8.4 Test error scenarios and verify error messages are clear
-

@@ -145,4 +145,3 @@ The codebase structure makes rollback straightforward since it's primarily a cha
 3. **Should we add aliases (e.g., `t` for `terminal`, `o` for `open`)?**
    - Could improve user experience for power users
    - Decision: Out of scope for this change, can be added later if requested
-

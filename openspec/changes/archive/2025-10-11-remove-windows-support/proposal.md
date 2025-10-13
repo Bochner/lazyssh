@@ -17,10 +17,9 @@ Windows OpenSSH client does not support the `-M` (master mode) flag for SSH cont
 ## Impact
 
 - Affected specs: `platform-compatibility`
-- Affected code: 
+- Affected code:
   - `src/lazyssh/ssh.py` (uses `-M` flag that doesn't work on Windows)
   - Documentation files: README.md, docs/troubleshooting.md, docs/user-guide.md
   - `openspec/project.md` (platform requirements section)
 - Users: Windows users will need to use WSL to run LazySSH
 - Benefits: Simpler documentation, clearer platform requirements, no need to maintain Windows-specific code paths
-

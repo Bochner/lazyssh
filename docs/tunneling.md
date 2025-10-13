@@ -17,7 +17,7 @@ LazySSH provides powerful SSH tunneling capabilities for securely forwarding por
 LazySSH supports three types of tunnels:
 
 1. **Forward Tunnels (Local)**: Access remote services through local ports
-2. **Reverse Tunnels (Remote)**: Expose local services through remote ports  
+2. **Reverse Tunnels (Remote)**: Expose local services through remote ports
 3. **Dynamic SOCKS Proxy**: Flexible proxy for routing application traffic
 
 ## Forward Tunnels

@@ -52,4 +52,3 @@
 - [x] 7.3 Document native terminal mode behavior
 - [x] 7.4 Add troubleshooting section for terminal-related issues
 - [x] 7.5 Update installation instructions to clarify optional dependencies
-

@@ -17,4 +17,3 @@ The bug occurs because `self.socket_path` is never set when no connection argume
 - Affected specs: None (no existing SCP spec, only terminal-integration exists)
 - Affected code: `src/lazyssh/scp_mode.py` (SCPMode.run method)
 - This is a bug fix restoring intended functionality
-

@@ -598,4 +598,4 @@ LazySSH features intelligent tab completion in both command and SCP modes:
 - **Command Names**: Press Tab to see available SCP mode commands
 - **Remote Files**: Automatically suggests remote files when using `get`, `ls`, etc.
 - **Local Files**: Suggests local files when using `put`, `lls`, etc.
-- **Directory Paths**: Offers path completion for `cd` and similar commands 
+- **Directory Paths**: Offers path completion for `cd` and similar commands

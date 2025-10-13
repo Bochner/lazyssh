@@ -27,4 +27,3 @@ Users need the ability to enter and exit SSH sessions at will while keeping Lazy
   - `src/lazyssh/command_mode.py` - Add `terminal` or `set-terminal` command
   - `src/lazyssh/config.py` - Add runtime terminal method configuration
   - `src/lazyssh/__main__.py` - Add menu option to change terminal method
-

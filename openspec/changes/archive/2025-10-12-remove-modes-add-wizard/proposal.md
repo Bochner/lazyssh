@@ -17,7 +17,7 @@ The current dual-mode system (prompt mode and command mode) has become obsolete 
 ## Impact
 
 - Affected specs: user-interface (new capability)
-- Affected code: 
+- Affected code:
   - `src/lazyssh/__main__.py` - Remove mode switching logic and --prompt flag
   - `src/lazyssh/command_mode.py` - Remove mode command and mode-related UI
   - `src/lazyssh/ui.py` - Remove prompt mode menu functions

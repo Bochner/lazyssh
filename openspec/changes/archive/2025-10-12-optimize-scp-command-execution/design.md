@@ -39,7 +39,7 @@ Key pain points:
 }
 ```
 
-**Rationale:** 
+**Rationale:**
 - Simple to implement and understand
 - No external dependencies
 - Memory usage minimal for typical directory sizes
@@ -118,7 +118,7 @@ Invalidation triggers:
 
 **Scenario:** User A modifies remote files while user B has cached listing
 
-**Mitigation:** 
+**Mitigation:**
 - 30-second TTL limits staleness window
 - Cache invalidation on cd provides fresh view when navigating
 - Users can manually cd to force refresh
@@ -177,4 +177,3 @@ Invalidation triggers:
 
 3. **Should throttling be configurable?**
    - Start with constant, evaluate based on user feedback
-

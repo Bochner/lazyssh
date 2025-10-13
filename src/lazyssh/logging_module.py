@@ -15,10 +15,6 @@ from rich.console import Console
 
 # from typing import Any, Dict, Optional
 
-
-# Create the console for rich output
-console = Console()
-
 # Define log levels
 LOG_LEVELS = {
     "DEBUG": logging.DEBUG,
@@ -40,6 +36,9 @@ DEBUG_MODE = False
 LOG_DIR = Path("/tmp/lazyssh/logs")
 CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"
 DEFAULT_LOG_LEVEL = "INFO"
+
+# Global console instance for Rich logging
+console = Console()
 
 # Global loggers
 APP_LOGGER: logging.Logger | None = None
@@ -76,7 +75,9 @@ def ensure_log_directory(log_dir: Path | str | None = None) -> bool:
             log_dir.mkdir(parents=True, exist_ok=True)
             log_dir.chmod(0o700)  # Secure permissions
         except Exception as e:
-            console.print(f"[bold red]Error creating log directory: {e}[/bold red]")
+            from .console_instance import display_error
+
+            display_error(f"Error creating log directory: {e}")
             return False
     return True
 

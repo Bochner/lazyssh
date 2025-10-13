@@ -5,58 +5,30 @@ TBD - created by archiving change fix-scp-no-args. Update Purpose after archive.
 ## Requirements
 ### Requirement: SCP Mode Entry Without Arguments
 
-The system SHALL allow users to enter SCP mode without providing a connection argument, prompting them to select from available connections, and SHALL establish the connection before entering the interactive SCP prompt.
+The system SHALL allow users to enter SCP mode without providing a connection argument, with enhanced visual feedback and consistent styling.
 
-#### Scenario: Interactive connection selection
-
+#### Scenario: Enhanced interactive connection selection
 - **WHEN** a user runs the `scp` command without arguments
-- **THEN** the system SHALL display a list of active SSH connections
-- **AND** the system SHALL prompt the user to select a connection by number
-- **AND** after selection, the system SHALL establish the socket connection
-- **AND** the system SHALL enter the interactive SCP mode with the selected connection
+- **THEN** the system SHALL display a list of active SSH connections using standardized Rich tables
+- **AND** the system SHALL prompt the user to select a connection with consistent Rich prompt styling
+- **AND** after selection, the system SHALL establish the socket connection with enhanced status feedback
+- **AND** the system SHALL enter the interactive SCP mode with consistent visual design
 
-#### Scenario: Direct connection specification
-
+#### Scenario: Enhanced direct connection specification
 - **WHEN** a user runs the `scp <connection_name>` command
-- **THEN** the system SHALL validate the connection exists
-- **AND** the system SHALL establish the socket connection directly
-- **AND** the system SHALL enter the interactive SCP mode with that connection
-
-#### Scenario: Connection selection establishes socket path
-
-- **WHEN** a user selects a connection interactively (via `scp` with no args)
-- **THEN** the system SHALL set the socket path to `/tmp/{connection_name}`
-- **AND** the socket path SHALL be available before calling the connect method
-- **AND** the connection SHALL succeed if the socket exists and is valid
+- **THEN** the system SHALL validate the connection exists with enhanced error messaging
+- **AND** the system SHALL establish the socket connection with enhanced status feedback
+- **AND** the system SHALL enter the interactive SCP mode with consistent visual design
 
 ### Requirement: Directory Listing Cache
 
-The system SHALL cache directory listing results from remote SSH commands to minimize redundant command execution, with automatic expiration and invalidation.
+The system SHALL cache directory listing results with enhanced visual feedback for cache operations using Rich components.
 
-#### Scenario: Cache hit on repeated completion
-
-- **WHEN** a user requests tab completion for a directory that was queried within the cache TTL (30 seconds)
-- **THEN** the system SHALL return cached results without executing a new SSH command
-- **AND** the system SHALL log cache hit in debug mode
-
-#### Scenario: Cache miss on expired entry
-
-- **WHEN** a user requests tab completion for a directory whose cache entry is older than TTL
-- **THEN** the system SHALL execute a new SSH command to fetch fresh results
-- **AND** the system SHALL update the cache with the new results
-- **AND** the system SHALL log cache miss in debug mode
-
-#### Scenario: Cache invalidation on directory change
-
-- **WHEN** a user changes directories using the `cd` command
-- **THEN** the system SHALL clear all cached directory listings
-- **AND** subsequent completions SHALL fetch fresh data
-
-#### Scenario: Cache invalidation on file upload
-
-- **WHEN** a user uploads a file using `put` or `mput`
-- **THEN** the system SHALL invalidate the cache entry for the target directory
-- **AND** subsequent completions for that directory SHALL fetch fresh data
+#### Scenario: Enhanced cache operation feedback
+- **WHEN** a user requests tab completion for a directory
+- **THEN** the system SHALL provide enhanced visual feedback about cache hits and misses
+- **AND** the feedback SHALL use consistent styling and be non-intrusive
+- **AND** the system SHALL display cache statistics when appropriate using standardized Rich components
 
 ### Requirement: Completion Query Throttling
 
@@ -82,27 +54,19 @@ The system SHALL limit the frequency of SSH command execution during automatic t
 
 ### Requirement: Runtime Debug Mode Toggle
 
-The system SHALL provide a command to toggle debug mode on and off during an active SCP session without requiring restart.
+The system SHALL provide a command to toggle debug mode with enhanced visual feedback and consistent styling.
 
-#### Scenario: Enable debug mode
-
+#### Scenario: Enhanced debug mode toggle feedback
 - **WHEN** a user enters the `debug` command while debug mode is OFF
-- **THEN** the system SHALL enable debug logging
-- **AND** the system SHALL display "Debug mode: ON"
-- **AND** subsequent operations SHALL show detailed debug information
+- **THEN** the system SHALL enable debug logging with enhanced visual confirmation
+- **AND** the system SHALL display "Debug mode: ON" using standardized success message formatting
+- **AND** subsequent operations SHALL show detailed debug information with consistent formatting
 
-#### Scenario: Disable debug mode
-
+#### Scenario: Enhanced debug mode disable feedback
 - **WHEN** a user enters the `debug` command while debug mode is ON
-- **THEN** the system SHALL disable debug logging
-- **AND** the system SHALL display "Debug mode: OFF"
-- **AND** subsequent operations SHALL suppress debug information
-
-#### Scenario: Debug command in help
-
-- **WHEN** a user enters the `help` command
-- **THEN** the system SHALL display the `debug` command in the available commands list
-- **AND** the help text SHALL indicate it toggles debug mode
+- **THEN** the system SHALL disable debug logging with enhanced visual confirmation
+- **AND** the system SHALL display "Debug mode: OFF" using standardized info message formatting
+- **AND** subsequent operations SHALL suppress debug information with consistent behavior
 
 ### Requirement: Optimized Command Execution
 
@@ -122,3 +86,62 @@ The system SHALL minimize the number of SSH commands executed during normal SCP 
 - **THEN** the system SHALL log cache hit and miss events
 - **AND** the logs SHALL include timestamps and cache entry information
 
+### Requirement: Enhanced SCP Mode Visual Design
+
+The system SHALL provide enhanced visual design for SCP mode operations using Rich library components for consistent, professional appearance.
+
+#### Scenario: Consistent SCP mode interface styling
+- **WHEN** a user enters SCP mode
+- **THEN** the system SHALL display the interface with consistent styling using Rich components
+- **AND** the interface SHALL match the visual design language of other LazySSH modes
+- **AND** all UI elements SHALL use standardized colors, fonts, and layouts
+
+#### Scenario: Enhanced file transfer progress display
+- **WHEN** a user performs file transfers in SCP mode
+- **THEN** the system SHALL display Rich progress bars with transfer speed, time remaining, and file size information
+- **AND** the progress bars SHALL be visually consistent with other LazySSH UI elements
+- **AND** the system SHALL support multiple concurrent transfers with separate, clearly labeled progress indicators
+
+#### Scenario: Enhanced directory tree visualization
+- **WHEN** a user views directory structures in SCP mode
+- **THEN** the system SHALL display directory trees using Rich's tree component with consistent styling
+- **AND** the tree display SHALL use standardized colors and formatting
+- **AND** the tree SHALL be visually consistent with other LazySSH displays
+
+### Requirement: Rich Progress Bar Integration
+
+The system SHALL integrate Rich's advanced progress bar system for all SCP operations requiring progress indication.
+
+#### Scenario: File upload progress with Rich progress bars
+- **WHEN** a user uploads files using `put` or `mput` commands
+- **THEN** the system SHALL display Rich progress bars with transfer speed, time remaining, and file size information
+- **AND** the progress bars SHALL show detailed transfer statistics
+- **AND** the system SHALL support multiple concurrent uploads with separate progress indicators
+
+#### Scenario: File download progress with Rich progress bars
+- **WHEN** a user downloads files using `get` or `mget` commands
+- **THEN** the system SHALL display Rich progress bars with transfer speed, time remaining, and file size information
+- **AND** the progress bars SHALL show detailed transfer statistics
+- **AND** the system SHALL support multiple concurrent downloads with separate progress indicators
+
+#### Scenario: Directory listing progress indication
+- **WHEN** a user requests directory listings that may take time
+- **THEN** the system SHALL display animated spinners with descriptive messages
+- **AND** the spinners SHALL use consistent styling and animation patterns
+- **AND** the system SHALL provide clear feedback about the operation being performed
+
+### Requirement: Enhanced SCP Mode Status Display
+
+The system SHALL provide enhanced status displays for SCP mode operations using Rich components for better user feedback.
+
+#### Scenario: Enhanced connection status display
+- **WHEN** a user views connection status in SCP mode
+- **THEN** the system SHALL display status information using standardized Rich tables
+- **AND** the status display SHALL be visually consistent with other LazySSH status displays
+- **AND** the information SHALL be clearly organized and easy to read
+
+#### Scenario: Enhanced transfer statistics display
+- **WHEN** a user views transfer statistics in SCP mode
+- **THEN** the system SHALL display statistics using standardized Rich tables and panels
+- **AND** the statistics SHALL be clearly formatted and easy to understand
+- **AND** the display SHALL be visually consistent with other LazySSH information displays

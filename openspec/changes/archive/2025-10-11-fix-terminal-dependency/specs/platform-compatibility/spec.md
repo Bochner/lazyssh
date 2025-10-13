@@ -34,4 +34,3 @@ The dependency checking system SHALL differentiate between required and optional
 - **THEN** it SHALL return a tuple of `(required_missing, optional_missing)`
 - **AND** `required_missing` SHALL contain only required dependencies that are not available
 - **AND** `optional_missing` SHALL contain only optional dependencies that are not available
-

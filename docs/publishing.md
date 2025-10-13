@@ -139,4 +139,4 @@ version = "1.2.1"  # <- Update this version number
 # ...
 ```
 
-2. Update the `CHANGELOG.md` file to reflect the changes in the new version 
+2. Update the `CHANGELOG.md` file to reflect the changes in the new version

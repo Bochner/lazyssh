@@ -26,4 +26,3 @@ Users currently must manually re-enter SSH connection details every time they st
   - `src/lazyssh/models.py` - May add `ConfigEntry` model or extend existing models
 - **Breaking changes**: None - purely additive feature
 - **Dependencies**: Add `toml` or `tomli`/`tomli-w` to requirements.txt for TOML parsing
-

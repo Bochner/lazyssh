@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2025-10-12
+
+### Added
+- **UI Environment Variables Support**: Comprehensive environment variable system for UI customization and accessibility
+  - `LAZYSSH_HIGH_CONTRAST`: Enable high contrast theme variant for better visibility
+  - `LAZYSSH_NO_RICH`: Disable Rich library features for basic terminal compatibility
+  - `LAZYSSH_REFRESH_RATE`: Control refresh rate for live updates (integer, 1-10)
+  - `LAZYSSH_NO_ANIMATIONS`: Disable progress animations and spinners
+  - `LAZYSSH_COLORBLIND_MODE`: Enable colorblind-friendly theme variant
+  - `LAZYSSH_PLAIN_TEXT`: Force plain text rendering without Rich formatting
+- **Environment Variable Integration**: Seamless integration with existing Dracula theme system
+  - Automatic parsing and validation of environment variables during UI initialization
+  - Support for multiple boolean value formats (true/false, 1/0, yes/no, on/off)
+  - Integer validation for refresh rate with bounds checking (1-10)
+  - Graceful fallback to default values for invalid or missing variables
+- **Comprehensive Test Coverage**: Unit tests for all environment variable functionality
+  - Test coverage for boolean environment variable parsing
+  - Test coverage for integer environment variable validation
+  - Test coverage for theme switching integration
+  - Test coverage for refresh rate bounds checking
+  - Test coverage for animation disable functionality
+  - Test coverage for plain text mode rendering
+- **Dracula Theme Implementation**: Complete visual overhaul with modern color palette
+  - Implemented comprehensive Dracula color scheme (#282a36, #f8f8f2, #8be9fd, #50fa7b, #ffb86c, #ff79c6, #bd93f9, #ff5555, #f1fa8c, #6272a4)
+  - Centralized theme management with `LAZYSSH_THEME` in `ui.py`
+  - Semantic color mapping for consistent visual hierarchy (info, success, error, warning, header, accent, etc.)
+  - Enhanced syntax highlighting with Dracula colors for better code readability
+- **Accessibility Theme Support**: Multiple theme variants for different accessibility needs
+  - High contrast theme using Dracula colors with enhanced visibility
+  - Colorblind-friendly theme with improved color differentiation
+  - Maintained WCAG compliance across all theme variants
+- **Rich Library Standardization**: Comprehensive UI component enhancements
+  - Centralized console instance management with consistent theme application
+  - Standardized table formatting with Dracula color scheme
+  - Enhanced panel layouts with consistent border styles and padding
+  - Improved progress bar styling with Dracula colors
+  - Advanced Rich features integration (layout system, markdown rendering, live updates)
+- **UI Performance Optimizations**: Performance monitoring and optimization features
+  - `benchmark_rich_rendering()` function for performance analysis
+  - `optimize_console_performance()` for optimized console instances
+  - `profile_ui_performance()` for UI performance profiling and recommendations
+  - Cached table templates for repeated use scenarios
+  - Batch rendering updates for efficient UI operations
+- **Enhanced SCP Mode Completion**: Improved tab completion behavior in SCP mode
+  - Filtered current directory from completion suggestions to reduce redundancy
+  - Added prevention of redundant directory changes when already in target directory
+  - Enhanced user experience with more relevant completion suggestions
+- **Console Instance Management**: Centralized console management system
+  - New `console_instance.py` module for unified console handling
+  - Centralized theme application across all UI components
+  - Improved performance with optimized console configuration
+  - Consistent styling and behavior across command mode, SCP mode, and terminal integration
+
+### Changed
+- **GitHub Issue Templates**: Streamlined and simplified issue submission process
+  - Reduced required fields in bug report template to minimize friction
+  - Simplified feature request template with clearer, shorter prompts
+  - Improved user experience for issue submission while maintaining information quality
+  - Reduced cognitive load for users submitting issues
+- **BREAKING:** Complete visual theme overhaul across entire application
+  - All UI components now use Dracula color palette instead of basic terminal colors
+  - Updated banner design with sophisticated ASCII art and Dracula styling
+  - Enhanced table headers, panels, and status displays with consistent Dracula colors
+  - Improved visual hierarchy and information distinction throughout the application
+- **Enhanced UI Components**: Upgraded all Rich library components
+  - Tables now use consistent Dracula color scheme for headers and rows
+  - Panels feature improved styling with Dracula colors for titles and subtitles
+  - Progress bars enhanced with Dracula color scheme for better visual feedback
+  - Status messages and prompts use semantic Dracula colors for better readability
+- **Console Management**: Centralized console instance with theme consistency
+  - All modules now use shared console instance from `ui.py`
+  - Consistent theme application across command mode, SCP mode, and terminal integration
+  - Improved console performance with optimized configuration settings
+- **Documentation Updates**: Enhanced troubleshooting guide with environment variable details
+  - Added comprehensive documentation for all supported environment variables
+  - Specified exact accepted values and precedence rules
+  - Updated user guide with environment variable usage examples
+
+### Technical Improvements
+- Enhanced `ui.py` with environment variable parsing and validation functions
+- Added `parse_boolean_env_var()` and `parse_integer_env_var()` utility functions
+- Integrated environment variable support with existing theme system
+- Updated `.github/ISSUE_TEMPLATE/` files with simplified templates
+- Added comprehensive test suite for UI environment variable functionality
+- Updated `ui.py` with comprehensive Dracula theme definition and accessibility themes
+- Enhanced `ssh.py` with Dracula-colored command display and syntax highlighting
+- Improved `scp_mode.py` styling for file transfer interface with Dracula colors
+- Updated `command_mode.py` styling for command interface with consistent theme
+- Enhanced `__main__.py` startup messages with Dracula theme styling
+- Added performance benchmarking and optimization utilities
+- Created new `console_instance.py` module for centralized console management
+- Improved code formatting and removed trailing whitespace across all files
+- Enhanced SCP mode completion logic for better user experience
+
 ## [1.4.1] - 2025-10-12
 
 ### Added

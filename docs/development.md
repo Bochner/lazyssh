@@ -168,10 +168,10 @@ make docs           # Verify documentation
    ```bash
    # Quick fix and check
    make fix && make check
-   
+
    # Or comprehensive verification (recommended before commit)
    make verify
-   
+
    # Or use the pre-commit script
    ./pre-commit-check.sh
    ```
@@ -632,4 +632,4 @@ git tag -a vX.Y.Z -m "Release vX.Y.Z"
 make publish-test # Test on TestPyPI
 make publish      # Publish to PyPI
 git push && git push --tags
-``` 
+```

@@ -7,13 +7,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for suggesting a feature! Please fill out the sections below to help us understand your request.
+        Thanks for suggesting a feature! Tell us what you'd like to see.
 
   - type: textarea
     id: description
     attributes:
-      label: Feature Description
-      description: Clearly describe the feature you'd like to see added
+      label: What feature would you like?
+      description: Describe the feature you'd like to see added
       placeholder: "I would like LazySSH to support..."
     validations:
       required: true
@@ -21,8 +21,8 @@ body:
   - type: textarea
     id: use-case
     attributes:
-      label: Use Case
-      description: Explain why this feature would be useful and how you would use it
+      label: Why would this be useful?
+      description: Explain how you would use this feature
       placeholder: "This would help me to..."
     validations:
       required: true
@@ -30,8 +30,8 @@ body:
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives Considered
-      description: Have you considered any alternative solutions or workarounds?
+      label: Alternatives considered (optional)
+      description: Any workarounds you've tried?
       placeholder: "I've tried... but it doesn't work because..."
     validations:
       required: false
@@ -39,21 +39,21 @@ body:
   - type: dropdown
     id: priority
     attributes:
-      label: Priority
-      description: How important is this feature to you?
+      label: Priority (optional)
+      description: How important is this to you?
       options:
         - Low - Nice to have
         - Medium - Would be helpful
         - High - Critical for my workflow
     validations:
-      required: true
+      required: false
 
   - type: checkboxes
     id: contribution
     attributes:
-      label: Contribution
-      description: Would you be willing to help implement this feature?
+      label: Would you like to help? (optional)
+      description: We'd love your help if you're interested!
       options:
         - label: I'm willing to submit a pull request for this feature
         - label: I can help with testing
-        - label: I can help with documentation 
+        - label: I can help with documentation

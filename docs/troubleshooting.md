@@ -11,6 +11,7 @@ This guide provides solutions to common issues you might encounter when using La
 - [Tunneling Problems](#tunneling-problems)
 - [SCP Mode Issues](#scp-mode-issues)
 - [Configuration Management Issues](#configuration-management-issues)
+- [UI and Display Issues](#ui-and-display-issues)
 - [Common Error Messages](#common-error-messages)
 
 ## Installation Issues
@@ -473,7 +474,7 @@ lazyssh> tunc myserver r 8080 localhost 80
    lazyssh> save-config prod-server
    lazyssh> save-config server_1
    lazyssh> save-config webserver01
-   
+
    # Invalid names (avoid)
    # server.name  (no dots)
    # my server    (no spaces)
@@ -610,7 +611,7 @@ lazyssh> tunc myserver r 8080 localhost 80
 
 **This is by design, not a bug.**
 
-**Explanation**: 
+**Explanation**:
 Config files are stored in `/tmp/lazyssh/` which is cleared on system reboot for security reasons.
 
 **Solutions if you need persistence**:
@@ -620,7 +621,7 @@ Config files are stored in `/tmp/lazyssh/` which is cleared on system reboot for
    # Create permanent config directory
    mkdir -p ~/.config/lazyssh
    cp /tmp/lazyssh/connections.conf ~/.config/lazyssh/
-   
+
    # Use custom path
    lazyssh --config ~/.config/lazyssh/connections.conf
    ```
@@ -632,6 +633,291 @@ Config files are stored in `/tmp/lazyssh/` which is cleared on system reboot for
    chmod 600 /tmp/lazyssh/connections.conf
    ```
 3. **Security note**: Permanent storage increases risk. Ensure proper file permissions.
+
+## UI and Display Issues
+
+### Colors Not Displaying Correctly
+
+**Issue**: LazySSH interface appears in plain text without colors or styling.
+
+**Solutions**:
+
+1. **Check terminal color support**:
+   ```bash
+   # Test if your terminal supports colors
+   echo -e "\033[31mRed\033[0m \033[32mGreen\033[0m \033[34mBlue\033[0m"
+   ```
+
+2. **Enable color output**:
+   ```bash
+   # Force color output
+   export TERM=xterm-256color
+   export COLORTERM=truecolor
+
+   # Restart LazySSH
+   lazyssh
+   ```
+
+3. **Check terminal emulator settings**:
+   - Ensure your terminal emulator supports 256 colors or truecolor
+   - Try a different terminal emulator (e.g., GNOME Terminal, Konsole, iTerm2)
+
+### High Contrast Mode
+
+**Issue**: Text is hard to read due to low contrast.
+
+**Solution**: LazySSH automatically detects terminal capabilities and provides high contrast themes when needed. If you still have issues:
+
+```bash
+# Force high contrast mode
+export LAZYSSH_HIGH_CONTRAST=true
+lazyssh
+```
+
+**Accepted values**: `true`, `1`, `yes`, `on` (case-insensitive). Any other value is treated as `false`.
+
+### Terminal Compatibility Issues
+
+**Issue**: LazySSH crashes or displays incorrectly in certain terminals.
+
+**Solutions**:
+
+1. **Use fallback mode**:
+   ```bash
+   # Disable Rich features for basic terminals
+   export LAZYSSH_NO_RICH=true
+   lazyssh
+   ```
+
+   **Accepted values**: `true`, `1`, `yes`, `on` (case-insensitive). Any other value is treated as `false`.
+
+2. **Check terminal emulator**:
+   - Use a modern terminal emulator (Terminal.app, GNOME Terminal, Konsole)
+   - Avoid very old or minimal terminal emulators
+
+### Performance Issues
+
+**Issue**: LazySSH interface is slow or unresponsive.
+
+**Solutions**:
+
+1. **Reduce refresh rate**:
+   ```bash
+   # Lower refresh rate for live updates
+   export LAZYSSH_REFRESH_RATE=1
+   lazyssh
+   ```
+
+   **Accepted values**: Integer between 1 and 10 (inclusive). Values outside this range are clamped to the nearest valid value. Default is 4.
+
+2. **Disable animations**:
+   ```bash
+   # Disable progress animations
+   export LAZYSSH_NO_ANIMATIONS=true
+   lazyssh
+   ```
+
+   **Accepted values**: `true`, `1`, `yes`, `on` (case-insensitive). Any other value is treated as `false`.
+
+3. **Check system resources**:
+   - Ensure adequate RAM and CPU resources
+   - Close other resource-intensive applications
+
+### Layout Issues
+
+**Issue**: Tables, panels, or layouts appear misaligned or broken.
+
+**Solutions**:
+
+1. **Check terminal size**:
+   ```bash
+   # Ensure terminal is large enough (minimum 80x24)
+   echo $COLUMNS $LINES
+   ```
+
+2. **Resize terminal**:
+   - Make terminal window larger
+   - Use full-screen mode if available
+
+3. **Reset terminal**:
+   ```bash
+   # Clear terminal and restart
+   clear
+   lazyssh
+   ```
+
+### Accessibility Issues
+
+**Issue**: Interface is not accessible for users with visual impairments.
+
+**Solutions**:
+
+1. **Enable high contrast mode**:
+   ```bash
+   export LAZYSSH_HIGH_CONTRAST=true
+   lazyssh
+   ```
+
+   **Accepted values**: `true`, `1`, `yes`, `on` (case-insensitive). Any other value is treated as `false`.
+
+2. **Use colorblind-friendly theme**:
+   ```bash
+   export LAZYSSH_COLORBLIND_MODE=true
+   lazyssh
+   ```
+
+   **Accepted values**: `true`, `1`, `yes`, `on` (case-insensitive). Any other value is treated as `false`.
+
+3. **Screen reader compatibility**:
+   - LazySSH provides clear text prefixes for all status messages
+   - Use screen readers that support terminal applications
+
+### Markdown Rendering Issues
+
+**Issue**: Help content or documentation doesn't display correctly.
+
+**Solutions**:
+
+1. **Check Rich library installation**:
+   ```bash
+   pip show rich
+   ```
+
+2. **Reinstall Rich**:
+   ```bash
+   pip install --upgrade rich
+   ```
+
+3. **Use plain text mode**:
+   ```bash
+   export LAZYSSH_PLAIN_TEXT=true
+   lazyssh
+   ```
+
+   **Accepted values**: `true`, `1`, `yes`, `on` (case-insensitive). Any other value is treated as `false`.
+
+### Environment Variable Precedence Rules
+
+When multiple UI environment variables are set, the following precedence rules apply:
+
+1. **LAZYSSH_PLAIN_TEXT** has the highest precedence - when enabled, it overrides all other theme settings
+2. **LAZYSSH_HIGH_CONTRAST** takes precedence over **LAZYSSH_COLORBLIND_MODE**
+3. **LAZYSSH_COLORBLIND_MODE** is used when high contrast is not enabled
+4. **LAZYSSH_NO_RICH** affects console configuration but doesn't override theme selection
+5. **LAZYSSH_NO_ANIMATIONS** affects progress displays independently of theme settings
+6. **LAZYSSH_REFRESH_RATE** affects live update frequency independently of other settings
+
+**Example precedence scenarios**:
+```bash
+# Scenario 1: Plain text overrides everything
+export LAZYSSH_PLAIN_TEXT=true
+export LAZYSSH_HIGH_CONTRAST=true
+export LAZYSSH_COLORBLIND_MODE=true
+# Result: Plain text theme (all colors set to "default")
+
+# Scenario 2: High contrast overrides colorblind mode
+export LAZYSSH_HIGH_CONTRAST=true
+export LAZYSSH_COLORBLIND_MODE=true
+# Result: High contrast theme
+
+# Scenario 3: Colorblind mode when high contrast is disabled
+export LAZYSSH_HIGH_CONTRAST=false
+export LAZYSSH_COLORBLIND_MODE=true
+# Result: Colorblind-friendly theme
+```
+
+### Environment Variable Examples
+
+Here are practical examples for each environment variable:
+
+**LAZYSSH_HIGH_CONTRAST** - Enable high contrast theme:
+```bash
+# Enable high contrast mode
+export LAZYSSH_HIGH_CONTRAST=true
+lazyssh
+
+# Disable high contrast mode
+export LAZYSSH_HIGH_CONTRAST=false
+lazyssh
+```
+
+**LAZYSSH_NO_RICH** - Disable Rich library features:
+```bash
+# Use basic terminal compatibility mode
+export LAZYSSH_NO_RICH=true
+lazyssh
+
+# Re-enable Rich features
+export LAZYSSH_NO_RICH=false
+lazyssh
+```
+
+**LAZYSSH_REFRESH_RATE** - Control live update frequency:
+```bash
+# Slow updates (1 refresh per second)
+export LAZYSSH_REFRESH_RATE=1
+lazyssh
+
+# Fast updates (10 refreshes per second)
+export LAZYSSH_REFRESH_RATE=10
+lazyssh
+
+# Default speed (4 refreshes per second)
+export LAZYSSH_REFRESH_RATE=4
+lazyssh
+```
+
+**LAZYSSH_NO_ANIMATIONS** - Disable progress animations:
+```bash
+# Disable all animations and spinners
+export LAZYSSH_NO_ANIMATIONS=true
+lazyssh
+
+# Re-enable animations
+export LAZYSSH_NO_ANIMATIONS=false
+lazyssh
+```
+
+**LAZYSSH_COLORBLIND_MODE** - Enable colorblind-friendly theme:
+```bash
+# Use colorblind-friendly colors
+export LAZYSSH_COLORBLIND_MODE=true
+lazyssh
+
+# Use default theme
+export LAZYSSH_COLORBLIND_MODE=false
+lazyssh
+```
+
+**LAZYSSH_PLAIN_TEXT** - Force plain text rendering:
+```bash
+# Use plain text without any Rich formatting
+export LAZYSSH_PLAIN_TEXT=true
+lazyssh
+
+# Use Rich formatting
+export LAZYSSH_PLAIN_TEXT=false
+lazyssh
+```
+
+**Combined examples**:
+```bash
+# Maximum accessibility and compatibility
+export LAZYSSH_HIGH_CONTRAST=true
+export LAZYSSH_NO_ANIMATIONS=true
+export LAZYSSH_REFRESH_RATE=1
+lazyssh
+
+# Performance optimized
+export LAZYSSH_NO_ANIMATIONS=true
+export LAZYSSH_REFRESH_RATE=2
+lazyssh
+
+# Basic terminal compatibility
+export LAZYSSH_NO_RICH=true
+export LAZYSSH_PLAIN_TEXT=true
+lazyssh
+```
 
 ## Common Error Messages
 

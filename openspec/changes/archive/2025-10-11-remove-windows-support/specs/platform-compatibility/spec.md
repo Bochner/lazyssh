@@ -56,4 +56,3 @@ The system SHALL handle failures during executable detection gracefully and prov
 - **THEN** the system SHALL handle the validation safely
 - **AND** return None if the path is invalid
 - **AND** not crash the application
-

@@ -61,4 +61,3 @@ This impacts new user onboarding and makes it harder for existing users to find 
 - Easier to find specific information
 - More accurate and up-to-date documentation
 - Clearer distinction between user and developer documentation
-

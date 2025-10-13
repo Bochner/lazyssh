@@ -17,4 +17,3 @@ Users need a way to backup their connection configurations before making changes
   - `src/lazyssh/config.py` - Add backup functionality
   - `src/lazyssh/command_mode.py` - Add backup-config command, modify show_status() to include configs
   - `src/lazyssh/ui.py` - May need adjustment if display logic changes
-

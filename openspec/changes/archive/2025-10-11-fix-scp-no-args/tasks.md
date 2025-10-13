@@ -13,4 +13,3 @@
 
 ## 3. Documentation
 - [x] 3.1 Update CHANGELOG.md with bug fix entry
-

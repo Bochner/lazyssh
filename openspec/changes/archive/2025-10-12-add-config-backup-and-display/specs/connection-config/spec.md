@@ -127,4 +127,3 @@ The system SHALL include the backup-config command in help and documentation.
 - **WHEN** the user executes `backup-config` with any arguments
 - **THEN** the system SHALL ignore the arguments
 - **AND** SHALL proceed with backup operation
-

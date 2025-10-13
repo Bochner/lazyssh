@@ -17,9 +17,8 @@ This creates performance issues and unnecessary network traffic, especially on h
 ## Impact
 
 - **Affected specs**: `scp-mode`
-- **Affected code**: 
+- **Affected code**:
   - `src/lazyssh/scp_mode.py` - Add caching mechanism, throttling, and debug command
   - `src/lazyssh/logging_module.py` - Expose debug mode toggle functionality
 - **Performance improvement**: Reduce SSH command count by 80-90% during typical completion workflows
 - **User experience**: More responsive completion, cleaner console output, runtime debug control
-

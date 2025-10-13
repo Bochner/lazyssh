@@ -24,24 +24,12 @@ from .config import (
     save_config,
     validate_config_name,
 )
-from .logging_module import (  # noqa: F401
-    APP_LOGGER,
-    CMD_LOGGER,
-    log_ssh_command,
-    set_debug_mode,
-)
+from .console_instance import console, display_error, display_info, display_success, display_warning
+from .logging_module import APP_LOGGER, CMD_LOGGER, log_ssh_command, set_debug_mode  # noqa: F401
 from .models import SSHConnection
 from .scp_mode import SCPMode
 from .ssh import SSHManager
-from .ui import (
-    display_error,
-    display_info,
-    display_saved_configs,
-    display_ssh_status,
-    display_success,
-    display_tunnels,
-    display_warning,
-)
+from .ui import display_saved_configs, display_ssh_status, display_tunnels
 
 
 class LazySSHCompleter(Completer):
@@ -392,7 +380,7 @@ class CommandMode:
                 completer=LazySSHCompleter(self),
                 style=Style.from_dict(
                     {
-                        "prompt": "ansicyan bold",
+                        "prompt": "#8be9fd bold",  # Cyan - info color
                     }
                 ),
             )
@@ -531,10 +519,12 @@ class CommandMode:
                 # Use Rich's Confirm.ask for a color-coded prompt (same as prompt mode)
                 from rich.prompt import Confirm, Prompt
 
-                if not Confirm.ask("Do you want to use a different name?", default=True):
+                if not Confirm.ask(
+                    "[foreground]Do you want to use a different name?[/foreground]", default=True
+                ):
                     display_info("Proceeding with the existing socket name.")
                 else:
-                    new_socket = Prompt.ask("Enter a new socket name")
+                    new_socket = Prompt.ask("[foreground]Enter a new socket name[/foreground]")
                     if not new_socket or not validate_config_name(new_socket):
                         display_error(
                             "Invalid socket name. Use alphanumeric characters, dashes, and underscores only"
@@ -742,7 +732,7 @@ class CommandMode:
         # Create connection object from config
         try:
             # Normalize and validate socket_name before using it
-            socket_name = os.path.basename(config_data.get("socket_name", ""))
+            socket_name = Path(config_data.get("socket_name", "")).name
             if not socket_name or not validate_config_name(socket_name):
                 display_error(
                     "Invalid socket name. Use alphanumeric characters, dashes, and underscores only"
@@ -758,10 +748,12 @@ class CommandMode:
                 display_warning(f"Socket name '{config_data['socket_name']}' is already in use.")
                 from rich.prompt import Confirm, Prompt
 
-                if not Confirm.ask("Do you want to use a different name?", default=True):
+                if not Confirm.ask(
+                    "[foreground]Do you want to use a different name?[/foreground]", default=True
+                ):
                     display_info("Connection aborted")
                     return False
-                new_socket = Prompt.ask("Enter a new socket name")
+                new_socket = Prompt.ask("[foreground]Enter a new socket name[/foreground]")
                 if not new_socket or not validate_config_name(new_socket):
                     display_error(
                         "Invalid socket name. Use alphanumeric characters, dashes, and underscores only"
@@ -832,12 +824,16 @@ class CommandMode:
             conn_list = list(self.ssh_manager.connections.items())
             for i, (sock_path, c) in enumerate(conn_list, 1):
                 conn_name = Path(sock_path).name
-                display_info(f"  {i}. {conn_name} ({c.username}@{c.host}:{c.port})")
+                console.print(
+                    f"  [info]{i}.[/info] [success]{conn_name}[/success] [dim]([/dim][variable]{c.username}[/variable][operator]@[/operator][highlight]{c.host}[/highlight][dim]:[/dim][number]{c.port}[/number][dim])[/dim]"
+                )
 
             try:
                 from rich.prompt import IntPrompt
 
-                choice = IntPrompt.ask("Enter connection number", default=1) - 1
+                choice = (
+                    IntPrompt.ask("[foreground]Enter connection number[/foreground]", default=1) - 1
+                )
                 if 0 <= choice < len(conn_list):
                     socket_path, conn = conn_list[choice]
                 else:
@@ -851,7 +847,9 @@ class CommandMode:
         if config_exists(config_name):
             from rich.prompt import Confirm
 
-            if not Confirm.ask(f"Configuration '{config_name}' already exists. Overwrite?"):
+            if not Confirm.ask(
+                f"[foreground]Configuration '{config_name}' already exists. Overwrite?[/foreground]"
+            ):
                 display_info("Save cancelled")
                 return False
 
@@ -903,7 +901,7 @@ class CommandMode:
         # Confirm deletion
         from rich.prompt import Confirm
 
-        if not Confirm.ask(f"Delete configuration '{config_name}'?"):
+        if not Confirm.ask(f"[foreground]Delete configuration '{config_name}'?[/foreground]"):
             display_info("Deletion cancelled")
             return False
 
@@ -934,262 +932,302 @@ class CommandMode:
     def cmd_help(self, args: list[str]) -> bool:
         """Handle help command"""
         if not args:
-            display_info("[bold cyan]\nLazySSH Command Mode - Available Commands:[/bold cyan]\n")
-            display_info("[magenta bold]SSH Connection:[/magenta bold]")
-            display_info(
-                "  [cyan]lazyssh[/cyan] -ip [yellow]<ip>[/yellow] -port [yellow]<port>[/yellow] -user [yellow]<username>[/yellow] -socket [yellow]<n>[/yellow] "
-                "[-proxy [yellow]<port>[/yellow]] [-ssh-key [yellow]<path>[/yellow]] [-shell [yellow]<shell>[/yellow]] [-no-term]"
-            )
-            display_info("  [cyan]close[/cyan] [yellow]<ssh_id>[/yellow]")
-            display_info(
-                "  [dim]Example:[/dim] [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/green]"
-            )
-            display_info(
-                "  [dim]Example:[/dim] [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh[/green]"
-            )
-            display_info("  [dim]Example:[/dim] [green]close ubuntu[/green]\n")
+            display_info("[header]\nLazySSH Command Mode - Available Commands:[/header]\n")
 
-            display_info("[magenta bold]Tunnel Management:[/magenta bold]")
+            display_info("[highlight]SSH Connection:[/highlight]")
             display_info(
-                "  [cyan]tunc[/cyan] [yellow]<ssh_id>[/yellow] [yellow]<l|r>[/yellow] [yellow]<local_port>[/yellow] [yellow]<remote_host>[/yellow] [yellow]<remote_port>[/yellow]"
+                "  [string]lazyssh[/string] -ip [number]<ip>[/number] -port [number]<port>[/number] "
+                "-user [number]<username>[/number] -socket [number]<n>[/number] "
+                "[-proxy [number]<port>[/number]] [-ssh-key [number]<path>[/number]] "
+                "[-shell [number]<shell>[/number]] [-no-term]"
             )
-            display_info(
-                "  [dim]Example (forward):[/dim] [green]tunc ubuntu l 8080 localhost 80[/green]"
-            )
-            display_info(
-                "  [dim]Example (reverse):[/dim] [green]tunc ubuntu r 3000 127.0.0.1 3000[/green]\n"
-            )
+            display_info("  [string]close[/string] [number]<ssh_id>[/number]")
 
-            display_info("  [cyan]tund[/cyan] [yellow]<tunnel_id>[/yellow]")
-            display_info("  [dim]Example:[/dim] [green]tund 1[/green]\n")
+            display_info("[dim]Examples:[/dim]")
+            display_info(
+                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/success]"
+            )
+            display_info(
+                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh[/success]"
+            )
+            display_info("  [success]close ubuntu[/success]\n")
 
-            display_info("[magenta bold]Terminal:[/magenta bold]")
+            display_info("[header]Tunnel Management:[/header]")
             display_info(
-                "  [cyan]open[/cyan] [yellow]<ssh_id>[/yellow]          - Open a terminal session"
-            )
-            display_info(
-                "  [cyan]terminal[/cyan] [yellow]<method>[/yellow]      - Change terminal method (auto, native, terminator)"
-            )
-            display_info(
-                "  [dim]Example:[/dim] [green]open ubuntu[/green]      [dim]# Open terminal for ubuntu connection[/dim]"
-            )
-            display_info(
-                "  [dim]Example:[/dim] [green]terminal native[/green]  [dim]# Use native terminal method[/dim]\n"
+                "  [highlight]tunc[/highlight] [number]<ssh_id>[/number] [number]<l|r>[/number] "
+                "[number]<local_port>[/number] [number]<remote_host>[/number] [number]<remote_port>[/number]"
             )
 
-            display_info("[magenta bold]File Transfer:[/magenta bold]")
-            display_info("  [cyan]scp[/cyan] [[yellow]<ssh_id>[/yellow]]")
-            display_info("  [dim]Example:[/dim] [green]scp ubuntu[/green]\n")
+            display_info("[dim]Examples:[/dim]")
+            display_info(
+                "  [success]tunc ubuntu l 8080 localhost 80[/success]  [dim]# Forward tunnel[/dim]"
+            )
+            display_info(
+                "  [success]tunc ubuntu r 3000 127.0.0.1 3000[/success]  [dim]# Reverse tunnel[/dim]"
+            )
 
-            display_info("[magenta bold]Configuration Management:[/magenta bold]")
-            display_info(
-                "  [cyan]config[/cyan] / [cyan]configs[/cyan]              - Display saved configurations"
-            )
-            display_info(
-                "  [cyan]connect[/cyan] [yellow]<config-name>[/yellow]          - Connect using saved configuration"
-            )
-            display_info(
-                "  [cyan]save-config[/cyan] [yellow]<config-name>[/yellow]     - Save current connection as configuration"
-            )
-            display_info(
-                "  [cyan]delete-config[/cyan] [yellow]<config-name>[/yellow]   - Delete saved configuration"
-            )
-            display_info(
-                "  [cyan]backup-config[/cyan]                    - Backup the connections configuration file"
-            )
-            display_info("  [dim]Example:[/dim] [green]config[/green]")
-            display_info("  [dim]Example:[/dim] [green]connect my-server[/green]")
-            display_info("  [dim]Example:[/dim] [green]save-config my-server[/green]")
-            display_info("  [dim]Example:[/dim] [green]backup-config[/green]\n")
+            display_info("  [highlight]tund[/highlight] [number]<tunnel_id>[/number]")
+            display_info("  [success]tund 1[/success]\n")
 
-            display_info("[magenta bold]System Commands:[/magenta bold]")
-            display_info("  [cyan]list[/cyan]    - Show all connections and tunnels")
-            display_info("  [cyan]wizard[/cyan]  - Guided workflows for complex operations")
-            display_info("  [cyan]debug[/cyan]   - Toggle debug logging to console")
-            display_info("  [cyan]help[/cyan]    - Show this help")
-            display_info("  [cyan]exit[/cyan]    - Exit the program")
+            display_info("[header]Terminal:[/header]")
+            display_info(
+                "  [highlight]open[/highlight] [number]<ssh_id>[/number]          - Open a terminal session"
+            )
+            display_info(
+                "  [highlight]terminal[/highlight] [number]<method>[/number]      - Change terminal method (auto, native, terminator)"
+            )
+
+            display_info("[dim]Examples:[/dim]")
+            display_info(
+                "  [success]open ubuntu[/success]      [dim]# Open terminal for ubuntu connection[/dim]"
+            )
+            display_info(
+                "  [success]terminal native[/success]  [dim]# Use native terminal method[/dim]\n"
+            )
+
+            display_info("[header]File Transfer:[/header]")
+            display_info("  [highlight]scp[/highlight] [[number]<ssh_id>[/number]]")
+            display_info("  [success]scp ubuntu[/success]\n")
+
+            display_info("[header]Configuration Management:[/header]")
+            display_info(
+                "  [highlight]config[/highlight] / [highlight]configs[/highlight]              - Display saved configurations"
+            )
+            display_info(
+                "  [highlight]connect[/highlight] [number]<config-name>[/number]          - Connect using saved configuration"
+            )
+            display_info(
+                "  [highlight]save-config[/highlight] [number]<config-name>[/number]     - Save current connection as configuration"
+            )
+            display_info(
+                "  [highlight]delete-config[/highlight] [number]<config-name>[/number]   - Delete saved configuration"
+            )
+            display_info(
+                "  [highlight]backup-config[/highlight]                    - Backup the connections configuration file"
+            )
+
+            display_info("[dim]Examples:[/dim]")
+            display_info("  [success]config[/success]")
+            display_info("  [success]connect my-server[/success]")
+            display_info("  [success]save-config my-server[/success]")
+            display_info("  [success]backup-config[/success]\n")
+
+            display_info("[header]System Commands:[/header]")
+            display_info("  [highlight]list[/highlight]    - Show all connections and tunnels")
+            display_info(
+                "  [highlight]wizard[/highlight]  - Guided workflows for complex operations"
+            )
+            display_info("  [highlight]debug[/highlight]   - Toggle debug logging to console")
+            display_info("  [highlight]help[/highlight]    - Show this help")
+            display_info("  [highlight]exit[/highlight]    - Exit the program")
             return True
 
         cmd = args[0]
         if cmd == "lazyssh":
-            display_info("[bold cyan]\nCreate new SSH connection:[/bold cyan]")
+            display_info("[header]\nCreate new SSH connection:[/header]")
             display_info(
-                "[yellow]Usage:[/yellow] [cyan]lazyssh[/cyan] -ip [yellow]<ip>[/yellow] -port [yellow]<port>[/yellow] -user [yellow]<username>[/yellow] -socket [yellow]<n>[/yellow] "
-                "[-proxy [port]] [-ssh-key [yellow]<identity_file>[/yellow]] [-shell [yellow]<shell>[/yellow]] [-no-term]"
+                "[number]Usage:[/number] [highlight]lazyssh[/highlight] -ip [number]<ip>[/number] -port [number]<port>[/number] -user [number]<username>[/number] -socket [number]<n>[/number] "
+                "[-proxy [port]] [-ssh-key [number]<identity_file>[/number]] [-shell [number]<shell>[/number]] [-no-term]"
             )
-            display_info("[magenta bold]Required parameters:[/magenta bold]")
-            display_info("  [cyan]-ip[/cyan]     : IP address or hostname of the SSH server")
-            display_info("  [cyan]-port[/cyan]   : SSH port number")
-            display_info("  [cyan]-user[/cyan]   : SSH username")
-            display_info("  [cyan]-socket[/cyan] : Name for the connection (used as identifier)")
-            display_info("[magenta bold]Optional parameters:[/magenta bold]")
+            display_info("[header]Required parameters:[/header]")
             display_info(
-                "  [cyan]-proxy[/cyan]  : Create a dynamic SOCKS proxy (default port: 9050)"
+                "  [highlight]-ip[/highlight]     : IP address or hostname of the SSH server"
             )
-            display_info("  [cyan]-ssh-key[/cyan]: Path to an SSH identity file")
-            display_info("  [cyan]-shell[/cyan]  : Specify the shell to use (e.g., /bin/sh)")
-            display_info("  [cyan]-no-term[/cyan]: Do not automatically open a terminal")
-            display_info("\n[magenta bold]Examples:[/magenta bold]")
+            display_info("  [highlight]-port[/highlight]   : SSH port number")
+            display_info("  [highlight]-user[/highlight]   : SSH username")
             display_info(
-                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/green]"
+                "  [highlight]-socket[/highlight] : Name for the connection (used as identifier)"
             )
+            display_info("[header]Optional parameters:[/header]")
             display_info(
-                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy[/green]"
+                "  [highlight]-proxy[/highlight]  : Create a dynamic SOCKS proxy (default port: 9050)"
             )
+            display_info("  [highlight]-ssh-key[/highlight]: Path to an SSH identity file")
             display_info(
-                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080[/green]"
+                "  [highlight]-shell[/highlight]  : Specify the shell to use (e.g., /bin/sh)"
             )
+            display_info("  [highlight]-no-term[/highlight]: Do not automatically open a terminal")
+            display_info("\n[header]Examples:[/header]")
             display_info(
-                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh[/green]"
+                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/success]"
             )
             display_info(
-                "  [green]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh -no-term[/green]"
+                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy[/success]"
+            )
+            display_info(
+                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080[/success]"
+            )
+            display_info(
+                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh[/success]"
+            )
+            display_info(
+                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh -no-term[/success]"
             )
         elif cmd == "tunc":
-            display_info("[bold cyan]\nCreate a new tunnel:[/bold cyan]")
+            display_info("[header]\nCreate a new tunnel:[/header]")
             display_info(
-                "[yellow]Usage:[/yellow] [cyan]tunc[/cyan] [yellow]<ssh_id>[/yellow] [yellow]<l|r>[/yellow] [yellow]<local_port>[/yellow] [yellow]<remote_host>[/yellow] [yellow]<remote_port>[/yellow]"
+                "[number]Usage:[/number] [highlight]tunc[/highlight] [number]<ssh_id>[/number] [number]<l|r>[/number] [number]<local_port>[/number] [number]<remote_host>[/number] [number]<remote_port>[/number]"
             )
-            display_info("[magenta bold]Parameters:[/magenta bold]")
-            display_info("  [cyan]ssh_id[/cyan]      : The identifier of the SSH connection")
+            display_info("[header]Parameters:[/header]")
             display_info(
-                "  [cyan]l|r[/cyan]         : 'l' for local (forward) tunnel, 'r' for remote (reverse) tunnel"
+                "  [highlight]ssh_id[/highlight]      : The identifier of the SSH connection"
             )
-            display_info("  [cyan]local_port[/cyan]  : The local port to use for the tunnel")
-            display_info("  [cyan]remote_host[/cyan] : The remote host to connect to")
-            display_info("  [cyan]remote_port[/cyan] : The remote port to connect to")
-            display_info("\n[magenta bold]Examples:[/magenta bold]")
             display_info(
-                "  [green]tunc ubuntu l 8080 localhost 80[/green]    [dim]# Forward local port 8080 to "
+                "  [highlight]l|r[/highlight]         : 'l' for local (forward) tunnel, 'r' for remote (reverse) tunnel"
+            )
+            display_info(
+                "  [highlight]local_port[/highlight]  : The local port to use for the tunnel"
+            )
+            display_info("  [highlight]remote_host[/highlight] : The remote host to connect to")
+            display_info("  [highlight]remote_port[/highlight] : The remote port to connect to")
+            display_info("\n[header]Examples:[/header]")
+            display_info(
+                "  [success]tunc ubuntu l 8080 localhost 80[/success]    [dim]# Forward local port 8080 to "
                 "localhost:80 on the remote server[/dim]"
             )
             display_info(
-                "  [green]tunc ubuntu r 3000 127.0.0.1 3000[/green]  [dim]# Reverse tunnel from remote port 3000 "
+                "  [success]tunc ubuntu r 3000 127.0.0.1 3000[/success]  [dim]# Reverse tunnel from remote port 3000 "
                 "to local 127.0.0.1:3000[/dim]"
             )
         elif cmd == "tund":
-            display_info("[bold cyan]\nDelete a tunnel:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]tund[/cyan] [yellow]<tunnel_id>[/yellow]")
-            display_info("[magenta bold]Parameters:[/magenta bold]")
+            display_info("[header]\nDelete a tunnel:[/header]")
             display_info(
-                "  [cyan]tunnel_id[/cyan] : The ID of the tunnel to delete (shown in the list command)"
+                "[number]Usage:[/number] [highlight]tund[/highlight] [number]<tunnel_id>[/number]"
             )
-            display_info("\n[magenta bold]Example:[/magenta bold]")
-            display_info("  [green]tund 1[/green]")
+            display_info("[header]Parameters:[/header]")
+            display_info(
+                "  [highlight]tunnel_id[/highlight] : The ID of the tunnel to delete (shown in the list command)"
+            )
+            display_info("\n[header]Example:[/header]")
+            display_info("  [success]tund 1[/success]")
         elif cmd == "terminal":
-            display_info("[bold cyan]\nChange terminal method:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]terminal[/cyan] [yellow]<method>[/yellow]")
-            display_info("[magenta bold]Parameters:[/magenta bold]")
+            display_info("[header]\nChange terminal method:[/header]")
             display_info(
-                "  [cyan]method[/cyan] : Terminal method to set (auto, native, terminator)"
+                "[number]Usage:[/number] [highlight]terminal[/highlight] [number]<method>[/number]"
             )
-            display_info("\n[magenta bold]Terminal methods:[/magenta bold]")
+            display_info("[header]Parameters:[/header]")
             display_info(
-                "  [cyan]auto[/cyan]       : Try terminator first, fallback to native (default)"
+                "  [highlight]method[/highlight] : Terminal method to set (auto, native, terminator)"
             )
+            display_info("\n[header]Terminal methods:[/header]")
             display_info(
-                "  [cyan]native[/cyan]     : Use native terminal (subprocess, allows returning to LazySSH)"
-            )
-            display_info("  [cyan]terminator[/cyan] : Use terminator terminal emulator only")
-            display_info("\n[magenta bold]Examples:[/magenta bold]")
-            display_info(
-                "  [green]terminal native[/green]  [dim]# Set terminal method to native[/dim]"
+                "  [highlight]auto[/highlight]       : Try terminator first, fallback to native (default)"
             )
             display_info(
-                "  [green]terminal auto[/green]    [dim]# Set terminal method to auto[/dim]"
+                "  [highlight]native[/highlight]     : Use native terminal (subprocess, allows returning to LazySSH)"
+            )
+            display_info(
+                "  [highlight]terminator[/highlight] : Use terminator terminal emulator only"
+            )
+            display_info("\n[header]Examples:[/header]")
+            display_info(
+                "  [success]terminal native[/success]  [dim]# Set terminal method to native[/dim]"
+            )
+            display_info(
+                "  [success]terminal auto[/success]    [dim]# Set terminal method to auto[/dim]"
             )
             display_info("\n[dim]Note: To open a terminal session, use the 'open' command[/dim]")
         elif cmd == "open":
-            display_info("[bold cyan]\nOpen a terminal session:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]open[/cyan] [yellow]<ssh_id>[/yellow]")
-            display_info("[magenta bold]Parameters:[/magenta bold]")
+            display_info("[header]\nOpen a terminal session:[/header]")
             display_info(
-                "  [cyan]ssh_id[/cyan] : The identifier of the SSH connection to open a terminal for"
+                "[number]Usage:[/number] [highlight]open[/highlight] [number]<ssh_id>[/number]"
             )
-            display_info("\n[magenta bold]Examples:[/magenta bold]")
+            display_info("[header]Parameters:[/header]")
             display_info(
-                "  [green]open ubuntu[/green]  [dim]# Open terminal for connection 'ubuntu'[/dim]"
+                "  [highlight]ssh_id[/highlight] : The identifier of the SSH connection to open a terminal for"
+            )
+            display_info("\n[header]Examples:[/header]")
+            display_info(
+                "  [success]open ubuntu[/success]  [dim]# Open terminal for connection 'ubuntu'[/dim]"
             )
             display_info(
-                "  [green]open web[/green]     [dim]# Open terminal for connection 'web'[/dim]"
+                "  [success]open web[/success]     [dim]# Open terminal for connection 'web'[/dim]"
             )
             display_info("\n[dim]Note: Use 'close <ssh_id>' to close the connection[/dim]")
         elif cmd == "clear":
-            display_info("[bold cyan]\nClear the terminal screen:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]clear[/cyan]")
+            display_info("[header]\nClear the terminal screen:[/header]")
+            display_info("[number]Usage:[/number] [highlight]clear[/highlight]")
         elif cmd == "scp":
-            display_info("[bold cyan]\nEnter SCP mode for file transfers:[/bold cyan]")
+            display_info("[header]\nEnter SCP mode for file transfers:[/header]")
             display_info(
-                "[yellow]Usage:[/yellow] [cyan]scp[/cyan] [[yellow]<connection_name>[/yellow]]"
+                "[number]Usage:[/number] [highlight]scp[/highlight] [[number]<connection_name>[/number]]"
             )
-            display_info("[magenta bold]Parameters:[/magenta bold]")
+            display_info("[header]Parameters:[/header]")
             display_info(
-                "  [cyan]connection_name[/cyan] : The identifier of the SSH connection to use (optional)"
+                "  [highlight]connection_name[/highlight] : The identifier of the SSH connection to use (optional)"
             )
             display_info("\nSCP mode leverages your existing SSH connection's master socket")
             display_info(
                 "to perform secure file transfers without requiring additional authentication."
             )
-            display_info("\n[magenta bold]SCP mode commands:[/magenta bold]")
+            display_info("\n[header]SCP mode commands:[/header]")
             display_info(
-                "  [cyan]put[/cyan] [yellow]<local_file>[/yellow] [[yellow]<remote_file>[/yellow]]  - Upload file to remote server"
+                "  [highlight]put[/highlight] [number]<local_file>[/number] [[number]<remote_file>[/number]]  - Upload file to remote server"
             )
             display_info(
-                "  [cyan]get[/cyan] [yellow]<remote_file>[/yellow] [[yellow]<local_file>[/yellow]]  - Download file from remote server"
+                "  [highlight]get[/highlight] [number]<remote_file>[/number] [[number]<local_file>[/number]]  - Download file from remote server"
             )
             display_info(
-                "  [cyan]ls[/cyan] [[yellow]<remote_path>[/yellow]]                - List files in remote directory"
+                "  [highlight]ls[/highlight] [[number]<remote_path>[/number]]                - List files in remote directory"
             )
             display_info(
-                "  [cyan]cd[/cyan] [yellow]<remote_path>[/yellow]                  - Change remote working directory"
+                "  [highlight]cd[/highlight] [number]<remote_path>[/number]                  - Change remote working directory"
             )
             display_info(
-                "  [cyan]pwd[/cyan]                               - Show current remote directory"
+                "  [highlight]pwd[/highlight]                               - Show current remote directory"
             )
             display_info(
-                "  [cyan]mget[/cyan] [yellow]<pattern>[/yellow]                    - Download multiple files matching pattern"
+                "  [highlight]mget[/highlight] [number]<pattern>[/number]                    - Download multiple files matching pattern"
             )
             display_info(
-                "  [cyan]local[/cyan] [[yellow]<path>[/yellow]]                    - Set or show local download directory"
-            )
-            display_info("  [cyan]exit[/cyan]                              - Exit SCP mode")
-            display_info("\n[magenta bold]Examples:[/magenta bold]")
-            display_info(
-                "  [green]scp ubuntu[/green]                        [dim]# Enter SCP mode with the 'ubuntu' connection[/dim]"
+                "  [highlight]local[/highlight] [[number]<path>[/number]]                    - Set or show local download directory"
             )
             display_info(
-                "  [green]scp[/green]                               [dim]# Enter SCP mode and select a connection interactively[/dim]"
+                "  [highlight]exit[/highlight]                              - Exit SCP mode"
+            )
+            display_info("\n[header]Examples:[/header]")
+            display_info(
+                "  [success]scp ubuntu[/success]                        [dim]# Enter SCP mode with the 'ubuntu' connection[/dim]"
+            )
+            display_info(
+                "  [success]scp[/success]                               [dim]# Enter SCP mode and select a connection interactively[/dim]"
             )
         elif cmd == "debug":
-            display_info("[bold cyan]\nToggle debug logging to console:[/bold cyan]")
+            display_info("[header]\nToggle debug logging to console:[/header]")
             display_info(
-                "[yellow]Usage:[/yellow] [cyan]debug[/cyan] [[yellow]on|off|enable|disable|true|false|1|0[/yellow]]"
+                "[number]Usage:[/number] [highlight]debug[/highlight] [[number]on|off|enable|disable|true|false|1|0[/number]]"
             )
-            display_info("\n[magenta bold]Description:[/magenta bold]")
+            display_info("\n[header]Description:[/header]")
             display_info("  Toggles debug logging output to the console.")
             display_info("  Logs are always saved to /tmp/lazyssh/logs regardless of this setting.")
             display_info("  When enabled, all log messages will be displayed in the console.")
-            display_info("\n[magenta bold]Examples:[/magenta bold]")
+            display_info("\n[header]Examples:[/header]")
             display_info(
-                "  [green]debug[/green]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
+                "  [success]debug[/success]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
             )
-            display_info("  [green]debug on[/green]   [dim]# Explicitly enable debug mode[/dim]")
-            display_info("  [green]debug off[/green]  [dim]# Explicitly disable debug mode[/dim]")
+            display_info(
+                "  [success]debug on[/success]   [dim]# Explicitly enable debug mode[/dim]"
+            )
+            display_info(
+                "  [success]debug off[/success]  [dim]# Explicitly disable debug mode[/dim]"
+            )
         elif cmd == "wizard":
-            display_info("[bold cyan]\nGuided workflows for complex operations:[/bold cyan]")
-            display_info("[yellow]Usage:[/yellow] [cyan]wizard[/cyan] [yellow]<workflow>[/yellow]")
-            display_info("[magenta bold]Available workflows:[/magenta bold]")
-            display_info("  [cyan]lazyssh[/cyan] - Guided SSH connection creation")
-            display_info("  [cyan]tunnel[/cyan]  - Guided tunnel creation")
-            display_info("\n[magenta bold]Description:[/magenta bold]")
+            display_info("[header]\nGuided workflows for complex operations:[/header]")
+            display_info(
+                "[number]Usage:[/number] [highlight]wizard[/highlight] [number]<workflow>[/number]"
+            )
+            display_info("[header]Available workflows:[/header]")
+            display_info("  [highlight]lazyssh[/highlight] - Guided SSH connection creation")
+            display_info("  [highlight]tunnel[/highlight]  - Guided tunnel creation")
+            display_info("\n[header]Description:[/header]")
             display_info("  The wizard provides step-by-step guidance for complex operations")
             display_info("  that benefit from interactive configuration.")
-            display_info("\n[magenta bold]Examples:[/magenta bold]")
+            display_info("\n[header]Examples:[/header]")
             display_info(
-                "  [green]wizard lazyssh[/green]  [dim]# Start guided SSH connection creation[/dim]"
+                "  [success]wizard lazyssh[/success]  [dim]# Start guided SSH connection creation[/dim]"
             )
             display_info(
-                "  [green]wizard tunnel[/green]   [dim]# Start guided tunnel creation[/dim]"
+                "  [success]wizard tunnel[/success]   [dim]# Start guided tunnel creation[/dim]"
             )
         else:
             display_error(f"Unknown command: {cmd}")
@@ -1205,7 +1243,9 @@ class CommandMode:
             # Use Rich's Confirm.ask for a color-coded prompt (same as prompt mode)
             from rich.prompt import Confirm
 
-            if not Confirm.ask("You have active connections. Close them and exit?"):
+            if not Confirm.ask(
+                "[foreground]You have active connections. Close them and exit?[/foreground]"
+            ):
                 display_info("Exit cancelled")
                 return True
 
@@ -1358,10 +1398,10 @@ class CommandMode:
                 return False
 
         # Start SCP mode
-        display_info("Entering SCP mode...")
+        console.print("\n[header]Entering SCP mode...[/header]")
         scp_mode = SCPMode(self.ssh_manager, selected_connection)
         scp_mode.run()
-        display_info("Exited SCP mode")
+        console.print("\n[success]Exited SCP mode[/success]")
         return True
 
     def cmd_debug(self, args: list[str]) -> bool:
@@ -1410,8 +1450,8 @@ class CommandMode:
         if not args:
             display_error("Usage: wizard <workflow>")
             display_info("Available workflows:")
-            display_info("  [cyan]lazyssh[/cyan] - Guided SSH connection creation")
-            display_info("  [cyan]tunnel[/cyan]  - Guided tunnel creation")
+            display_info("  [highlight]lazyssh[/highlight] - Guided SSH connection creation")
+            display_info("  [highlight]tunnel[/highlight]  - Guided tunnel creation")
             display_info("Example: wizard lazyssh")
             return False
 
@@ -1428,31 +1468,33 @@ class CommandMode:
 
     def _wizard_lazyssh(self) -> bool:
         """Guided workflow for SSH connection creation"""
-        display_info("[bold cyan]\n🔮 SSH Connection Wizard[/bold cyan]")
+        display_info("[header]\n🔮 SSH Connection Wizard[/header]")
         display_info("This wizard will guide you through creating a new SSH connection.\n")
 
         try:
             from rich.prompt import Confirm, Prompt
 
             # Get basic connection details
-            host = Prompt.ask("[cyan]Enter hostname or IP address[/cyan]")
+            host = Prompt.ask("[foreground]Enter hostname or IP address[/foreground]")
             if not host:
                 display_error("Hostname is required")
                 return False
 
-            port = Prompt.ask("[cyan]Enter SSH port[/cyan]", default="22")
+            port = Prompt.ask("[foreground]Enter SSH port[/foreground]", default="22")
             try:
                 port_int = int(port)
             except ValueError:
                 display_error("Port must be a number")
                 return False
 
-            username = Prompt.ask("[cyan]Enter username[/cyan]")
+            username = Prompt.ask("[foreground]Enter username[/foreground]")
             if not username:
                 display_error("Username is required")
                 return False
 
-            socket_name = Prompt.ask("[cyan]Enter connection name (used as identifier)[/cyan]")
+            socket_name = Prompt.ask(
+                "[foreground]Enter connection name (used as identifier)[/foreground]"
+            )
             if not socket_name:
                 display_error("Connection name is required")
                 return False
@@ -1468,10 +1510,12 @@ class CommandMode:
             socket_path = f"/tmp/{socket_name}"
             if socket_path in self.ssh_manager.connections:
                 display_warning(f"Connection name '{socket_name}' is already in use.")
-                if not Confirm.ask("Do you want to use a different name?", default=True):
+                if not Confirm.ask(
+                    "[foreground]Do you want to use a different name?[/foreground]", default=True
+                ):
                     display_info("Proceeding with the existing connection name.")
                 else:
-                    new_socket = Prompt.ask("Enter a new connection name")
+                    new_socket = Prompt.ask("[foreground]Enter a new connection name[/foreground]")
                     if not new_socket or not validate_config_name(new_socket):
                         display_error(
                             "Invalid connection name. Use alphanumeric characters, dashes, and underscores only"
@@ -1481,32 +1525,40 @@ class CommandMode:
                     socket_path = f"/tmp/{socket_name}"
 
             # Ask about optional settings
-            display_info("\n[bold yellow]Optional Settings:[/bold yellow]")
+            display_info("\n[warning]Optional Settings:[/warning]")
 
             # SSH Key
-            use_ssh_key = Confirm.ask("Use specific SSH key?", default=False)
+            use_ssh_key = Confirm.ask(
+                "[foreground]Use specific SSH key?[/foreground]", default=False
+            )
             identity_file = None
             if use_ssh_key:
-                identity_file = Prompt.ask("Enter path to SSH key (e.g. ~/.ssh/id_rsa)")
+                identity_file = Prompt.ask(
+                    "[foreground]Enter path to SSH key (e.g. ~/.ssh/id_rsa)[/foreground]"
+                )
                 if not identity_file:
                     display_warning("No SSH key specified, using default SSH key")
 
             # Shell
-            use_custom_shell = Confirm.ask("Use custom shell?", default=False)
+            use_custom_shell = Confirm.ask(
+                "[foreground]Use custom shell?[/foreground]", default=False
+            )
             shell = None
             if use_custom_shell:
-                shell = Prompt.ask("Enter shell to use", default="bash")
+                shell = Prompt.ask("[foreground]Enter shell to use[/foreground]", default="bash")
                 if not shell:
                     display_warning("No shell specified, using default shell")
 
             # Terminal preference
-            no_term = Confirm.ask("Disable terminal?", default=False)
+            no_term = Confirm.ask("[foreground]Disable terminal?[/foreground]", default=False)
 
             # Dynamic proxy
-            use_proxy = Confirm.ask("Create dynamic SOCKS proxy?", default=False)
+            use_proxy = Confirm.ask(
+                "[foreground]Create dynamic SOCKS proxy?[/foreground]", default=False
+            )
             dynamic_port = None
             if use_proxy:
-                proxy_port = Prompt.ask("Enter proxy port", default="9050")
+                proxy_port = Prompt.ask("[foreground]Enter proxy port[/foreground]", default="9050")
                 try:
                     dynamic_port = int(proxy_port)
                 except ValueError:
@@ -1514,7 +1566,7 @@ class CommandMode:
                     return False
 
             # Create the connection
-            display_info(f"\n[bold green]Creating connection '{socket_name}'...[/bold green]")
+            display_info(f"\n[success]Creating connection '{socket_name}'...[/success]")
 
             conn = SSHConnection(
                 host=host,
@@ -1533,8 +1585,12 @@ class CommandMode:
                     display_success(f"Dynamic proxy created on port {dynamic_port}")
 
                 # Ask about saving configuration
-                if Confirm.ask("Save this connection configuration?", default=True):
-                    config_name = Prompt.ask("Enter configuration name", default=socket_name)
+                if Confirm.ask(
+                    "[foreground]Save this connection configuration?[/foreground]", default=True
+                ):
+                    config_name = Prompt.ask(
+                        "[foreground]Enter configuration name[/foreground]", default=socket_name
+                    )
 
                     if validate_config_name(config_name):
                         # Build config parameters
@@ -1558,7 +1614,7 @@ class CommandMode:
                         # Check if config already exists
                         if config_exists(config_name):
                             if not Confirm.ask(
-                                f"Configuration '{config_name}' already exists. Overwrite?"
+                                f"[foreground]Configuration '{config_name}' already exists. Overwrite?[/foreground]"
                             ):
                                 display_info("Configuration not saved")
                                 return True
@@ -1589,7 +1645,7 @@ class CommandMode:
 
     def _wizard_tunnel(self) -> bool:
         """Guided workflow for tunnel creation"""
-        display_info("[bold cyan]\n🔮 Tunnel Creation Wizard[/bold cyan]")
+        display_info("[header]\n🔮 Tunnel Creation Wizard[/header]")
         display_info("This wizard will guide you through creating a new tunnel.\n")
 
         if not self.ssh_manager.connections:
@@ -1601,13 +1657,17 @@ class CommandMode:
             from rich.prompt import Confirm, IntPrompt, Prompt
 
             # Select connection
-            display_info("[bold yellow]Select SSH Connection:[/bold yellow]")
+            display_info("[warning]Select SSH Connection:[/warning]")
             conn_list = list(self.ssh_manager.connections.items())
             for i, (socket_path, conn) in enumerate(conn_list, 1):
                 conn_name = Path(socket_path).name
-                display_info(f"  {i}. {conn_name} ({conn.username}@{conn.host}:{conn.port})")
+                console.print(
+                    f"  [number]{i}.[/number] [success]{conn_name}[/success] [dim]([/dim][foreground]{conn.username}[/foreground][operator]@[/operator][header]{conn.host}[/header][dim]:[/dim][number]{conn.port}[/number][dim])[/dim]"
+                )
 
-            choice = IntPrompt.ask("Enter connection number", default=1) - 1
+            choice = (
+                IntPrompt.ask("[foreground]Enter connection number[/foreground]", default=1) - 1
+            )
             if not (0 <= choice < len(conn_list)):
                 display_error("Invalid connection number")
                 return False
@@ -1616,11 +1676,15 @@ class CommandMode:
             conn_name = Path(socket_path).name
 
             # Select tunnel type
-            display_info(f"\n[bold yellow]Tunnel Type for '{conn_name}':[/bold yellow]")
-            display_info("1. Forward tunnel (local port -> remote host:port)")
-            display_info("2. Reverse tunnel (remote port -> local host:port)")
+            display_info(
+                f"\n[warning]Tunnel Type for '[highlight]{conn_name}[/highlight]':[/warning]"
+            )
+            display_info("[number]1.[/number] Forward tunnel (local port -> remote host:port)")
+            display_info("[number]2.[/number] Reverse tunnel (remote port -> local host:port)")
 
-            tunnel_choice = IntPrompt.ask("Choose tunnel type (1-2)", default=1)
+            tunnel_choice = IntPrompt.ask(
+                "[foreground]Choose tunnel type (1-2)[/foreground]", default=1
+            )
             if tunnel_choice not in [1, 2]:
                 display_error("Invalid choice")
                 return False
@@ -1629,18 +1693,24 @@ class CommandMode:
 
             # Get tunnel parameters
             if is_reverse:
-                display_info("\n[bold yellow]Reverse Tunnel Parameters:[/bold yellow]")
+                display_info("\n[warning]Reverse Tunnel Parameters:[/warning]")
                 display_info("This will forward a remote port to your local machine")
-                local_port = IntPrompt.ask("Enter local port to bind to")
-                remote_host = Prompt.ask("Enter remote host to connect to", default="127.0.0.1")
-                remote_port = IntPrompt.ask("Enter remote port to connect to")
+                local_port = IntPrompt.ask("[foreground]Enter local port to bind to[/foreground]")
+                remote_host = Prompt.ask(
+                    "[foreground]Enter remote host to connect to[/foreground]", default="127.0.0.1"
+                )
+                remote_port = IntPrompt.ask(
+                    "[foreground]Enter remote port to connect to[/foreground]"
+                )
                 tunnel_type_str = "reverse"
             else:
-                display_info("\n[bold yellow]Forward Tunnel Parameters:[/bold yellow]")
+                display_info("\n[warning]Forward Tunnel Parameters:[/warning]")
                 display_info("This will forward a local port to a remote host")
-                local_port = IntPrompt.ask("Enter local port to bind to")
-                remote_host = Prompt.ask("Enter remote host to connect to")
-                remote_port = IntPrompt.ask("Enter remote port to connect to")
+                local_port = IntPrompt.ask("[foreground]Enter local port to bind to[/foreground]")
+                remote_host = Prompt.ask("[foreground]Enter remote host to connect to[/foreground]")
+                remote_port = IntPrompt.ask(
+                    "[foreground]Enter remote port to connect to[/foreground]"
+                )
                 tunnel_type_str = "forward"
 
             # Confirm tunnel creation
@@ -1649,17 +1719,17 @@ class CommandMode:
             else:
                 tunnel_desc = f"Local port {local_port} -> Remote {remote_host}:{remote_port}"
 
-            display_info("\n[bold green]Tunnel Summary:[/bold green]")
+            display_info("\n[success]Tunnel Summary:[/success]")
             display_info(f"Connection: {conn_name}")
             display_info(f"Type: {tunnel_type_str}")
             display_info(f"Mapping: {tunnel_desc}")
 
-            if not Confirm.ask("Create this tunnel?", default=True):
+            if not Confirm.ask("[foreground]Create this tunnel?[/foreground]", default=True):
                 display_info("Tunnel creation cancelled")
                 return False
 
             # Create the tunnel
-            display_info(f"\n[bold green]Creating {tunnel_type_str} tunnel...[/bold green]")
+            display_info(f"\n[success]Creating {tunnel_type_str} tunnel...[/success]")
 
             if self.ssh_manager.create_tunnel(
                 socket_path, local_port, remote_host, remote_port, is_reverse

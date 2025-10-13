@@ -115,4 +115,3 @@
 - [x] 14.5 Update user-guide.md with config workflow examples ✓ Added workflows and examples
 - [x] 14.6 Document `--config` CLI flag ✓ Documented in README and user-guide
 - [x] 14.7 Add security considerations for config files ✓ Added security notes in both README and user-guide
-
