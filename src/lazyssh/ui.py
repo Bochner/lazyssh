@@ -717,3 +717,117 @@ def profile_ui_performance() -> None:
         console.print("[info]Consider using caching or reducing update frequency[/info]")
     else:
         console.print("\n[success]All components performing well![/success]")
+
+
+def display_plugins(plugins: dict[str, Any]) -> None:
+    """Display available plugins in a formatted table
+
+    Args:
+        plugins: Dictionary of plugin name to PluginMetadata objects
+    """
+    if not plugins:
+        display_info("No plugins found")
+        return
+
+    table = create_standard_table()
+    table.add_column("Name", style="info", no_wrap=True)
+    table.add_column("Type", style="accent", justify="center")
+    table.add_column("Description", style="table.row")
+    table.add_column("Status", style="success", justify="center")
+
+    for plugin_name, plugin in sorted(plugins.items()):
+        # Determine plugin type display
+        plugin_type = "🐍 Python" if plugin.plugin_type == "python" else "🐚 Shell"
+
+        # Determine status
+        if plugin.is_valid:
+            status = "✓ Valid"
+            status_style = "success"
+        else:
+            status = "✗ Invalid"
+            status_style = "error"
+
+        # Add row to table
+        table.add_row(
+            plugin_name,
+            plugin_type,
+            plugin.description[:60] + "..." if len(plugin.description) > 60 else plugin.description,
+            f"[{status_style}]{status}[/{status_style}]",
+        )
+
+    panel = Panel(
+        table,
+        title="[panel.title]Available Plugins[/panel.title]",
+        border_style="border",
+        box=ROUNDED,
+        padding=(1, 2),
+    )
+
+    console.print(panel)
+
+
+def display_plugin_info(plugin: Any) -> None:
+    """Display detailed information about a plugin
+
+    Args:
+        plugin: PluginMetadata object
+    """
+    # Create info table
+    info_table = Table.grid(padding=(0, 2))
+    info_table.add_column(justify="right")  # No style on column, use markup in rows
+    info_table.add_column()
+
+    info_table.add_row("[bold info]Name:[/bold info]", plugin.name)
+    info_table.add_row(
+        "[bold info]Type:[/bold info]", "Python" if plugin.plugin_type == "python" else "Shell"
+    )
+    info_table.add_row("[bold info]Version:[/bold info]", plugin.version)
+    info_table.add_row("[bold info]Description:[/bold info]", plugin.description)
+    info_table.add_row("[bold info]Requirements:[/bold info]", plugin.requirements)
+    info_table.add_row("[bold info]File Path:[/bold info]", str(plugin.file_path))
+    info_table.add_row(
+        "[bold info]Status:[/bold info]",
+        "[success]Valid ✓[/success]" if plugin.is_valid else "[error]Invalid ✗[/error]",
+    )
+
+    if not plugin.is_valid and plugin.validation_errors:
+        info_table.add_row("")
+        info_table.add_row("[error]Validation Errors:[/error]", "")
+        for error in plugin.validation_errors:
+            info_table.add_row("", f"[error]• {error}[/error]")
+
+    panel = Panel(
+        info_table,
+        title=f"[panel.title]Plugin: {plugin.name}[/panel.title]",
+        border_style="border",
+        box=ROUNDED,
+        padding=(1, 2),
+    )
+
+    console.print(panel)
+
+
+def display_plugin_output(output: str, execution_time: float, success: bool = True) -> None:
+    """Display plugin execution output with formatting
+
+    Args:
+        output: Plugin output text
+        execution_time: Time taken to execute plugin
+        success: Whether plugin executed successfully
+    """
+    # Display output with a simple header and footer rule (no outer border)
+    if output.strip():
+        normalized = output.replace("\r\n", "\n").replace("\r", "\n").strip()
+        text = Text.from_ansi(normalized)
+        text.justify = "left"
+        text.no_wrap = False
+        text.overflow = "fold"
+
+        rule_style = "success" if success else "error"
+        console.rule("[panel.title]Plugin Output[/panel.title]", style=rule_style)
+        console.print(text)
+        console.rule(style=rule_style)
+
+    # Display execution time
+    time_style = "success" if success else "error"
+    console.print(f"\n[{time_style}]Execution time: {execution_time:.2f}s[/{time_style}]")

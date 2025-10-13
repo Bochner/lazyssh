@@ -1,0 +1,15 @@
+# Ignore user-added plugins (keep built-in plugins)
+# User plugins start with 'user_' prefix
+user_*.py
+user_*.sh
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore temporary files
+*.tmp
+*.swp
+*~

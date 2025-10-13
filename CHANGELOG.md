@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.5.0] - 2025-10-13
+
+### Added
+- **Plugin System**: Extensible plugin architecture for custom automation and workflows
+  - Plugin discovery and validation system
+  - Support for Python (.py) and shell (.sh) script plugins
+  - Plugin metadata extraction from structured comments
+  - Environment variable-based plugin API for connection context
+  - `plugin` command with `list`, `run`, and `info` subcommands
+  - Tab completion for plugin names and socket names
+  - Plugin execution with real-time output streaming
+  - Error handling and execution time tracking
+  - Built-in plugin development template
+- **Enumerate Plugin**: Comprehensive system enumeration and reconnaissance
+  - OS and kernel information gathering
+  - User accounts and group enumeration
+  - Network configuration discovery (interfaces, routes, ports)
+  - Process and service enumeration
+  - Installed package detection (apt, yum, pacman)
+  - Filesystem and mount information
+  - Environment variable extraction
+  - Scheduled task discovery (cron, systemd timers)
+  - Security configuration checks (firewall, SELinux, AppArmor)
+  - System logs summary
+  - Hardware information
+  - JSON and human-readable output formats
+- **Plugin Development Guide**: Comprehensive documentation for plugin creators
+  - Plugin structure and metadata format
+  - Environment variable reference
+  - Remote command execution patterns
+  - Best practices and security considerations
+  - Testing and debugging guide
+  - Multiple example plugins (Python and shell)
+- **UI Components for Plugins**: Rich-formatted plugin display functions
+  - Plugin listing table with status indicators
+  - Detailed plugin information panels
+  - Plugin execution output formatting
+  - Execution time display
+
 ## [1.4.2] - 2025-10-12
 
 ### Added
