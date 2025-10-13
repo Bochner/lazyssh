@@ -197,7 +197,9 @@ class SCPModeCompleter(Completer):
                             self.scp_mode._update_completion_time()
 
                             # Get files in the directory
-                            result = self.scp_mode._execute_ssh_command(f"ls -a {base_dir}")
+                            result = self.scp_mode._execute_ssh_command(
+                                f"ls -a {shlex.quote(base_dir)}"
+                            )
                             if result and result.returncode == 0:
                                 file_list = result.stdout.strip().split("\n")
                                 file_list = [f for f in file_list if f and f not in [".", ".."]]
@@ -875,7 +877,7 @@ class SCPMode:
         # Handle paths with ~ for home directory
         if path.startswith("~"):
             # Execute command to expand ~ on the remote server
-            result = self._execute_ssh_command(f"echo {path}")
+            result = self._execute_ssh_command(f"echo {shlex.quote(path)}")
             if result and result.returncode == 0:
                 expanded_path = result.stdout.strip()
                 return expanded_path if expanded_path else path
@@ -909,7 +911,7 @@ class SCPMode:
         try:
             if is_remote and self.conn:
                 # Get size of remote file
-                result = self._execute_ssh_command(f"stat -c %s {path}")
+                result = self._execute_ssh_command(f"stat -c %s {shlex.quote(path)}")
                 if result and result.returncode == 0:
                     return int(result.stdout.strip())
                 return 0
@@ -1067,7 +1069,7 @@ class SCPMode:
         # Check if the remote file exists and get its size
         try:
             # Get file size before download to log it properly
-            size_cmd = f"stat -c %s '{remote_path}'"
+            size_cmd = f"stat -c %s {shlex.quote(remote_path)}"
             size_result = self._execute_ssh_command(size_cmd)
             file_size = 0
             if size_result and size_result.returncode == 0:
@@ -1248,7 +1250,7 @@ class SCPMode:
 
         try:
             # Use ls -la command via SSH for detailed listing
-            result = self._execute_ssh_command(f"ls -la {path}")
+            result = self._execute_ssh_command(f"ls -la {shlex.quote(path)}")
 
             if not result or result.returncode != 0:
                 display_error(
@@ -1365,7 +1367,7 @@ class SCPMode:
 
         try:
             # Check if directory exists and is accessible
-            result = self._execute_ssh_command(f"cd {target_dir} && pwd")
+            result = self._execute_ssh_command(f"cd {shlex.quote(target_dir)} && pwd")
 
             if not result or result.returncode != 0:
                 display_error(
@@ -1437,7 +1439,10 @@ class SCPMode:
             # Batch file size queries for better performance
             if matched_files:
                 # Create a single command to get sizes for all files
-                file_paths = [f"{self.current_remote_dir}/{filename}" for filename in matched_files]
+                file_paths = [
+                    shlex.quote(f"{self.current_remote_dir}/{filename}")
+                    for filename in matched_files
+                ]
                 size_command = f"stat -c '%n %s' {' '.join(file_paths)}"
 
                 size_result = self._execute_ssh_command(size_command)
@@ -1467,9 +1472,8 @@ class SCPMode:
                 else:
                     # Fallback to individual queries if batch fails
                     for filename in matched_files:
-                        size_result = self._execute_ssh_command(
-                            f"stat -c %s {self.current_remote_dir}/{filename}"
-                        )
+                        quoted_path = shlex.quote(f"{self.current_remote_dir}/{filename}")
+                        size_result = self._execute_ssh_command(f"stat -c %s {quoted_path}")
                         if size_result and size_result.returncode == 0:
                             try:
                                 size = int(size_result.stdout.strip())

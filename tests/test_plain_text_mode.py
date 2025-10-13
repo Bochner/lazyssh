@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from rich.style import Style
+
 # Add src to path to make imports work for tests
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path.absolute()))
@@ -98,7 +100,9 @@ class TestPlainTextMode(unittest.TestCase):
             if key in theme.styles:
                 value = theme.styles[key]
                 self.assertEqual(
-                    str(value), "default", f"Style '{key}' should be 'default' in plain text mode"
+                    value,
+                    Style.parse("default"),
+                    f"Style '{key}' should be default Style in plain text mode",
                 )
 
     def test_plain_text_theme_precedence(self) -> None:
@@ -149,9 +153,9 @@ class TestPlainTextMode(unittest.TestCase):
             if key in theme.styles:
                 value = theme.styles[key]
                 self.assertEqual(
-                    str(value),
-                    "default",
-                    f"Style '{key}' should be 'default' when plain text is enabled",
+                    value,
+                    Style.parse("default"),
+                    f"Style '{key}' should be default Style when plain text is enabled",
                 )
 
     def test_console_creation_plain_text_mode(self) -> None:
@@ -288,9 +292,9 @@ class TestPlainTextMode(unittest.TestCase):
             if key in theme.styles:
                 value = theme.styles[key]
                 self.assertEqual(
-                    str(value),
-                    "default",
-                    f"Style '{key}' should be 'default' when plain text is enabled",
+                    value,
+                    Style.parse("default"),
+                    f"Style '{key}' should be default Style when plain text is enabled",
                 )
 
     def test_plain_text_mode_environment_variable_changes(self) -> None:

@@ -278,7 +278,7 @@ def get_current_ui_config() -> dict[str, Any]:
 
 def update_console_config() -> None:
     """Update the global console instance with current configuration."""
-    global console
+    global console, ui_config
     ui_config = get_ui_config()
     console = create_console_with_config(ui_config)
 
