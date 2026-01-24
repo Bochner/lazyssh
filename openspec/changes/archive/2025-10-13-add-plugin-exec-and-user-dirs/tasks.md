@@ -15,4 +15,3 @@
 ## 3. Release
 - [x] 3.1 Bump version and update `CHANGELOG.md`
 - [x] 3.2 Publish and verify with `pipx install` smoke test
-

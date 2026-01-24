@@ -137,6 +137,6 @@ Follow the tasks.md checklist sequentially:
 
 ---
 
-**Proposal ID**: add-plugin-system  
-**Created**: 2025-10-13  
+**Proposal ID**: add-plugin-system
+**Created**: 2025-10-13
 **Status**: Awaiting Approval

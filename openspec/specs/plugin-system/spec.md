@@ -203,4 +203,3 @@ Python plugins SHALL remain runnable even when installation strips executable pe
 - **WHEN** LazySSH discovers built-in Python plugins
 - **THEN** file access failures during validation SHALL not prevent plugin discovery or execution
 - **AND** plugins SHALL execute successfully via interpreter even without executable permissions or readable shebangs.
-

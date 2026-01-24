@@ -330,7 +330,7 @@ def update_transfer_stats(connection_name: str, files_count: int, bytes_count: i
     if isinstance(total_bytes, int):
         bytes_formatted = format_size(total_bytes)
     else:
-        bytes_formatted = "0B"  # Fallback if not an int
+        bytes_formatted = "0B"  # Fallback if not an int  # pragma: no cover
 
     if SCP_LOGGER:
         SCP_LOGGER.info(

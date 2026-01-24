@@ -140,3 +140,6 @@ venv/
 *.exe
 *.out
 *.app
+
+# Test artifacts
+artifacts/

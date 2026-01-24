@@ -1,4 +1,4 @@
-.PHONY: help install run fmt fix lint test check build clean version release publish
+.PHONY: help install run fmt fix lint test check build clean version release publish pre-commit pre-commit-install
 
 SHELL := /bin/bash
 
@@ -23,6 +23,10 @@ help:
 	@echo "  make lint       Run linter (ruff check)"
 	@echo "  make test       Run tests with coverage"
 	@echo "  make check      Run all quality checks"
+	@echo ""
+	@echo -e "$(GREEN)Git Hooks:$(NC)"
+	@echo "  make pre-commit-install   Install pre-commit hooks"
+	@echo "  make pre-commit           Run pre-commit on all files"
 	@echo ""
 	@echo -e "$(GREEN)Release:$(NC)"
 	@echo "  make build      Build package"
@@ -80,3 +84,11 @@ release:
 publish: check build
 	@echo -e "$(RED)Publishing to PyPI$(NC)"
 	@read -p "Continue? [y/N] " -n1 r; echo; [[ $$r == [Yy] ]] && hatch publish || echo "Cancelled"
+
+pre-commit-install:
+	@command -v pre-commit >/dev/null 2>&1 || { echo -e "$(RED)Install pre-commit: mise install$(NC)"; exit 1; }
+	@pre-commit install
+	@echo -e "$(GREEN)Pre-commit hooks installed$(NC)"
+
+pre-commit:
+	@pre-commit run --all-files

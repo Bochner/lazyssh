@@ -4,6 +4,7 @@
 [tools]
 python = "3.11"
 ruff = "latest"
+pre-commit = "latest"
 
 [env]
 # Ensure consistent Python behavior

@@ -33,15 +33,33 @@ mise trust                 # Trust this project's .mise.toml
 
 Tools are auto-activated when entering the directory - no manual version switching needed.
 
+## Pre-commit Hooks
+
+This project uses **pre-commit** to automatically run quality checks before each commit.
+
+```bash
+# One-time setup (after mise is installed)
+mise install              # Install pre-commit via mise
+make pre-commit-install   # Install git hooks
+```
+
+Hooks run automatically on `git commit`. To run manually:
+
+```bash
+make pre-commit           # Run all hooks on all files
+```
+
+Hooks include: trailing whitespace, ruff (lint + format), and mypy.
+
 ## Quality Gate
 
-**All quality checks must pass before committing.** Run:
+**All quality checks must pass before committing.** Pre-commit hooks enforce this automatically. To run manually:
 
 ```bash
 make check                # Linting (ruff) + type checking (mypy)
 ```
 
-This is the minimum bar for all changes. For full verification including tests and build:
+For full verification including tests and build:
 
 ```bash
 make verify               # check + test + build

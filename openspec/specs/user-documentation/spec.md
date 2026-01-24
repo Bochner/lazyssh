@@ -108,4 +108,3 @@ CLAUDE.md SHALL serve as a concise quick reference for AI coding assistants, doc
 - **THEN** CLAUDE.md provides summaries and quick commands
 - **AND** detailed conventions, patterns, and rationale remain in project.md
 - **AND** CLAUDE.md links to project.md for comprehensive information
-

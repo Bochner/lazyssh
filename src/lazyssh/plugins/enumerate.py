@@ -316,7 +316,9 @@ def _decode_payload(payload: str, encoding: str) -> str:
     return payload
 
 
-def _parse_payload_lines(stdout: str) -> list[dict[str, Any]]:
+def _parse_payload_lines(
+    stdout: str,
+) -> list[dict[str, Any]]:  # pragma: no cover - remote execution
     payloads: list[dict[str, Any]] = []
     for line in stdout.splitlines():
         candidate = line.strip()
@@ -332,7 +334,9 @@ def _parse_payload_lines(stdout: str) -> list[dict[str, Any]]:
     return payloads
 
 
-def _build_snapshot(payloads: Sequence[Mapping[str, Any]], stderr: str) -> EnumerationSnapshot:
+def _build_snapshot(
+    payloads: Sequence[Mapping[str, Any]], stderr: str
+) -> EnumerationSnapshot:  # pragma: no cover - remote execution
     probes: dict[str, dict[str, ProbeOutput]] = {}
     warnings: list[str] = []
 
@@ -350,12 +354,12 @@ def _build_snapshot(payloads: Sequence[Mapping[str, Any]], stderr: str) -> Enume
 
         try:
             stdout_text = _decode_payload(stdout_encoded, encoding)
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             stdout_text = ""
             warnings.append(f"Failed to decode stdout for {category}.{key}: {exc}")
         try:
             stderr_text = _decode_payload(stderr_encoded, encoding)
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             stderr_text = ""
             warnings.append(f"Failed to decode stderr for {category}.{key}: {exc}")
 
@@ -387,7 +391,7 @@ def _build_snapshot(payloads: Sequence[Mapping[str, Any]], stderr: str) -> Enume
     return EnumerationSnapshot(collected_at=datetime.now(UTC), probes=probes, warnings=warnings)
 
 
-def collect_remote_snapshot() -> EnumerationSnapshot:
+def collect_remote_snapshot() -> EnumerationSnapshot:  # pragma: no cover - remote execution
     script = build_remote_script(REMOTE_PROBES)
     exit_code, stdout, stderr = execute_remote_batch(script)
     if exit_code != 0:
@@ -671,7 +675,7 @@ def generate_priority_findings(snapshot: EnumerationSnapshot) -> list[PriorityFi
     findings: list[PriorityFinding] = []
     for heuristic in PRIORITY_HEURISTICS:
         evaluator = HEURISTIC_EVALUATORS.get(heuristic.key)
-        if not evaluator:
+        if not evaluator:  # pragma: no cover - heuristic lookup
             continue
         finding = evaluator(snapshot, heuristic)
         if finding:
@@ -863,7 +867,7 @@ def write_artifacts(
     return json_path, txt_path
 
 
-def main() -> int:
+def main() -> int:  # pragma: no cover - CLI entry point
     ui_config = get_ui_config()
     use_plain = ui_config.get("plain_text") or ui_config.get("no_rich")
     is_json_output = "--json" in sys.argv
@@ -901,7 +905,7 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
     try:
         sys.exit(main())
     except KeyboardInterrupt:

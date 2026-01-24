@@ -11,6 +11,7 @@ Usage:
 Alternatively, use Hatch directly:
     hatch version 1.2.3
 """
+
 import argparse
 import re
 import subprocess
@@ -70,7 +71,7 @@ def main() -> None:
         print(f"Successfully updated version to {args.version}")
         print()
         print("Next steps:")
-        print(f"1. Review changes: git diff")
+        print("1. Review changes: git diff")
         print(f"2. Commit: git commit -am 'Bump version to {args.version}'")
         print(f"3. Tag: git tag -a v{args.version} -m 'Release v{args.version}'")
         print("4. Push: git push && git push --tags")
