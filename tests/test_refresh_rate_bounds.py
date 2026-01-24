@@ -2,6 +2,7 @@
 """
 Tests for refresh rate bounds checking functionality.
 """
+
 import os
 import sys
 import unittest

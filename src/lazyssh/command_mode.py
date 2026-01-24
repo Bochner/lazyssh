@@ -57,7 +57,7 @@ class LazySSHCompleter(Completer):
 
         if not words or (len(words) == 1 and not text.endswith(" ")):
             # Show base commands if at start
-            for cmd in self.command_mode.commands.keys():
+            for cmd in self.command_mode.commands:
                 if not word_before_cursor or cmd.startswith(word_before_cursor):
                     yield Completion(cmd, start_position=-len(word_before_cursor))
             return
@@ -177,7 +177,7 @@ class LazySSHCompleter(Completer):
             # If we're at the end of a word, we're expecting the next argument
             if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
                 # Show available tunnel IDs
-                for socket_path, conn in self.command_mode.ssh_manager.connections.items():
+                for _socket_path, conn in self.command_mode.ssh_manager.connections.items():
                     for tunnel in conn.tunnels:
                         if not word_before_cursor or tunnel.id.startswith(word_before_cursor):
                             yield Completion(tunnel.id, start_position=-len(word_before_cursor))
@@ -229,7 +229,7 @@ class LazySSHCompleter(Completer):
             # Or if we've just typed the command and a space, show completions
             if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
                 # Show available commands for help
-                for cmd in self.command_mode.commands.keys():
+                for cmd in self.command_mode.commands:
                     if not word_before_cursor or cmd.startswith(word_before_cursor):
                         yield Completion(cmd, start_position=-len(word_before_cursor))
 
@@ -313,7 +313,7 @@ class LazySSHCompleter(Completer):
                     if subcommand in ["run", "info"]:
                         # Suggest plugin names
                         plugins = self.command_mode.plugin_manager.discover_plugins()
-                        for plugin_name in plugins.keys():
+                        for plugin_name in plugins:
                             if not word_before_cursor or plugin_name.startswith(word_before_cursor):
                                 yield Completion(
                                     plugin_name, start_position=-len(word_before_cursor)
@@ -387,7 +387,7 @@ class CommandMode:
     def _get_connection_name_completions(self) -> list[str]:
         """Get list of established connection socket names for completion"""
         connection_names = []
-        for socket_path in self.ssh_manager.connections.keys():
+        for socket_path in self.ssh_manager.connections:
             # Extract the socket name from the full path
             connection_name = Path(socket_path).name
             connection_names.append(connection_name)
@@ -478,7 +478,7 @@ class CommandMode:
                     # Handle the result
                     if result:
                         # Success
-                        if not cmd == "list":  # Don't show status after list command
+                        if cmd != "list":  # Don't show status after list command
                             self.show_status()
                     # else handled by the command method
 
@@ -735,7 +735,7 @@ class CommandMode:
             configs = load_configs()
             if configs:
                 display_info("Available configurations:")
-                for name in configs.keys():
+                for name in configs:
                     display_info(f"  {name}")
             else:
                 display_info("No saved configurations available")
@@ -749,7 +749,7 @@ class CommandMode:
             configs = load_configs()
             if configs:
                 display_info("Available configurations:")
-                for name in configs.keys():
+                for name in configs:
                     display_info(f"  {name}")
             return False
 
@@ -931,7 +931,7 @@ class CommandMode:
             configs = load_configs()
             if configs:
                 display_info("Available configurations:")
-                for name in configs.keys():
+                for name in configs:
                     display_info(f"  {name}")
             return False
 
@@ -1943,7 +1943,7 @@ class CommandMode:
             # Show available connections
             if self.ssh_manager.connections:
                 display_info("Available connections:")
-                for socket_path in self.ssh_manager.connections.keys():
+                for socket_path in self.ssh_manager.connections:
                     name = Path(socket_path).name
                     console.print(f"  • {name}")
             else:

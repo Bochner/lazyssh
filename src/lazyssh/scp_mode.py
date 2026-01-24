@@ -30,10 +30,10 @@ from rich.text import Text
 from rich.tree import Tree
 
 from .console_instance import console, display_error, display_info, display_success
-from .logging_module import get_connection_logger  # noqa: F401
 from .logging_module import (
     SCP_LOGGER,
     format_size,
+    get_connection_logger,  # noqa: F401
     log_file_transfer,
     log_scp_command,
     set_debug_mode,
@@ -141,7 +141,7 @@ class SCPModeCompleter(Completer):
 
         if not words or (len(words) == 1 and not text.endswith(" ")):
             # Show base commands if at start
-            for cmd in self.scp_mode.commands.keys():
+            for cmd in self.scp_mode.commands:
                 if not word_before_cursor or cmd.startswith(word_before_cursor):
                     yield Completion(cmd, start_position=-len(word_before_cursor))
             return
@@ -726,7 +726,7 @@ class SCPMode:
             normalized_path = self._normalize_cache_path(path)
             # Invalidate all cache entries for this path
             keys_to_delete = [
-                k for k in self.directory_cache.keys() if k.startswith(f"{normalized_path}:")
+                k for k in self.directory_cache if k.startswith(f"{normalized_path}:")
             ]
             for key in keys_to_delete:
                 del self.directory_cache[key]
@@ -799,9 +799,8 @@ class SCPMode:
             self.socket_path = f"/tmp/{self.connection_name}"
 
         # Connect to the selected SSH session if not already connected
-        if not self.conn:
-            if not self.connect():
-                return
+        if not self.conn and not self.connect():
+            return
 
         while True:
             try:
@@ -1522,7 +1521,7 @@ class SCPMode:
                 # Create a task for overall progress based on total bytes, not file count
                 overall_task = progress.add_task("Overall progress", total=total_size)
 
-                for idx, filename in enumerate(matched_files):
+                for _idx, filename in enumerate(matched_files):
                     remote_file = str(Path(self.current_remote_dir) / filename)
                     local_file = (
                         str(Path(str(self.local_download_dir)) / filename)

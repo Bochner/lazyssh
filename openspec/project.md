@@ -33,25 +33,23 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 - **OpenSSH client** - Core SSH functionality (required)
 - **Terminator** - Optional terminal emulator; falls back to native subprocess terminal when absent
 
-### Development Tools
-- **black** - Code formatting (100 char line length)
-- **isort** - Import sorting (black-compatible profile)
-- **flake8** - Linting
-- **pylint** - Additional linting
+### Build & Development Tools
+- **[Hatch](https://hatch.pypa.io/)** - Modern Python project manager (build, environments, versioning)
+- **[mise](https://mise.jdx.dev/)** - Polyglot tool version manager (Python, Ruff)
+- **[Ruff](https://docs.astral.sh/ruff/)** - Fast linter and formatter (replaces black, isort, flake8, pylint, pyupgrade)
 - **mypy** - Type checking
 - **pytest** - Testing framework
 - **pytest-cov** - Code coverage
-- **pre-commit** - Git hook management
 
 ## Project Conventions
 
 ### Code Style
 
 **Formatting:**
-- Line length: 100 characters (enforced by black)
+- Line length: 100 characters (enforced by Ruff)
 - Target Python version: 3.11
-- Import sorting: black-compatible profile with isort
-- Type hints: Preferred but not strictly enforced (disallow_untyped_defs = false)
+- Import sorting: Ruff (isort-compatible)
+- Type hints: Preferred but not strictly enforced
 
 **Naming Conventions:**
 - Modules: `snake_case` (e.g., `command_mode.py`, `logging_module.py`, `scp_mode.py`)
@@ -137,17 +135,17 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 
 **Quality Gates:**
 - Pre-commit hooks for automated checking
-- Manual run: `./pre-commit-check.sh`
+- Run `hatch run check` or `make check` for all quality checks
+- Run `make verify` for full verification (check + test + build)
 - All checks must pass before commits
 
 ### Git Workflow
 
 **Version Management:**
 - Follows semantic versioning: MAJOR.MINOR.PATCH
-- Version maintained in exactly two places:
-  1. `pyproject.toml` - Package version
-  2. `src/lazyssh/__init__.py` - `__version__` variable
-- Use `scripts/release.py` to update versions (auto-updates both locations and creates git tags)
+- Version maintained in single source of truth: `src/lazyssh/__init__.py` (`__version__` variable)
+- Hatch reads version dynamically from this file
+- Use `hatch version X.Y.Z` to update versions
 - **Never** add version information elsewhere
 
 **Branching:**
@@ -160,10 +158,11 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 - Reference issue numbers where applicable
 
 **Release Process:**
-1. Update version with `python scripts/release.py X.Y.Z`
+1. Update version with `hatch version X.Y.Z`
 2. Update CHANGELOG.md with changes
-3. Create git tag (automated by release script)
-4. Build and publish to PyPI
+3. Commit and create git tag: `git tag -a vX.Y.Z -m 'Release vX.Y.Z'`
+4. Push with tags: `git push && git push --tags`
+5. GitHub Actions builds and publishes to PyPI
 
 ## Domain Context
 

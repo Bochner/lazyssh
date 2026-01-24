@@ -1,5 +1,6 @@
 """Plugin manager for LazySSH - Discover, validate and execute plugins"""
 
+import contextlib
 import os
 import select
 import shutil
@@ -403,10 +404,8 @@ class PluginManager:
                     if APP_LOGGER:
                         APP_LOGGER.error(error_msg)
                     # Ensure we reap the process
-                    try:
+                    with contextlib.suppress(Exception):
                         process.wait(timeout=5)
-                    except Exception:
-                        pass
                     return False, error_msg, execution_time
 
                 rlist, _, _ = select.select([stdout_fd, stderr_fd], [], [], min(0.2, remaining))

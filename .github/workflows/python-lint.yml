@@ -1,34 +1,29 @@
-name: Python Lint and Code Quality
+name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Allow manual triggering
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  lint:
+  check:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
 
-    - name: Environment diagnostics
-      run: |
-        set -e
-        python -m pip install --upgrade pip
-        pip --version || true
-        which python || true
-        python --version || true
-        echo "make version: $(make -v | head -n1)"
+      - run: pipx install hatch
 
-    - name: Verify via Makefile (make verify)
-      run: |
-        set -e
-        make verify
+      - name: Check
+        run: hatch run check
+
+      - name: Test
+        run: hatch run test
+
+      - name: Build
+        run: hatch build && hatch run verify-pkg

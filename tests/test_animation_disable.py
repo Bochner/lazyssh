@@ -2,6 +2,7 @@
 """
 Tests for animation disable functionality.
 """
+
 import os
 import sys
 import unittest

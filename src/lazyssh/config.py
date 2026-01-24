@@ -214,9 +214,8 @@ def save_config(name: str, connection_params: dict[str, Any]) -> bool:
     file_path = get_config_file_path()
 
     # Initialize the file if it doesn't exist
-    if not file_path.exists():
-        if not initialize_config_file():
-            return False
+    if not file_path.exists() and not initialize_config_file():
+        return False
 
     try:
         # Read existing file content as text to preserve comments

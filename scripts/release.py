@@ -2,115 +2,80 @@
 """
 Version updater script for LazySSH.
 
-This script only updates version numbers in:
-1. pyproject.toml
-2. src/lazyssh/__init__.py
+This script is a compatibility wrapper that uses Hatch for version management.
+The version is stored in src/lazyssh/__init__.py and read dynamically by Hatch.
+
+Usage:
+    python scripts/release.py 1.2.3
+
+Alternatively, use Hatch directly:
+    hatch version 1.2.3
 """
 import argparse
 import re
+import subprocess
 import sys
-from pathlib import Path
 
 
-def get_repo_root():
-    """Get the absolute path to the repository root."""
-    # Path to this script
-    script_path = Path(__file__).resolve()
-    # The repository root is the parent directory of the scripts directory
-    return script_path.parent.parent
-
-
-def update_version(new_version):
-    """Update version numbers in the two essential files."""
-    updated_files = []
-    repo_root = get_repo_root()
-
-    # File 1: Update pyproject.toml
-    pyproject_path = repo_root / "pyproject.toml"
-    if pyproject_path.exists():
-        content = pyproject_path.read_text()
-
-        # Use a simpler approach - read the file line by line and only modify the project version line
-        lines = content.splitlines()
-        in_project_section = False
-        version_updated = False
-
-        for i, line in enumerate(lines):
-            if line.strip() == "[project]":
-                in_project_section = True
-            elif line.strip().startswith("[") and line.strip().endswith("]"):
-                in_project_section = False
-
-            if in_project_section and line.strip().startswith("version = "):
-                current_version_match = re.search(r'version = "([^"]+)"', line)
-                if current_version_match and current_version_match.group(1) == new_version:
-                    # Version is already correct
-                    print(f"ℹ️ No changes needed in pyproject.toml (already version {new_version})")
-                    break
-
-                # Version needs to be updated
-                lines[i] = f'version = "{new_version}"'
-                updated_files.append(str(pyproject_path))
-                print(f"✅ Updated version in pyproject.toml to {new_version}")
-                version_updated = True
-                break
-
-        # Write the updated content back to the file only if needed
-        if version_updated:
-            pyproject_path.write_text("\n".join(lines))
-    else:
-        print(f"❌ Error: pyproject.toml not found at {pyproject_path}")
-        return False
-
-    # File 2: Update __init__.py
-    init_path = repo_root / "src" / "lazyssh" / "__init__.py"
-    if init_path.exists():
-        content = init_path.read_text()
-        updated_content = re.sub(
-            r'__version__ = "[^"]+"', f'__version__ = "{new_version}"', content
-        )
-        if content != updated_content:
-            init_path.write_text(updated_content)
-            updated_files.append(str(init_path))
-            print(f"✅ Updated version in src/lazyssh/__init__.py to {new_version}")
-        else:
-            print("ℹ️ No changes needed in src/lazyssh/__init__.py")
-    else:
-        print(f"❌ Error: __init__.py not found at {init_path}")
-        return False
-
-    if updated_files:
-        print(f"\n🎉 Successfully updated version to {new_version} in {len(updated_files)} files")
+def check_hatch_installed() -> bool:
+    """Check if Hatch is installed."""
+    try:
+        subprocess.run(["hatch", "--version"], capture_output=True, check=True)
         return True
-    else:
-        print("\nℹ️ No files were updated. Version may already be up to date.")
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
 
-def main():
+def get_current_version() -> str:
+    """Get current version using Hatch."""
+    result = subprocess.run(["hatch", "version"], capture_output=True, text=True, check=True)
+    return result.stdout.strip()
+
+
+def update_version(new_version: str) -> bool:
+    """Update version using Hatch."""
+    try:
+        subprocess.run(["hatch", "version", new_version], check=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Update version numbers in pyproject.toml and __init__.py only"
+        description="Update version using Hatch. Version is stored in src/lazyssh/__init__.py"
     )
     parser.add_argument("version", help="New version number (e.g., 1.1.2)")
 
     args = parser.parse_args()
 
-    # Validate version format
-    if not re.match(r"^\d+\.\d+\.\d+$", args.version):
-        print("❌ Error: Version must be in the format X.Y.Z")
+    # Check Hatch is installed
+    if not check_hatch_installed():
+        print("Hatch is not installed. Install with: pipx install hatch")
         sys.exit(1)
 
-    # Update version numbers
-    success = update_version(args.version)
+    # Validate version format
+    if not re.match(r"^\d+\.\d+\.\d+$", args.version):
+        print("Error: Version must be in the format X.Y.Z")
+        sys.exit(1)
 
-    print("\nℹ️ Remember to handle git tagging and releases manually")
+    # Show current version
+    current = get_current_version()
+    print(f"Current version: {current}")
+    print(f"New version: {args.version}")
+    print()
 
-    if success:
-        print("\n📝 Next steps:")
-        print(f"1. Commit the changes: git commit -am 'Bump version to {args.version}'")
-        print(f"2. Create a tag: git tag -a v{args.version} -m 'Release v{args.version}'")
-        print("3. Push the changes: git push && git push --tags")
+    # Update version
+    if update_version(args.version):
+        print(f"Successfully updated version to {args.version}")
+        print()
+        print("Next steps:")
+        print(f"1. Review changes: git diff")
+        print(f"2. Commit: git commit -am 'Bump version to {args.version}'")
+        print(f"3. Tag: git tag -a v{args.version} -m 'Release v{args.version}'")
+        print("4. Push: git push && git push --tags")
     else:
+        print("Failed to update version")
         sys.exit(1)
 
 

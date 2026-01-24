@@ -2,6 +2,7 @@
 """
 Basic tests for LazySSH package structure.
 """
+
 import sys
 import unittest
 from pathlib import Path
