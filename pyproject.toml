@@ -78,6 +78,7 @@ dependencies = [
     "pytest",
     "pytest-cov",
     "pytest-html",
+    "pytest-timeout",
     "build",
     "twine",
 ]
@@ -164,6 +165,8 @@ python_files = "test_*.py"
 python_functions = "test_*"
 python_classes = "Test*"
 addopts = "-x --tb=short"
+timeout = 30
+timeout_method = "thread"
 log_cli = false
 log_cli_level = "WARNING"
 log_level = "DEBUG"

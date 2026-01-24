@@ -59,6 +59,13 @@ def test_plugin_run_executes(monkeypatch):
 
     monkeypatch.setattr(cm.plugin_manager, "get_plugin", lambda name: Meta)
 
+    # Mock execute_plugin to avoid actual subprocess execution
+    monkeypatch.setattr(
+        cm.plugin_manager,
+        "execute_plugin",
+        lambda plugin_name, connection, args=None: (True, "", 0.1),
+    )
+
     # Ensure subprocess output is displayed without raising
     outputs = []
 
@@ -69,4 +76,3 @@ def test_plugin_run_executes(monkeypatch):
 
     # Execute
     assert cm.cmd_plugin(["run", "echo", conn.conn_name]) is True
-    # echo prints nothing without args, but should still be considered success
