@@ -63,6 +63,6 @@ hatch version patch    # Bump patch
 src/lazyssh/           # Source code
 tests/                 # Tests
 pyproject.toml         # Config (Hatch, Ruff, pytest, mypy)
-.mise.toml             # Tool versions (Python, Ruff)
+.mise.toml             # Tool versions (Python, Ruff, pre-commit)
 Makefile               # Dev commands
 ```

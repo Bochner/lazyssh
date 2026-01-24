@@ -23,7 +23,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ## Tool Version Management
 
-This project uses **[mise](https://mise.jdx.dev/)** for tool version management. When you `cd` into the project directory, mise automatically activates the correct versions of Python and Ruff defined in `.mise.toml`.
+This project uses **[mise](https://mise.jdx.dev/)** for tool version management. When you `cd` into the project directory, mise automatically activates the correct versions of Python, Ruff, and pre-commit defined in `.mise.toml`.
 
 ```bash
 # One-time setup
