@@ -714,13 +714,29 @@ class TestSCPModeInitWithConnection:
         manager.connections["/tmp/preselect"] = conn
         return manager
 
-    def test_init_with_selected_connection(self, ssh_manager: SSHManager) -> None:
+    def test_init_with_selected_connection(
+        self, ssh_manager: SSHManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test initialization with pre-selected connection."""
+        # Mock subprocess.run to avoid actual SSH calls
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "/home/user"
+        monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock_result)
+
         mode = SCPMode(ssh_manager, selected_connection="preselect")
         assert mode.socket_path == "/tmp/preselect"
 
-    def test_init_with_invalid_connection(self, ssh_manager: SSHManager) -> None:
+    def test_init_with_invalid_connection(
+        self, ssh_manager: SSHManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test initialization with invalid connection name."""
+        # Mock subprocess.run to avoid actual SSH calls (though connect will fail early)
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock_result)
+
         mode = SCPMode(ssh_manager, selected_connection="nonexistent")
         assert mode.socket_path == "/tmp/nonexistent"
 

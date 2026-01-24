@@ -133,6 +133,33 @@ Plugins receive connection context via environment variables: `LAZYSSH_SOCKET`, 
 - **Version location**: Single source of truth in `src/lazyssh/__init__.py`
 - **Version updates**: Use `hatch version X.Y.Z`
 
+## Test Isolation Requirements (CRITICAL)
+
+All tests MUST be isolated from external dependencies for CI/CD compatibility. Tests that make real subprocess calls or network connections will timeout and fail in CI.
+
+**Always mock these in tests:**
+
+| Operation | What to Mock | Example |
+|-----------|--------------|---------|
+| SSH/subprocess | `subprocess.run`, `subprocess.Popen` | `monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock_result)` |
+| Interactive prompts | `Confirm.ask`, `Prompt.ask`, `input()` | `monkeypatch.setattr("rich.prompt.Confirm.ask", lambda *a, **kw: True)` |
+| Plugin execution | `execute_plugin()` | `monkeypatch.setattr(cm.plugin_manager, "execute_plugin", lambda *a: (True, "", 0.1))` |
+| SCPMode with connection | `subprocess.run` in `connect()` | Mock before creating `SCPMode(manager, selected_connection="name")` |
+
+**Pattern for SCPMode tests with selected_connection:**
+```python
+def test_with_connection(self, ssh_manager: SSHManager, monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_result = mock.MagicMock()
+    mock_result.returncode = 0
+    mock_result.stdout = "/home/user"
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock_result)
+
+    mode = SCPMode(ssh_manager, selected_connection="myconn")
+    # ... test assertions
+```
+
+**Timeout protection:** pytest-timeout enforces 30s per test. Hanging tests indicate missing mocks.
+
 ## Environment Variables
 
 **Terminal:**
