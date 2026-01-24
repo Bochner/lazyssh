@@ -723,7 +723,7 @@ class CommandMode:
             display_info("No active connections")
             return True
 
-        # Connections are already shown by show_status() before each prompt
+        self.show_status()
         return True
 
     def cmd_config(self, args: list[str]) -> bool:
