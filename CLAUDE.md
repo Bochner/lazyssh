@@ -21,6 +21,26 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
 
+### OpenSpec Workflow Enforcement
+
+**Three-Stage Workflow:**
+1. **Proposal** (`/openspec:proposal`) - Design documents ONLY. Create `proposal.md`, `tasks.md`, `design.md` (if needed), and spec deltas. **NO CODE CHANGES.**
+2. **Apply** (`/openspec:apply`) - Implementation happens here. Follow `tasks.md` checklist, mark items complete.
+3. **Archive** (`/openspec:archive`) - After deployment, move to `changes/archive/`.
+
+**Critical Rules:**
+- **NEVER write code during proposal stage** - only create design documents
+- **NEVER implement until proposal is approved** - wait for user approval after `/openspec:proposal`
+- **tasks.md format** - Use numbered sections with checkboxes:
+  ```markdown
+  ## 1. Implementation
+  - [ ] 1.1 First task
+  - [ ] 1.2 Second task
+
+  ## 2. Validation
+  - [ ] 2.1 Run tests
+  ```
+
 ## Tool Version Management
 
 This project uses **[mise](https://mise.jdx.dev/)** for tool version management. When you `cd` into the project directory, mise automatically activates the correct versions of Python, Ruff, and pre-commit defined in `.mise.toml`.
@@ -173,6 +193,23 @@ def test_with_connection(self, ssh_manager: SSHManager, monkeypatch: pytest.Monk
 - `LAZYSSH_NO_ANIMATIONS` - Disable spinner animations
 - `LAZYSSH_HIGH_CONTRAST` - High contrast theme
 - `LAZYSSH_COLORBLIND_MODE` - Colorblind-friendly palette
+
+## Changelog Maintenance
+
+**Always update `CHANGELOG.md` when making user-facing changes.** Follow [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
+
+- Add entries under `## [Unreleased]` section
+- Use categories: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`
+- Write entries from user perspective (what changed, not how)
+- Mark breaking changes with `**BREAKING:**` prefix
+- When releasing, move Unreleased entries to a versioned section with date
+
+**Example entry:**
+```markdown
+### Added
+- **Feature Name**: Brief description of what was added
+  - Supporting detail or sub-feature
+```
 
 ## Cross-References
 

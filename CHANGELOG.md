@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-01-24
+
+### Added
+- **Test Isolation Infrastructure**: Comprehensive test isolation requirements for CI/CD compatibility
+  - Added `pytest-timeout` with 30-second timeout per test using thread method
+  - Documented mocking patterns for subprocess, interactive prompts, and plugin execution
+  - Updated `conftest.py` with isolation fixtures and guidance
+- **Pre-commit Hooks**: Automatic quality checks before each commit
+  - Integrated trailing whitespace, ruff (lint + format), and mypy hooks
+  - Added `make pre-commit-install` and `make pre-commit` targets
+- **Tool Version Management**: Added `.mise.toml` for automatic tool version activation
+  - Python, Ruff, and pre-commit versions managed by mise
+  - Tools auto-activate when entering the project directory
+- **HTML Test Reports**: Test infrastructure generates HTML coverage reports in `artifacts/`
+  - Added `pytest-html` for rich test result visualization
+  - Coverage reports available in both CLI and HTML formats
+- **Full Test Coverage**: Achieved 100% test coverage across all modules
+
+### Changed
+- **BREAKING:** Modernized build system from legacy scripts to Hatch
+  - Replaced flake8 and legacy linting with Ruff for formatting, linting, and import sorting
+  - Version management now handled natively by Hatch (`hatch version X.Y.Z`)
+  - Simplified GitHub Actions workflows for CI and publishing
+- **Documentation Updates**: Comprehensive updates to build and development documentation
+  - Updated CLAUDE.md with test isolation requirements and mocking patterns
+  - Revised CONTRIBUTING.md with new tool management workflow
+  - Updated openspec/project.md with build tools and test infrastructure details
+
+### Removed
+- **BREAKING:** Removed `scripts/release.py` and Makefile `release` target
+  - Version management is now handled by `hatch version` command
+  - Release workflow simplified to use Hatch directly
+
 ## [1.5.1] - 2025-10-13
 
 ### Added
