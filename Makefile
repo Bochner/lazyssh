@@ -1,4 +1,4 @@
-.PHONY: help install run fmt fix lint test check build clean version release publish pre-commit pre-commit-install
+.PHONY: help install run fmt fix lint test check build clean version publish pre-commit pre-commit-install
 
 SHELL := /bin/bash
 
@@ -31,8 +31,7 @@ help:
 	@echo -e "$(GREEN)Release:$(NC)"
 	@echo "  make build      Build package"
 	@echo "  make clean      Clean artifacts"
-	@echo "  make version    Show version"
-	@echo "  make release    Version bump workflow"
+	@echo "  make version    Show version (hatch version)"
 	@echo "  make publish    Publish to PyPI"
 
 install:
@@ -74,12 +73,6 @@ clean:
 
 version:
 	@hatch version
-
-release:
-	@echo "Current: $$(hatch version)"
-	@read -p "New version: " v && hatch version $$v && \
-	echo -e "$(GREEN)Updated to $$v$(NC)" && \
-	echo "Next: git commit -am 'v$$v' && git tag v$$v && git push --tags"
 
 publish: check build
 	@echo -e "$(RED)Publishing to PyPI$(NC)"
