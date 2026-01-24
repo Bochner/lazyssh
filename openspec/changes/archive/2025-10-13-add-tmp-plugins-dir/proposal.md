@@ -22,5 +22,3 @@ Backward compatible. Existing locations continue to work. Discovery order is ext
 - Restrict permissions to `0700`.
 - Do not follow symlinks that resolve outside the base directory.
 - Maintain existing validation (shebang, executable bit) and metadata parsing.
-
-

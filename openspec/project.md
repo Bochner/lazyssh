@@ -15,7 +15,7 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 ## Tech Stack
 
 ### Core Language & Runtime
-- **Python 3.11+** - Primary language with modern type hints and features
+- **Python 3.11+** - Primary language with modern type hints and features (3.11, 3.12, and 3.13 supported in pyproject.toml classifiers)
 
 ### Key Python Libraries
 - **rich** (13.0.0+) - Rich text formatting, plugin output rendering, progress visualization
@@ -33,25 +33,30 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 - **OpenSSH client** - Core SSH functionality (required)
 - **Terminator** - Optional terminal emulator; falls back to native subprocess terminal when absent
 
-### Development Tools
-- **black** - Code formatting (100 char line length)
-- **isort** - Import sorting (black-compatible profile)
-- **flake8** - Linting
-- **pylint** - Additional linting
+### Build & Development Tools
+- **[Hatch](https://hatch.pypa.io/)** - Modern Python project manager (build, environments, versioning, multi-version testing via `hatch test`)
+- **[mise](https://mise.jdx.dev/)** - Polyglot tool version manager (Python, Ruff, pre-commit)
+- **[Ruff](https://docs.astral.sh/ruff/)** - Fast linter and formatter (replaces black, isort, flake8, pylint, pyupgrade)
+- **[pre-commit](https://pre-commit.com/)** - Git hook framework for automated quality checks before commits
 - **mypy** - Type checking
 - **pytest** - Testing framework
 - **pytest-cov** - Code coverage
-- **pre-commit** - Git hook management
+- **pytest-html** - HTML test report generation
+
+### Artifacts Directory
+Test and coverage reports are generated into the `artifacts/` directory:
+- `artifacts/coverage/` - HTML coverage reports from pytest-cov
+- `artifacts/unit/` - HTML test reports from pytest-html
 
 ## Project Conventions
 
 ### Code Style
 
 **Formatting:**
-- Line length: 100 characters (enforced by black)
+- Line length: 100 characters (enforced by Ruff)
 - Target Python version: 3.11
-- Import sorting: black-compatible profile with isort
-- Type hints: Preferred but not strictly enforced (disallow_untyped_defs = false)
+- Import sorting: Ruff (isort-compatible)
+- Type hints: Preferred but not strictly enforced
 
 **Naming Conventions:**
 - Modules: `snake_case` (e.g., `command_mode.py`, `logging_module.py`, `scp_mode.py`)
@@ -112,6 +117,20 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 - Command-mode integration: `plugin list`, `plugin info <name>`, `plugin run <name> <socket>` with tab completion and formatted output
 - Built-in `enumerate` plugin ships under `src/lazyssh/plugins/` providing reconnaissance reports and log file export
 
+**Enumerate Plugin (v2.0.0):**
+- **Batched script execution**: Executes a single remote script gathering all telemetry in one SSH round-trip for minimal latency
+- **Priority findings summary**: Heuristics flag elevated risks including:
+  - Sudo/wheel group membership and passwordless sudo entries
+  - SUID/SGID binaries
+  - World-writable directories outside temp paths
+  - Externally accessible network listeners
+  - Insecure sshd configuration (PermitRootLogin, PasswordAuthentication, etc.)
+  - Suspicious scheduled tasks (cron jobs with curl, wget, nc, etc.)
+  - Kernel version drift from package inventory
+- **JSON export**: Use `--json` flag for machine-readable output
+- **Log persistence**: Survey results saved to connection workspace (`/tmp/lazyssh/{socket}.d/logs/survey_*.json` and `.txt`)
+- **Dracula-themed Rich output**: Styled tables and panels with severity indicators (high/medium/info)
+
 **UI Configuration:**
 - `console_instance.py` centralizes Rich console setup, Dracula-themed defaults, and accessibility variants
 - Environment toggles: `LAZYSSH_HIGH_CONTRAST`, `LAZYSSH_COLORBLIND_MODE`, `LAZYSSH_NO_RICH`, `LAZYSSH_NO_ANIMATIONS`, `LAZYSSH_PLAIN_TEXT`, `LAZYSSH_REFRESH_RATE`
@@ -130,24 +149,56 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 - Test classes: `Test*` prefix
 
 **Coverage:**
+- **100% test coverage required** - the test suite must maintain full coverage
 - Source tracking enabled for `src/` directory
 - Tests excluded from coverage reports
-- Run with: `pytest` and `pytest-cov`
+- Run with: `make test` (wraps `hatch run test`) or `hatch test` for multi-version testing
 - Dedicated suites cover plugin discovery/execution (`tests/test_plugin_manager.py`, `tests/test_command_plugin.py`) and UI environment toggles
 
+**Test Isolation for CI/CD:**
+All tests must be isolated from external dependencies to ensure reliable CI execution:
+- **Subprocess operations** (`subprocess.run`, `subprocess.Popen`) MUST be mocked to prevent actual process execution
+- **Interactive prompts** (`Confirm.ask`, `Prompt.ask`, `input()`) MUST be mocked to prevent stdin blocking
+- **Network operations** (SSH connections, sockets) MUST be mocked to prevent network dependencies
+- **SCPMode tests** with active connections MUST mock `connect()` subprocess calls
+- **Plugin execution tests** MUST either mock `execute_plugin()` or use small controlled test scripts
+
+**Timeout Protection:**
+- pytest-timeout is configured with a 30-second per-test timeout
+- If a test hangs, the timeout captures the stack trace identifying the blocking operation
+- Timeout method is `thread` for cross-platform compatibility
+
+**HTML Reports:**
+- Coverage HTML reports: `artifacts/coverage/` (generated by pytest-cov)
+- Test result reports: `artifacts/unit/report.html` (generated by pytest-html)
+- Reports are self-contained and can be viewed in a browser
+
+**Multi-Version Testing:**
+- `hatch test` runs the test suite across Python 3.11, 3.12, and 3.13
+- CI matrix ensures compatibility across all supported Python versions
+
 **Quality Gates:**
-- Pre-commit hooks for automated checking
-- Manual run: `./pre-commit-check.sh`
+- **Pre-commit hooks** automatically run quality checks before each commit
+- Install hooks: `make pre-commit-install` (one-time setup after mise is installed)
+- Run hooks manually: `make pre-commit` (runs on all files)
+- Hooks include: trailing whitespace removal, Ruff (lint + format), mypy type checking
+- Run `hatch run check` or `make check` for all quality checks
+- Run `make verify` for full verification (check + test + build)
 - All checks must pass before commits
+
+**Pre-commit Workflow:**
+1. Install mise and run `mise install` to get pre-commit
+2. Run `make pre-commit-install` to configure git hooks
+3. On each `git commit`, hooks run automatically and block commits with issues
+4. Fix any reported issues and re-commit
 
 ### Git Workflow
 
 **Version Management:**
 - Follows semantic versioning: MAJOR.MINOR.PATCH
-- Version maintained in exactly two places:
-  1. `pyproject.toml` - Package version
-  2. `src/lazyssh/__init__.py` - `__version__` variable
-- Use `scripts/release.py` to update versions (auto-updates both locations and creates git tags)
+- Version maintained in single source of truth: `src/lazyssh/__init__.py` (`__version__` variable)
+- Hatch reads version dynamically from this file
+- Use `hatch version X.Y.Z` to update versions
 - **Never** add version information elsewhere
 
 **Branching:**
@@ -160,10 +211,11 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 - Reference issue numbers where applicable
 
 **Release Process:**
-1. Update version with `python scripts/release.py X.Y.Z`
+1. Update version with `hatch version X.Y.Z`
 2. Update CHANGELOG.md with changes
-3. Create git tag (automated by release script)
-4. Build and publish to PyPI
+3. Commit and create git tag: `git tag -a vX.Y.Z -m 'Release vX.Y.Z'`
+4. Push with tags: `git push && git push --tags`
+5. GitHub Actions builds and publishes to PyPI
 
 ## Domain Context
 
@@ -200,8 +252,9 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 - Windows - Not supported natively; Windows users should use Windows Subsystem for Linux (WSL)
 
 **Python Version:**
-- Minimum: Python 3.11
+- Minimum: Python 3.11, with 3.12 and 3.13 also tested and supported
 - Type hint features from 3.11 used (e.g., `list[str]` instead of `List[str]`)
+- CI matrix tests against 3.11, 3.12, and 3.13
 
 **External Dependencies:**
 - OpenSSH client must be installed on the system

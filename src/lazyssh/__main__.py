@@ -2,6 +2,7 @@
 """
 LazySSH - Main module providing the entry point and interactive menus.
 """
+
 from __future__ import annotations
 
 import sys
@@ -81,11 +82,10 @@ def check_active_connections() -> bool:
     Returns:
         True if the user confirmed or there are no active connections, False otherwise.
     """
-    if ssh_manager.connections and not Confirm.ask(
-        "You have active connections. Close them and exit?"
-    ):
-        return False
-    return True
+    return not (
+        ssh_manager.connections
+        and not Confirm.ask("You have active connections. Close them and exit?")
+    )
 
 
 def safe_exit() -> None:

@@ -306,4 +306,3 @@ The system SHALL provide a `plugin` command in command mode that enables users t
 - **THEN** the system SHALL display error message "Socket '<socket_name>' not found"
 - **AND** the system SHALL list currently active socket names
 - **AND** error formatting SHALL use consistent display_error styling
-

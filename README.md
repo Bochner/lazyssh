@@ -19,10 +19,12 @@ pipx install lazyssh
 # Or use pip
 pip install lazyssh
 
-# From source
+# From source (requires Hatch)
 git clone https://github.com/Bochner/lazyssh.git
 cd lazyssh
-pip install -e .
+pipx install hatch  # or: pip install hatch
+hatch build
+pip install dist/*.whl
 ```
 
 Dependencies: Python 3.11+, OpenSSH client, and optionally the Terminator terminal emulator (LazySSH falls back to the native terminal automatically).
@@ -56,6 +58,19 @@ scp myserver:/home/admin> get backup.tar.gz
 ```
 
 Need a guided setup? Run `lazyssh> wizard lazyssh` for a prompt-driven connection workflow.
+
+## Development
+
+```bash
+git clone https://github.com/Bochner/lazyssh.git && cd lazyssh
+pipx install hatch        # Install build tool (one-time)
+make install              # Setup environment
+make run                  # Run lazyssh
+make check                # Lint + type check
+make test                 # Run tests
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Learn More
 - [Getting Started](docs/getting-started.md) – first-run walkthroughs and everyday workflows

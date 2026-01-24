@@ -2,7 +2,6 @@
 
 ## Purpose
 Define expectations for LazySSH's user-facing documentation structure, accuracy, completeness, and supporting GitHub issue templates.
-
 ## Requirements
 ### Requirement: Documentation Structure
 User-facing documentation SHALL remain layered into quick start, guided journey, reference, and specialised guides, with each layer mapped to a single maintained file.
@@ -22,6 +21,7 @@ User-facing documentation SHALL remain layered into quick start, guided journey,
 - **AND** `docs/guides.md` hosts advanced workflows (tunnelling, SCP, automation) without repeating quick-start content
 
 ### Requirement: Documentation Accuracy
+
 All documentation SHALL reflect current command syntax, feature availability, and system behaviour.
 
 #### Scenario: README commands execute as written
@@ -31,6 +31,12 @@ All documentation SHALL reflect current command syntax, feature availability, an
 #### Scenario: Reference tables match implementation
 - **WHEN** a maintainer reviews `docs/reference.md`
 - **THEN** every listed command, flag, environment variable, and config key matches names found in `src/lazyssh`
+
+#### Scenario: Project.md reflects current implementation
+- **WHEN** a maintainer reviews `openspec/project.md`
+- **THEN** all listed tools, libraries, and versions match `pyproject.toml` and `.mise.toml`
+- **AND** all documented commands match the current Makefile and Hatch scripts
+- **AND** the testing strategy section matches the actual test infrastructure
 
 ### Requirement: Documentation Completeness
 All user-facing features present in the current release SHALL be documented with usage examples.
@@ -85,3 +91,69 @@ The project SHALL provide user-friendly GitHub issue templates that facilitate b
 - **THEN** the templates feel approachable rather than overwhelming
 - **AND** required fields are kept to the minimum necessary for triage
 - **AND** field descriptions use clear, friendly language
+
+### Requirement: Project Context Accuracy
+
+`openspec/project.md` SHALL accurately reflect the current state of the project's tech stack, conventions, and development infrastructure at all times.
+
+#### Scenario: project.md reflects build system changes
+
+- **WHEN** the build system, testing infrastructure, or development tools are updated
+- **THEN** `openspec/project.md` is updated to document the new tooling
+- **AND** the update is included in the same PR as the tool changes
+
+#### Scenario: Test infrastructure is documented
+
+- **WHEN** a reviewer checks `openspec/project.md`
+- **THEN** they find documentation of the test coverage requirements (100%)
+- **AND** they find documentation of HTML report generation (artifacts/ directory)
+- **AND** they find documentation of multi-version testing via `hatch test`
+
+#### Scenario: Pre-commit workflow is documented
+
+- **WHEN** a new contributor sets up the development environment
+- **THEN** they can follow project.md to install and configure pre-commit hooks
+- **AND** they understand which checks run automatically on commit
+
+### Requirement: AI Assistant Quick Reference
+
+CLAUDE.md SHALL serve as a concise quick reference for AI coding assistants, documenting essential development commands and quality gates without duplicating detailed information available in openspec/project.md or CONTRIBUTING.md.
+
+#### Scenario: AI assistant reads CLAUDE.md
+
+- **WHEN** an AI assistant reads CLAUDE.md at conversation start
+- **THEN** it finds essential build commands (make fmt, make check, make test)
+- **AND** it finds the quality gate requirement (make check must pass before commits)
+- **AND** it finds cross-references to detailed documentation for deeper context
+
+#### Scenario: Tool version management documented
+
+- **WHEN** an AI assistant needs to understand tool versioning
+- **THEN** CLAUDE.md documents that mise auto-activates correct Python and Ruff versions
+- **AND** it references .mise.toml as the configuration source
+
+#### Scenario: No duplication with project.md
+
+- **WHEN** CLAUDE.md content is compared to openspec/project.md
+- **THEN** CLAUDE.md provides summaries and quick commands
+- **AND** detailed conventions, patterns, and rationale remain in project.md
+- **AND** CLAUDE.md links to project.md for comprehensive information
+
+### Requirement: Project Context Maintenance
+
+The openspec/project.md file SHALL be updated whenever significant implementation changes occur to build tooling, test infrastructure, or plugin capabilities.
+
+#### Scenario: Build tool changes documented
+- **WHEN** build tooling (Hatch, mise, pre-commit) is added or modified
+- **THEN** project.md is updated to reflect the new tools and commands
+- **AND** the change is made as part of the same change proposal or immediately following implementation
+
+#### Scenario: Test infrastructure changes documented
+- **WHEN** test infrastructure (coverage requirements, HTML reports, CI changes) is modified
+- **THEN** project.md Testing Strategy section is updated
+- **AND** relevant Makefile targets and Hatch scripts are documented
+
+#### Scenario: Plugin enhancements documented
+- **WHEN** built-in plugin capabilities are enhanced
+- **THEN** project.md Plugin Architecture section is updated
+- **AND** new command flags or output formats are described

@@ -30,5 +30,3 @@ Discovery SHALL avoid following symlinks outside declared plugin directories and
 #### Scenario: Symlink outside base is ignored
 - **WHEN** a symlink points outside a configured plugin directory
 - **THEN** it SHALL be skipped and not loaded
-
-

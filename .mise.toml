@@ -1,0 +1,11 @@
+# mise-en-place configuration for LazySSH
+# https://mise.jdx.dev/
+
+[tools]
+python = "3.11"
+ruff = "latest"
+pre-commit = "latest"
+
+[env]
+# Ensure consistent Python behavior
+PYTHONDONTWRITEBYTECODE = "1"

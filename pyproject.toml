@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "lazyssh"
-version = "1.5.2"
+dynamic = ["version"]
 description = "A comprehensive SSH toolkit for managing connections and tunnels"
 readme = "README.md"
 authors = [
@@ -17,7 +17,10 @@ classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Environment :: Console",
     "Topic :: System :: Networking",
     "Topic :: System :: Systems Administration",
@@ -38,51 +41,154 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/Bochner/lazyssh"
+Homepage = "https://github.com/Bochner/lazyssh"
 "Bug Tracker" = "https://github.com/Bochner/lazyssh/issues"
-"Documentation" = "https://github.com/Bochner/lazyssh"
+Documentation = "https://github.com/Bochner/lazyssh"
 "Source Code" = "https://github.com/Bochner/lazyssh"
-
-[project.optional-dependencies]
-dev = [
-    "black",
-    "isort",
-    "flake8",
-    "pylint",
-    "pytest",
-    "pytest-cov",
-    "mypy",
-    "pre-commit",
-    "build",
-    "wheel",
-    "twine",
-]
 
 [project.scripts]
 lazyssh = "lazyssh.__main__:main"
 
-[tool.black]
-line-length = 100
-target-version = ['py311']
-include = '\.pyi?$'
+# =============================================================================
+# Hatch Configuration
+# =============================================================================
 
-[tool.isort]
-profile = "black"
-line_length = 100
+[tool.hatch.version]
+path = "src/lazyssh/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lazyssh"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/CONTRIBUTING.md",
+    "/LICENSE",
+]
+
+# Single environment with all dev tools
+[tool.hatch.envs.default]
+description = "Development environment"
+dependencies = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "pytest-cov",
+    "pytest-html",
+    "pytest-timeout",
+    "build",
+    "twine",
+]
+
+[tool.hatch.envs.default.scripts]
+# Formatting
+fmt = "ruff format src tests"
+# Linting
+lint = "ruff check src tests"
+# Auto-fix and format
+fix = [
+    "ruff check --fix src tests",
+    "ruff format src tests",
+]
+# Testing (with coverage by default)
+test = "pytest tests --cov=src/lazyssh --cov-report=term-missing --cov-report=html:artifacts/coverage --html=artifacts/unit/report.html --self-contained-html"
+# All quality checks
+check = [
+    "ruff format --check src tests",
+    "ruff check src tests",
+    "mypy src",
+    "python -c 'import lazyssh; print(lazyssh.__version__)'",
+]
+# Build verification
+verify-pkg = "twine check dist/*"
+
+# Hatch test environment (for `hatch test` command)
+[tool.hatch.envs.hatch-test]
+extra-dependencies = [
+    "pytest-cov",
+    "pytest-html",
+]
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.11", "3.12", "3.13"]
+
+[tool.hatch.envs.hatch-test.scripts]
+run = "pytest{env:HATCH_TEST_ARGS:} {args}"
+run-cov = "pytest --cov=src/lazyssh --cov-report=term-missing --cov-report=html:artifacts/coverage --html=artifacts/unit/report.html --self-contained-html{env:HATCH_TEST_ARGS:} {args}"
+cov-combine = ""
+
+# =============================================================================
+# Ruff Configuration (replaces black, isort, flake8, pylint, pyupgrade)
+# =============================================================================
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "SIM102", # nested if statements (often more readable than combined)
+    "SIM105", # contextlib.suppress (try/except/pass is clearer)
+    "SIM108", # ternary operator (can reduce readability)
+    "SIM117", # nested with statements (often clearer for multiple mock patches)
+    "B904",   # raise from (not always appropriate)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["lazyssh"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# =============================================================================
+# Pytest Configuration
+# =============================================================================
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
 python_classes = "Test*"
+addopts = "-x --tb=short"
+timeout = 30
+timeout_method = "thread"
+log_cli = false
+log_cli_level = "WARNING"
+log_level = "DEBUG"
+log_format = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+log_date_format = "%H:%M:%S"
+
+[tool.coverage.run]
+source = ["src/lazyssh"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+# =============================================================================
+# Mypy Configuration
+# =============================================================================
 
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-
-[tool.coverage.run]
-source = ["src"]
-omit = ["tests/*"]
+ignore_missing_imports = true

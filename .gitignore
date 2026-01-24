@@ -61,6 +61,9 @@ venv.bak/
 .python-version
 .pre-commit-venv/
 
+# Hatch
+.hatch/
+
 # IDE
 .idea/
 .vscode/
@@ -137,3 +140,6 @@ venv/
 *.exe
 *.out
 *.app
+
+# Test artifacts
+artifacts/

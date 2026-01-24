@@ -3,10 +3,20 @@
 import os
 import shutil
 import subprocess
+import sys
 from typing import Any
 
 from rich.console import Console
 from rich.theme import Theme
+
+
+def _is_real_terminal() -> bool:
+    """Check if we're running in a real terminal (not in tests or pipes)."""
+    try:
+        return sys.stdout.isatty() and sys.stderr.isatty()
+    except (AttributeError, ValueError):
+        return False
+
 
 # Centralized Dracula theme definition
 LAZYSSH_THEME = Theme(
@@ -215,9 +225,14 @@ def create_console_with_config(config: dict[str, Any]) -> Console:
     """Create a console instance with configuration applied."""
     theme = get_theme_for_config(config)
 
+    # Only force terminal if we're actually in a real terminal
+    # This prevents OSError spam when running in tests or pipes
+    is_terminal = _is_real_terminal()
+    force_terminal = is_terminal and not config["no_rich"]
+
     return Console(
         theme=theme,
-        force_terminal=not config["no_rich"],
+        force_terminal=force_terminal,
         legacy_windows=False,
         color_system="auto" if not (config["no_rich"] or config["plain_text"]) else None,
         width=get_terminal_width(),
@@ -231,24 +246,41 @@ console = create_console_with_config(ui_config)
 
 
 # Display functions
+def _safe_console_print(text: str) -> None:
+    """Safely print to console, handling non-terminal environments."""
+    try:
+        console.print(text)
+    except OSError:
+        # Fall back to plain print when console write fails (e.g., in tests)
+        # Strip Rich markup for plain output
+        import re
+
+        plain_text = re.sub(r"\[/?[^\]]+\]", "", text)
+        try:
+            print(plain_text)
+        except OSError:
+            # Silently ignore if even print fails (broken pipe, etc.)
+            pass
+
+
 def display_error(message: str) -> None:
     """Display an error message."""
-    console.print(f"[error]Error:[/error] {message}")
+    _safe_console_print(f"[error]Error:[/error] {message}")
 
 
 def display_success(message: str) -> None:
     """Display a success message."""
-    console.print(f"[success]Success:[/success] {message}")
+    _safe_console_print(f"[success]Success:[/success] {message}")
 
 
 def display_info(message: str) -> None:
     """Display an info message."""
-    console.print(f"[info]{message}[/info]")
+    _safe_console_print(f"[info]{message}[/info]")
 
 
 def display_warning(message: str) -> None:
     """Display a warning message."""
-    console.print(f"[warning]Warning:[/warning] {message}")
+    _safe_console_print(f"[warning]Warning:[/warning] {message}")
 
 
 def display_accessible_message(message: str, message_type: str = "info") -> None:

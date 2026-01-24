@@ -22,7 +22,7 @@ The current architecture has a circular import issue where `logging_module.py` n
 **Alternatives considered:**
 1. **Dependency injection**: Pass display_error as a parameter to logging functions
    - Rejected: Would require changing many function signatures and make the API more complex
-2. **Move display functions to logging_module**: 
+2. **Move display functions to logging_module**:
    - Rejected: Would create the reverse circular import and doesn't make architectural sense
 3. **Use a global variable approach**:
    - Rejected: Less explicit and harder to test than module-level exports

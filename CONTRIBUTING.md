@@ -1,71 +1,92 @@
 # Contributing to LazySSH
 
-Thank you for your interest in contributing to LazySSH! This document provides guidelines and information to help you contribute effectively.
-
-## Version Management
-
-LazySSH follows semantic versioning (MAJOR.MINOR.PATCH).
-
-### Version Information
-
-Version information is maintained in **only two places**:
-
-1. `pyproject.toml` - The main version of the package
-2. `src/lazyssh/__init__.py` - The `__version__` variable
-
-**Important**: Do not add version information anywhere else in the codebase. This helps avoid confusion and ensures consistency.
-
-### Updating Versions
-
-When preparing a release:
-
-1. Use the `scripts/release.py` script to update versions
-2. Example: `python scripts/release.py 1.1.2`
-
-This script will:
-- Update version in `pyproject.toml`
-- Update `__version__` in `src/lazyssh/__init__.py`
-- Create a git tag
-
 ## Development Setup
 
-1. Clone the repository
-2. Install development dependencies:
-   ```
-   pip install -e ".[dev]"
-   ```
-3. Set up pre-commit hooks:
-   ```
-   pre-commit install
-   ```
-
-## Testing
-
-Run tests with pytest:
-
+```bash
+git clone https://github.com/Bochner/lazyssh.git && cd lazyssh
+pipx install hatch    # Install Hatch (one-time)
+make install          # Setup environment
+make run              # Run lazyssh
 ```
-pytest
-```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Setup Hatch environment |
+| `make run` | Run lazyssh |
+| `make fmt` | Format code with Ruff |
+| `make fix` | Auto-fix issues + format |
+| `make lint` | Run linter |
+| `make test` | Run tests with coverage |
+| `make check` | All quality checks |
+| `make build` | Build package |
+
+Use `hatch run <command>` to run any command in the venv without activation.
 
 ## Code Style
 
-This project follows:
-- Black for code formatting
-- isort for import sorting
-- mypy for type checking
+- **Ruff** for formatting and linting (100 char lines)
+- **mypy** for type checking
+- Python 3.11+
 
-You can run all style checks with:
+Auto-fix most issues: `make fix`
 
+## Testing
+
+Tests run with coverage by default:
+
+```bash
+make test    # Shows coverage in terminal
 ```
-./pre-commit-check.sh
+
+### Test Isolation Requirements
+
+All tests must be isolated from external dependencies for CI/CD compatibility:
+
+**Mock blocking operations:**
+- `subprocess.run()` / `subprocess.Popen()` - Mock to prevent actual process execution
+- `Confirm.ask()` / `Prompt.ask()` / `input()` - Mock to prevent stdin blocking
+- SSH connections and network calls - Mock to prevent network dependencies
+
+**Example patterns:**
+```python
+# Mock subprocess
+mock_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: mock_result)
+
+# Mock interactive prompts
+monkeypatch.setattr("rich.prompt.Confirm.ask", lambda *args, **kwargs: True)
+
+# Mock plugin execution
+monkeypatch.setattr(cm.plugin_manager, "execute_plugin", lambda *args: (True, "", 0.1))
 ```
+
+**Timeout protection:** All tests have a 30-second timeout via pytest-timeout. If a test hangs, the timeout will identify the blocking operation.
 
 ## Pull Request Process
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes following the coding standards
-4. Run all tests and linting
-5. Submit a pull request
+1. Fork and create a feature branch
+2. Make changes following the code style
+3. Run `make check` (must pass)
+4. Submit PR
 
-Thank you for contributing to LazySSH!
+## Version Management
+
+Single source of truth: `src/lazyssh/__init__.py`
+
+```bash
+hatch version          # Show version
+hatch version 1.2.3    # Set version
+hatch version patch    # Bump patch
+```
+
+## Project Structure
+
+```
+src/lazyssh/           # Source code
+tests/                 # Tests
+pyproject.toml         # Config (Hatch, Ruff, pytest, mypy)
+.mise.toml             # Tool versions (Python, Ruff, pre-commit)
+Makefile               # Dev commands
+```

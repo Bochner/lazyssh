@@ -2,6 +2,7 @@
 """
 Integration tests for UI theme switching functionality.
 """
+
 import os
 import sys
 import unittest

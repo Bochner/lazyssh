@@ -13,7 +13,7 @@ The current implementation in `src/lazyssh/logging_module.py` around lines 78-81
 ## Impact
 
 - Affected specs: user-interface
-- Affected code: 
+- Affected code:
   - `src/lazyssh/console_instance.py` (new file)
   - `src/lazyssh/logging_module.py` (remove local import)
   - `src/lazyssh/ui.py` (use shared console)
