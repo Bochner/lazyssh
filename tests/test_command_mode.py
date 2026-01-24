@@ -1590,7 +1590,7 @@ class TestWizardLazyssh:
     def test_wizard_lazyssh_existing_connection(
         self, ssh_manager: SSHManager, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Test wizard with already existing connection name."""
+        """Test wizard with already existing connection name, then rename."""
         from unittest import mock
 
         # Add an existing connection
@@ -1604,17 +1604,27 @@ class TestWizardLazyssh:
             mock.patch("rich.prompt.Confirm") as mock_confirm,
         ):
             mock_prompt.ask.side_effect = [
-                "192.168.1.1",
-                "22",
-                "user",
-                "existing",  # Same as existing
-                "newname",  # New name after prompt
+                "192.168.1.1",  # host
+                "22",  # port
+                "user",  # username
+                "existing",  # socket name (same as existing)
+                "newname",  # new socket name after rename prompt
+                "",  # ssh key (empty)
+                "bash",  # shell
+                "9050",  # proxy port
             ]
-            mock_confirm.ask.return_value = True  # Yes, want different name
+            mock_confirm.ask.side_effect = [
+                True,  # Yes, want different name
+                False,  # Use SSH key?
+                False,  # Custom shell?
+                False,  # No term?
+                False,  # SOCKS proxy?
+                False,  # Save config?
+            ]
+            monkeypatch.setattr(ssh_manager, "create_connection", lambda conn: True)
             cm = CommandMode(ssh_manager)
-            # Will fail at create_connection since we're not mocking it
-            cm._wizard_lazyssh()
-            # May succeed or fail depending on mocking, but shouldn't crash
+            result = cm._wizard_lazyssh()
+            assert result is True
 
     def test_wizard_lazyssh_full_flow_success(
         self, ssh_manager: SSHManager, monkeypatch: pytest.MonkeyPatch
