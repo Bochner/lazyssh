@@ -1080,11 +1080,18 @@ class TestScpCommand:
         self, ssh_manager: SSHManager, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test scp with valid connection."""
+        import subprocess
+
         conn = SSHConnection(
             host="192.168.1.1", port=22, username="user", socket_path="/tmp/scptest"
         )
         ssh_manager.connections["/tmp/scptest"] = conn
-        # Mock SCPMode.run to not actually run
+
+        # Mock subprocess.run to avoid actual SSH connection in SCPMode.connect()
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: mock_result)
+
+        # Mock SCPMode.run to not actually run the interactive loop
         from lazyssh import scp_mode
 
         monkeypatch.setattr(scp_mode.SCPMode, "run", lambda self: None)

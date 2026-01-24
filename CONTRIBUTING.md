@@ -40,6 +40,30 @@ Tests run with coverage by default:
 make test    # Shows coverage in terminal
 ```
 
+### Test Isolation Requirements
+
+All tests must be isolated from external dependencies for CI/CD compatibility:
+
+**Mock blocking operations:**
+- `subprocess.run()` / `subprocess.Popen()` - Mock to prevent actual process execution
+- `Confirm.ask()` / `Prompt.ask()` / `input()` - Mock to prevent stdin blocking
+- SSH connections and network calls - Mock to prevent network dependencies
+
+**Example patterns:**
+```python
+# Mock subprocess
+mock_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: mock_result)
+
+# Mock interactive prompts
+monkeypatch.setattr("rich.prompt.Confirm.ask", lambda *args, **kwargs: True)
+
+# Mock plugin execution
+monkeypatch.setattr(cm.plugin_manager, "execute_plugin", lambda *args: (True, "", 0.1))
+```
+
+**Timeout protection:** All tests have a 30-second timeout via pytest-timeout. If a test hangs, the timeout will identify the blocking operation.
+
 ## Pull Request Process
 
 1. Fork and create a feature branch
