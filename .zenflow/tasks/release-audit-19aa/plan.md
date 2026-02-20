@@ -105,15 +105,16 @@ Tighten mypy settings incrementally. Move from global `ignore_missing_imports` t
 - [x] 4.5 Resolve all `# type: ignore` comments: added error codes and explanatory comments; replaced `dict[str, int | datetime]` with `TransferStats` TypedDict in `logging_module.py` to eliminate 2 `type: ignore` comments entirely; 6 remaining `type: ignore` comments all have error codes and explanations
 - [x] 4.6 Run `make check && make test` — zero ruff/mypy errors, 955 tests passed, 97.22% branch coverage, build clean
 
-### [ ] Step 5: Refactor high-complexity functions
+### [x] Step 5: Refactor high-complexity functions
+<!-- chat-id: 3cfa4e1a-55f0-4e17-8a43-4ea730cc91da -->
 
 Break down the four highest-complexity functions into smaller, focused methods. Preserve all existing behavior — tests must pass without modification.
 
-- [ ] 5.1 Refactor `LazySSHCompleter.get_completions` in `command_mode.py`: extract per-command completion handlers into separate private methods, dispatch via a handler dictionary
-- [ ] 5.2 Refactor `SCPModeCompleter.get_completions` in `scp_mode.py`: same pattern — extract per-command completion handlers into private methods
-- [ ] 5.3 Refactor `CommandMode.cmd_help` in `command_mode.py`: extract to a data-driven approach using a dictionary mapping topic names to help text content
-- [ ] 5.4 Refactor `SCPMode.cmd_mget` in `scp_mode.py`: split into `_mget_discover_files()`, `_mget_calculate_size()`, and `_mget_download()` helper methods
-- [ ] 5.5 Run `make check && make test` after each refactor to verify behavior preservation and coverage maintenance
+- [x] 5.1 Refactor `LazySSHCompleter.get_completions` in `command_mode.py`: extracted 10 private methods (`_complete_lazyssh`, `_complete_tunc`, `_complete_tund`, `_complete_terminal`, `_complete_single_arg_connection`, `_complete_single_arg_connection_name`, `_complete_single_arg_config`, `_complete_help`, `_complete_wizard`, `_complete_plugin`), dispatched via `_completion_handlers` dictionary
+- [x] 5.2 Refactor `SCPModeCompleter.get_completions` in `scp_mode.py`: extracted 6 private methods (`_complete_remote_files`, `_complete_put`, `_complete_cd`, `_complete_local`, `_complete_lls`, `_complete_lcd`)
+- [x] 5.3 Refactor `CommandMode.cmd_help` in `command_mode.py`: extracted 11 private methods (`_help_overview`, `_help_lazyssh`, `_help_tunc`, `_help_tund`, `_help_terminal`, `_help_open`, `_help_clear`, `_help_scp`, `_help_debug`, `_help_wizard`, `_help_plugin`), dispatched via `help_handlers` dictionary
+- [x] 5.4 Refactor `SCPMode.cmd_mget` in `scp_mode.py`: split into `_mget_discover_files()`, `_mget_calculate_size()`, and `_mget_download()` helper methods
+- [x] 5.5 Verified after each refactor — all 955 tests pass, 97.06% branch coverage, zero lint/type errors
 
 ### [ ] Step 6: Tighten exception handling
 
