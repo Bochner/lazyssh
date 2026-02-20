@@ -1,0 +1,4 @@
+{
+  "setup_script": "mise install && pipx install hatch && hatch env create default 2>/dev/null; pre-commit install",
+  "verification_script": "hatch run check"
+}
