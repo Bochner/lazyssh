@@ -128,14 +128,20 @@ Add logging to silent exception handlers and narrow broad `except Exception` cat
 - [x] 6.5 Surveyed all remaining modules: `__main__.py` close loop narrowed to `(OSError, subprocess.SubprocessError)`, top-level safety net kept as `except Exception` with comment; `logging_module.py` narrowed 2 blocks to `OSError`; `command_mode.py` narrowed close loop and wizard handlers, kept top-level as `except Exception`; `ui.py` kept `ensure_terminal_compatibility` as `except Exception` (Rich rendering failures); `enumerate.py` narrowed import fallbacks to `ImportError`, base64 decoding to `(ValueError, UnicodeDecodeError)`, mkdir to `(OSError, ValueError)`; updated 1 test mock to raise `OSError` instead of bare `Exception`
 - [x] 6.6 Run `make check && make test` — zero ruff violations, zero mypy errors, 955 tests passed, 97.04% branch coverage, build clean
 
-### [ ] Step 7: Add parametrized tests
+### [x] Step 7: Add parametrized tests
+<!-- chat-id: 447cd157-b603-42f2-904c-08dffee673f6 -->
 
 Convert 3-5 repetitive test groups to use `@pytest.mark.parametrize`, improving conciseness and edge case coverage.
 
-- [ ] 7.1 Identify repetitive test patterns: terminal method options, environment variable toggles, config validation edge cases, connection parameter combinations, command parsing variations
-- [ ] 7.2 Convert the identified groups to parametrized tests using `@pytest.mark.parametrize` with descriptive `ids`
-- [ ] 7.3 Verify test count is maintained or increased (parametrized tests expand at runtime)
-- [ ] 7.4 Run `make test` to confirm all tests pass and coverage is maintained
+- [x] 7.1 Identify repetitive test patterns: terminal method options, integer env var parsing, config name validation, display message types (plain text and rich), accessible message types
+- [x] 7.2 Convert 5 groups to parametrized tests with descriptive `ids`:
+  - `TestGetTerminalMethod` in `test_config.py`: collapsed 5 tests (3 method returns + case insensitive + invalid) into 1 parametrized test with 7 cases
+  - `TestValidateConfigName` in `test_config.py`: converted inline assertions to 5 valid + 6 invalid parametrized cases with descriptive ids
+  - `TestParseIntegerEnvVar` in `test_console_instance.py`: collapsed 4 tests into 1 parametrized test with 5 cases
+  - `TestDisplayMessageWithFallback` in `test_console_instance.py`: collapsed 4 plain-text tests into 1 parametrized (4 cases) and 4 rich-mode tests into 1 parametrized (4 cases)
+  - `TestDisplayAccessibleMessage` in `test_console_instance.py`: collapsed 5 tests into 1 parametrized test with 5 cases
+- [x] 7.3 Test count increased from 955 to 966 (parametrized tests expand at runtime)
+- [x] 7.4 Run `make check && make test` — zero ruff violations, zero mypy errors, 966 tests passed, 97.06% branch coverage
 
 ### [ ] Step 8: Documentation updates
 

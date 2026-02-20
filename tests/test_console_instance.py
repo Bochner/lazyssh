@@ -37,30 +37,29 @@ class TestParseIntegerEnvVar:
         monkeypatch.delenv("TEST_INT", raising=False)
         assert console_instance.parse_integer_env_var("TEST_INT", 5) == 5
 
-    def test_valid_integer(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test parsing valid integer."""
-        monkeypatch.setenv("TEST_INT", "7")
-        assert console_instance.parse_integer_env_var("TEST_INT", 5, 1, 10) == 7
-
-    def test_integer_below_min(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test integer below minimum is clamped."""
-        monkeypatch.setenv("TEST_INT", "0")
-        assert console_instance.parse_integer_env_var("TEST_INT", 5, 1, 10) == 1
-
-    def test_integer_above_max(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test integer above maximum is clamped."""
-        monkeypatch.setenv("TEST_INT", "100")
-        assert console_instance.parse_integer_env_var("TEST_INT", 5, 1, 10) == 10
-
-    def test_invalid_integer(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test invalid integer returns default."""
-        monkeypatch.setenv("TEST_INT", "not-a-number")
-        assert console_instance.parse_integer_env_var("TEST_INT", 5, 1, 10) == 5
-
-    def test_empty_string(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test empty string returns default."""
-        monkeypatch.setenv("TEST_INT", "")
-        assert console_instance.parse_integer_env_var("TEST_INT", 5, 1, 10) == 5
+    @pytest.mark.parametrize(
+        ("env_value", "expected"),
+        [
+            ("7", 7),
+            ("0", 1),
+            ("100", 10),
+            ("not-a-number", 5),
+            ("", 5),
+        ],
+        ids=[
+            "valid-in-range",
+            "below-min-clamped",
+            "above-max-clamped",
+            "invalid-default",
+            "empty-default",
+        ],
+    )
+    def test_parse_with_bounds(
+        self, monkeypatch: pytest.MonkeyPatch, env_value: str, expected: int
+    ) -> None:
+        """Test integer parsing with min/max bounds and invalid inputs."""
+        monkeypatch.setenv("TEST_INT", env_value)
+        assert console_instance.parse_integer_env_var("TEST_INT", 5, 1, 10) == expected
 
 
 class TestGetUIConfig:
@@ -325,66 +324,34 @@ class TestDisplayFunctions:
 class TestDisplayAccessibleMessage:
     """Tests for display_accessible_message function."""
 
-    def test_error_type(self) -> None:
-        """Test error message type."""
-        console_instance.display_accessible_message("Test", "error")
-
-    def test_success_type(self) -> None:
-        """Test success message type."""
-        console_instance.display_accessible_message("Test", "success")
-
-    def test_warning_type(self) -> None:
-        """Test warning message type."""
-        console_instance.display_accessible_message("Test", "warning")
-
-    def test_info_type(self) -> None:
-        """Test info message type."""
-        console_instance.display_accessible_message("Test", "info")
-
-    def test_unknown_type(self) -> None:
-        """Test unknown message type defaults to info."""
-        console_instance.display_accessible_message("Test", "unknown")
+    @pytest.mark.parametrize(
+        "msg_type",
+        ["error", "success", "warning", "info", "unknown"],
+        ids=["error", "success", "warning", "info", "unknown-defaults-to-info"],
+    )
+    def test_message_types(self, msg_type: str) -> None:
+        """Test that each message type (including unknown) does not raise."""
+        console_instance.display_accessible_message("Test", msg_type)
 
 
 class TestDisplayMessageWithFallback:
     """Tests for display_message_with_fallback function."""
 
-    def test_plain_text_mode(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-        """Test plain text mode output."""
+    @pytest.mark.parametrize(
+        ("msg_type", "expected_prefix"),
+        [("info", "INFO:"), ("success", "SUCCESS:"), ("error", "ERROR:"), ("warning", "WARNING:")],
+    )
+    def test_plain_text_types(
+        self, monkeypatch: pytest.MonkeyPatch, capsys, msg_type: str, expected_prefix: str
+    ) -> None:
+        """Test plain text output for each message type."""
         monkeypatch.setenv("LAZYSSH_PLAIN_TEXT", "true")
 
-        console_instance.display_message_with_fallback("Test message", "info")
+        console_instance.display_message_with_fallback("Test message", msg_type)
 
         captured = capsys.readouterr()
-        assert "INFO:" in captured.out
+        assert expected_prefix in captured.out
         assert "Test message" in captured.out
-
-    def test_plain_text_success(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-        """Test plain text success output."""
-        monkeypatch.setenv("LAZYSSH_PLAIN_TEXT", "true")
-
-        console_instance.display_message_with_fallback("Test message", "success")
-
-        captured = capsys.readouterr()
-        assert "SUCCESS:" in captured.out
-
-    def test_plain_text_error(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-        """Test plain text error output."""
-        monkeypatch.setenv("LAZYSSH_PLAIN_TEXT", "true")
-
-        console_instance.display_message_with_fallback("Test message", "error")
-
-        captured = capsys.readouterr()
-        assert "ERROR:" in captured.out
-
-    def test_plain_text_warning(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-        """Test plain text warning output."""
-        monkeypatch.setenv("LAZYSSH_PLAIN_TEXT", "true")
-
-        console_instance.display_message_with_fallback("Test message", "warning")
-
-        captured = capsys.readouterr()
-        assert "WARNING:" in captured.out
 
     def test_no_rich_mode(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
         """Test no_rich mode output."""
@@ -396,34 +363,13 @@ class TestDisplayMessageWithFallback:
         captured = capsys.readouterr()
         assert "INFO:" in captured.out
 
-    def test_rich_mode_info(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test rich mode info output."""
+    @pytest.mark.parametrize("msg_type", ["info", "success", "error", "warning"])
+    def test_rich_mode_types(self, monkeypatch: pytest.MonkeyPatch, msg_type: str) -> None:
+        """Test rich mode output does not raise for each message type."""
         monkeypatch.delenv("LAZYSSH_PLAIN_TEXT", raising=False)
         monkeypatch.delenv("LAZYSSH_NO_RICH", raising=False)
 
-        # Just verify it doesn't raise
-        console_instance.display_message_with_fallback("Test message", "info")
-
-    def test_rich_mode_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test rich mode success output."""
-        monkeypatch.delenv("LAZYSSH_PLAIN_TEXT", raising=False)
-        monkeypatch.delenv("LAZYSSH_NO_RICH", raising=False)
-
-        console_instance.display_message_with_fallback("Test message", "success")
-
-    def test_rich_mode_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test rich mode error output."""
-        monkeypatch.delenv("LAZYSSH_PLAIN_TEXT", raising=False)
-        monkeypatch.delenv("LAZYSSH_NO_RICH", raising=False)
-
-        console_instance.display_message_with_fallback("Test message", "error")
-
-    def test_rich_mode_warning(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test rich mode warning output."""
-        monkeypatch.delenv("LAZYSSH_PLAIN_TEXT", raising=False)
-        monkeypatch.delenv("LAZYSSH_NO_RICH", raising=False)
-
-        console_instance.display_message_with_fallback("Test message", "warning")
+        console_instance.display_message_with_fallback("Test message", msg_type)
 
     def test_rich_mode_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test rich mode unknown type defaults to info."""
