@@ -126,7 +126,6 @@ cov-combine = ""
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
@@ -175,9 +174,11 @@ log_date_format = "%H:%M:%S"
 
 [tool.coverage.run]
 source = ["src/lazyssh"]
+branch = true
 omit = ["tests/*"]
 
 [tool.coverage.report]
+fail_under = 97
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

@@ -53,15 +53,16 @@ Create a detailed implementation plan based on `{@artifacts_path}/spec.md`.
 
 Save to `{@artifacts_path}/plan.md`.
 
-### [ ] Step 1: Low-risk configuration changes
+### [x] Step 1: Low-risk configuration changes
+<!-- chat-id: fb4c0f97-a4ed-4c5a-adbf-deb66728f82c -->
 
 Apply safe, config-only changes that reduce risk and enforce existing standards. No behavioral code changes.
 
-- [ ] 1.1 Add `fail_under = 100` to `[tool.coverage.report]` in `pyproject.toml` (Req 3.1)
-- [ ] 1.2 Add `branch = true` to `[tool.coverage.run]` in `pyproject.toml`; run `make test` to verify branch coverage level; adjust `fail_under` if branch coverage is below 100% (Req 3.1)
-- [ ] 1.3 Remove `target-version = "py311"` from `[tool.ruff]` in `pyproject.toml`; verify Ruff infers from `requires-python` by running `ruff check src tests` (Req 5.3)
-- [ ] 1.4 Add missing CHANGELOG entries for v1.6.1 and v1.6.2 based on `git log` between those releases (Req 4.1)
-- [ ] 1.5 Run `make check && make test && make build` to verify no regressions
+- [x] 1.1 Add `fail_under = 100` to `[tool.coverage.report]` in `pyproject.toml` (Req 3.1)
+- [x] 1.2 Add `branch = true` to `[tool.coverage.run]` in `pyproject.toml`; run `make test` to verify branch coverage level; adjust `fail_under` if branch coverage is below 100% (Req 3.1) — branch coverage is 97.36%, set `fail_under = 97`
+- [x] 1.3 Remove `target-version = "py311"` from `[tool.ruff]` in `pyproject.toml`; verify Ruff infers from `requires-python` by running `ruff check src tests` (Req 5.3)
+- [x] 1.4 Add missing CHANGELOG entry for v1.6.2 based on `git log` (no v1.6.1 release exists — version went from 1.6.0 to 1.6.2) (Req 4.1)
+- [x] 1.5 Run `make check && make test && make build` to verify no regressions — all pass (955 tests, 97.36% branch coverage, build clean)
 
 ### [ ] Step 2: Security hardening — remove `shell=True`
 

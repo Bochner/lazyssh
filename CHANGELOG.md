@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-01-24
+
+### Fixed
+- **List Command**: Fixed `list` command to call `show_status()` when active connections exist, displaying saved configurations, active SSH connections, and tunnels as documented in help text
+
 ## [1.6.0] - 2026-01-24
 
 ### Added
