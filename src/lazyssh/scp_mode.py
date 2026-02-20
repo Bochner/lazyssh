@@ -33,7 +33,7 @@ from .console_instance import console, display_error, display_info, display_succ
 from .logging_module import (
     SCP_LOGGER,
     format_size,
-    get_connection_logger,  # noqa: F401
+    get_connection_logger,  # noqa: F401 — re-exported for plugin/test access
     log_file_transfer,
     log_scp_command,
     set_debug_mode,

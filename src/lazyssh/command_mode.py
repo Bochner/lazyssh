@@ -27,7 +27,12 @@ from .config import (
     validate_config_name,
 )
 from .console_instance import console, display_error, display_info, display_success, display_warning
-from .logging_module import APP_LOGGER, CMD_LOGGER, log_ssh_command, set_debug_mode  # noqa: F401
+from .logging_module import (  # noqa: F401 — plugin use
+    APP_LOGGER,
+    CMD_LOGGER,
+    log_ssh_command,
+    set_debug_mode,
+)
 from .models import SSHConnection
 from .plugin_manager import PluginManager
 from .scp_mode import SCPMode

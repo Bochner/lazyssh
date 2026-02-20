@@ -169,13 +169,22 @@ Review and adjust dependency constraints; document rationale.
 - [x] 9.2 Add comment in `pyproject.toml` noting that CI tests with latest resolved versions only and minimum compatibility is not separately tested — added above `dependencies` list
 - [x] 9.3 Run `make build` to verify packaging is clean — sdist and wheel built, `twine check` passed
 
-### [ ] Step 10: Final verification
+### [x] Step 10: Final verification
+<!-- chat-id: 31af37e2-5d55-4212-b818-972dd14e6928 -->
 
 Full quality gate and summary.
 
-- [ ] 10.1 Run `make check` — zero ruff violations, zero mypy errors
-- [ ] 10.2 Run `make test` — all tests pass, coverage threshold enforced
-- [ ] 10.3 Run `make build` — package builds and `twine check` passes
-- [ ] 10.4 Review all `# noqa:` comments added during audit to confirm each has an explanatory note
-- [ ] 10.5 Confirm CHANGELOG is accurate and complete through v1.6.2
-- [ ] 10.6 Record final test count, coverage percentage, and any deferred items in this plan
+- [x] 10.1 Run `make check` — zero ruff violations, zero mypy errors (ruff format: 34 files clean, ruff check: all passed, mypy: 14 source files clean)
+- [x] 10.2 Run `make test` — 966 tests passed in 5.16s, 97.04% branch coverage (threshold: 97%), zero failures
+- [x] 10.3 Run `make build` — sdist and wheel built (`lazyssh-1.6.2`), `twine check` passed on both artifacts
+- [x] 10.4 Review all `# noqa:` comments — 53 total across src/ and tests/; found 3 F401 suppressions in `__init__.py`, `command_mode.py`, and `scp_mode.py` missing explanatory notes; added explanations to all 3; re-ran `make check && make test` — all clean
+- [x] 10.5 Confirm CHANGELOG is accurate and complete — `[Unreleased]` covers all 9 audit steps (security hardening, exception narrowing, complexity refactoring, Ruff rules, mypy strengthening, parametrized tests, branch coverage, documentation, dependency review); `[1.6.2]` and `[1.6.0]` entries match git history; no missing versions
+- [x] 10.6 Final metrics and deferred items:
+  - **Test count**: 966 (up from 955 at audit start)
+  - **Branch coverage**: 97.04% (threshold enforced at 97%)
+  - **Statement coverage**: 97% (3596 statements, 15 missed)
+  - **Ruff violations**: 0
+  - **mypy errors**: 0
+  - **noqa comments**: 53 (all with explanatory notes)
+  - **type: ignore comments**: 6 (all with error codes and explanations)
+  - **Deferred items**: None — all planned audit work is complete
