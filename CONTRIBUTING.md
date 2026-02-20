@@ -20,6 +20,7 @@ make run              # Run lazyssh
 | `make lint` | Run linter |
 | `make test` | Run tests with coverage |
 | `make check` | All quality checks |
+| `make verify` | Full verification (check + test + build) |
 | `make build` | Build package |
 
 Use `hatch run <command>` to run any command in the venv without activation.

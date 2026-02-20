@@ -143,15 +143,22 @@ Convert 3-5 repetitive test groups to use `@pytest.mark.parametrize`, improving 
 - [x] 7.3 Test count increased from 955 to 966 (parametrized tests expand at runtime)
 - [x] 7.4 Run `make check && make test` — zero ruff violations, zero mypy errors, 966 tests passed, 97.06% branch coverage
 
-### [ ] Step 8: Documentation updates
+### [x] Step 8: Documentation updates
+<!-- chat-id: 84b81ffb-4ad8-4651-8a34-4bde3990aa68 -->
 
 Update CHANGELOG, user docs, and contributor guidance to reflect current state.
 
-- [ ] 8.1 Review `docs/getting-started.md`, `docs/reference.md`, `docs/guides.md`, `docs/troubleshooting.md` against current command set and features in `command_mode.py`; update stale instructions for v1.6.x changes
-- [ ] 8.2 Verify environment variable documentation matches actual usage across source modules
-- [ ] 8.3 Verify config file format documentation matches `config.py` implementation
-- [ ] 8.4 Verify plugin documentation matches `plugin_manager.py` behavior
-- [ ] 8.5 Audit `CLAUDE.md`, `CONTRIBUTING.md`, `openspec/project.md` for contradictions or stale info; ensure distinct purpose for each; add cross-references where content overlaps
+- [x] 8.1 Review `docs/getting-started.md`, `docs/reference.md`, `docs/guides.md`, `docs/troubleshooting.md` against current command set and features in `command_mode.py` — all 20 commands documented correctly; env vars, config format, SCP commands, and plugin system all match source code; no stale instructions found in user-facing docs
+- [x] 8.2 Verify environment variable documentation matches actual usage across source modules — `reference.md` lists all 12 user-configurable and 8 plugin API env vars accurately; added `LAZYSSH_SHELL` to `docs/Plugin/example_template.py` env var comment; added cross-reference from `CLAUDE.md` to `docs/reference.md` for complete env var table
+- [x] 8.3 Verify config file format documentation matches `config.py` implementation — all 8 TOML fields documented correctly with required/optional status matching source
+- [x] 8.4 Verify plugin documentation matches `plugin_manager.py` behavior — search order, metadata format, execution model, and validation all match; `PLUGIN_REQUIREMENTS` field is optional and correctly omitted from minimal examples
+- [x] 8.5 Audit `CLAUDE.md`, `CONTRIBUTING.md`, `openspec/project.md` for contradictions or stale info:
+  - Fixed `openspec/project.md`: updated type hints from "preferred but not strictly enforced" to "strictly enforced via mypy"; changed coverage from "100% required" to "97% branch coverage required"; corrected `prompt_toolkit` version from pinned `3.0.39` to range `>=3.0.39, <3.1.0`; removed stale "Target Python version: 3.11" Ruff line (Ruff now infers from `requires-python`)
+  - Fixed `CLAUDE.md`: added cross-reference to `docs/reference.md` for full env var documentation
+  - Fixed `CONTRIBUTING.md`: added missing `make verify` to commands table
+  - Fixed `Makefile`: added `verify` target (check + test + build) referenced by CLAUDE.md and openspec/project.md but previously missing
+  - Added `[Unreleased]` CHANGELOG entries for all audit work (Steps 1-7)
+  - Run `make check && make test && make build` — zero violations, 966 tests passed, 97.06% branch coverage, build clean
 
 ### [ ] Step 9: Dependency and packaging review
 

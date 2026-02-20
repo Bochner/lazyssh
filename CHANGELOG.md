@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Security**: Removed `shell=True` from subprocess calls in tunnel creation and teardown, converting string commands to argument lists to eliminate command injection risk
+- **Exception Handling**: Narrowed broad `except Exception` catches across all modules to specific exception types (`OSError`, `subprocess.SubprocessError`, `ValueError`, etc.) with explanatory comments
+- **Code Quality**: Refactored four highest-complexity functions (`get_completions` in both completers, `cmd_help`, `cmd_mget`) into smaller focused methods using dispatch dictionaries
+- **Linting**: Enabled Ruff security (`S`), pytest-style (`PT`), and return-statement (`RET`) rules with per-file ignores for tests
+- **Type Checking**: Strengthened mypy configuration with `disallow_untyped_defs`, `strict_equality`, `no_implicit_optional`, and per-module overrides replacing global `ignore_missing_imports`
+- **Testing**: Converted repetitive test groups to `@pytest.mark.parametrize` with descriptive IDs, increasing test count from 955 to 966
+- **Coverage**: Enabled branch coverage tracking; set `fail_under = 97` threshold in pyproject.toml
+- **Documentation**: Updated `openspec/project.md` to reflect strict type enforcement and branch coverage threshold; added `LAZYSSH_SHELL` to plugin template env var reference
+
 ## [1.6.2] - 2026-01-24
 
 ### Fixed
