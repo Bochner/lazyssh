@@ -160,13 +160,14 @@ Update CHANGELOG, user docs, and contributor guidance to reflect current state.
   - Added `[Unreleased]` CHANGELOG entries for all audit work (Steps 1-7)
   - Run `make check && make test && make build` — zero violations, 966 tests passed, 97.06% branch coverage, build clean
 
-### [ ] Step 9: Dependency and packaging review
+### [x] Step 9: Dependency and packaging review
+<!-- chat-id: c1e475e6-819d-444e-9c85-bd29f81a8084 -->
 
 Review and adjust dependency constraints; document rationale.
 
-- [ ] 9.1 Search codebase for `prompt_toolkit` APIs requiring >=3.0.39; if none found, relax lower bound to `>=3.0.36` or broader; keep `<3.1.0` upper bound; add comment documenting reasoning
-- [ ] 9.2 Add comment in `pyproject.toml` noting that CI tests with latest resolved versions only and minimum compatibility is not separately tested
-- [ ] 9.3 Run `make build` to verify packaging is clean
+- [x] 9.1 Search codebase for `prompt_toolkit` APIs requiring >=3.0.39 — found `complete_event.completion_requested` in `scp_mode.py` (lines 177 and 265), introduced in prompt_toolkit 3.0.39; lower bound `>=3.0.39` is justified and kept; added inline comment documenting the rationale
+- [x] 9.2 Add comment in `pyproject.toml` noting that CI tests with latest resolved versions only and minimum compatibility is not separately tested — added above `dependencies` list
+- [x] 9.3 Run `make build` to verify packaging is clean — sdist and wheel built, `twine check` passed
 
 ### [ ] Step 10: Final verification
 

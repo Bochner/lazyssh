@@ -27,12 +27,17 @@ classifiers = [
 ]
 keywords = ["ssh", "tunnel", "proxy", "socks", "terminal", "connection", "management"]
 requires-python = ">=3.11"
+# NOTE: CI tests with latest resolved versions only; minimum-version compatibility
+# is not separately tested. Lower bounds reflect the oldest version known to work
+# based on API usage analysis, not exhaustive testing.
 dependencies = [
     "colorama>=0.4.6",
     "rich>=13.0.0",
     "click>=8.0.0",
     "pexpect>=4.8.0",
     "python-dotenv>=1.0.0",
+    # >=3.0.39 required: scp_mode.py uses complete_event.completion_requested
+    # (introduced in 3.0.39). Upper bound <3.1.0 guards against breaking changes.
     "prompt_toolkit>=3.0.39,<3.1.0",
     "wcwidth>=0.2.5",
     "art>=5.9",
