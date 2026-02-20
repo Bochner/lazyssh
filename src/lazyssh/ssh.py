@@ -204,18 +204,23 @@ class SSHManager:
 
             conn = self.connections[socket_path]
 
-            # Build the command
-            if reverse:
-                tunnel_args = f"-O forward -R {local_port}:{remote_host}:{remote_port}"
-            else:
-                tunnel_args = f"-O forward -L {local_port}:{remote_host}:{remote_port}"
-
-            cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
+            # Build the command as an argument list to avoid shell injection
+            tunnel_spec = f"{local_port}:{remote_host}:{remote_port}"
+            cmd = [
+                "ssh",
+                "-S",
+                socket_path,
+                "-O",
+                "forward",
+                "-R" if reverse else "-L",
+                tunnel_spec,
+                "dummy",
+            ]
             if SSH_LOGGER:
-                SSH_LOGGER.debug(f"Tunnel command: {cmd}")
+                SSH_LOGGER.debug(f"Tunnel command: {' '.join(cmd)}")
 
             # Execute the command
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
                 display_error(f"Failed to create tunnel: {result.stderr}")
@@ -256,22 +261,23 @@ class SSHManager:
                     SSH_LOGGER.error(f"Tunnel {tunnel_id} not found for {socket_path}")
                 return False
 
-            # Build the command
-            if tunnel.type == "reverse":
-                tunnel_args = (
-                    f"-O cancel -R {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
-                )
-            else:
-                tunnel_args = (
-                    f"-O cancel -L {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
-                )
-
-            cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
+            # Build the command as an argument list to avoid shell injection
+            tunnel_spec = f"{tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
+            cmd = [
+                "ssh",
+                "-S",
+                socket_path,
+                "-O",
+                "cancel",
+                "-R" if tunnel.type == "reverse" else "-L",
+                tunnel_spec,
+                "dummy",
+            ]
             if SSH_LOGGER:
-                SSH_LOGGER.debug(f"Close tunnel command: {cmd}")
+                SSH_LOGGER.debug(f"Close tunnel command: {' '.join(cmd)}")
 
             # Execute the command
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
                 display_error(f"Failed to close tunnel: {result.stderr}")
