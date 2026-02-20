@@ -149,7 +149,7 @@ class SSHManager:
                 self.open_terminal(conn.socket_path)
 
             return True
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error creating SSH connection: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error creating SSH connection: {str(e)}")
@@ -178,7 +178,7 @@ class SSHManager:
                     SSH_LOGGER.debug(f"Connection check failed: {socket_path}")
 
             return success
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error checking connection: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Error checking connection: {str(e)}")
@@ -236,7 +236,7 @@ class SSHManager:
             log_tunnel_creation(socket_path, local_port, remote_host, remote_port, reverse)
 
             return True
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error creating tunnel: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error creating tunnel: {str(e)}")
@@ -291,7 +291,7 @@ class SSHManager:
                 SSH_LOGGER.info(f"Tunnel {tunnel_id} closed for {socket_path}")
 
             return True
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error closing tunnel: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error closing tunnel: {str(e)}")
@@ -362,7 +362,7 @@ class SSHManager:
                 )
             return False
 
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error opening native terminal: {str(e)}")
             console.print("\n[warning]You can manually connect using:[/warning]")
             console.print(
@@ -442,7 +442,7 @@ class SSHManager:
                 SSH_LOGGER.error(f"Terminator failed to start: {stderr.decode().strip()}")
             return False
 
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error opening Terminator terminal: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error opening Terminator terminal: {str(e)}")
@@ -510,7 +510,7 @@ class SSHManager:
                 SSH_LOGGER.debug("Terminator not available, using native terminal (auto mode)")
             return self.open_terminal_native(socket_path)
 
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error opening terminal: {str(e)}")
             console.print("\n[warning]You can manually connect using:[/warning]")
             console.print(
@@ -573,7 +573,7 @@ class SSHManager:
 
             display_success("SSH connection closed")
             return True
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_warning(f"Error during connection cleanup: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Error during connection cleanup: {str(e)}")

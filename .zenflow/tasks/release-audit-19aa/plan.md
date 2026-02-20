@@ -116,16 +116,17 @@ Break down the four highest-complexity functions into smaller, focused methods. 
 - [x] 5.4 Refactor `SCPMode.cmd_mget` in `scp_mode.py`: split into `_mget_discover_files()`, `_mget_calculate_size()`, and `_mget_download()` helper methods
 - [x] 5.5 Verified after each refactor — all 955 tests pass, 97.06% branch coverage, zero lint/type errors
 
-### [ ] Step 6: Tighten exception handling
+### [x] Step 6: Tighten exception handling
+<!-- chat-id: fad1c12f-8c7e-4286-931c-4aa954dcdc85 -->
 
 Add logging to silent exception handlers and narrow broad `except Exception` catches where the expected failure type is clear.
 
-- [ ] 6.1 In `scp_mode.py` (lines ~216, 243, 318): add `SCP_LOGGER.debug(...)` to `except Exception: pass` blocks and narrow to `OSError` or `subprocess.SubprocessError` where applicable
-- [ ] 6.2 In `plugin_manager.py` (line ~597): add `APP_LOGGER.debug(...)` to silent catch; narrow to `ValueError` / `OSError` for metadata parsing
-- [ ] 6.3 In `config.py` (lines ~287, 367, 463): add debug logging before cleanup attempts; narrow to `tomllib.TOMLDecodeError` / `OSError` where applicable
-- [ ] 6.4 In `ssh.py`: narrow broad catches in connection operations to `subprocess.SubprocessError` / `OSError` where the expected failure is clear
-- [ ] 6.5 Survey remaining `except Exception` instances across all source modules; narrow where safe, leave with comment where genuinely unknown failures are possible
-- [ ] 6.6 Run `make check && make test` to verify all tests pass and coverage holds
+- [x] 6.1 In `scp_mode.py`: narrowed 18 `except Exception` blocks — tab-completion handlers narrowed to `(OSError, subprocess.SubprocessError, ValueError)` with explanatory comments; SCP operations narrowed to `(OSError, subprocess.SubprocessError)`; date parsing narrowed to `(ValueError, OverflowError)`; local directory operations narrowed to `OSError`; top-level command loop kept as `except Exception` with comment
+- [x] 6.2 In `plugin_manager.py`: narrowed 10 `except Exception` blocks — filesystem ops to `OSError`; path resolution to `OSError`; `is_relative_to` to `(ValueError, OSError)`; file reading to `(OSError, UnicodeDecodeError)`; plugin execution to `(OSError, subprocess.SubprocessError)`; streaming plugin to `(OSError, subprocess.SubprocessError)`; unbound process variable to `UnboundLocalError`
+- [x] 6.3 In `config.py`: narrowed 9 `except Exception` blocks — directory/file creation to `OSError`; TOML loading already had `TOMLDecodeError` first, narrowed fallback to `OSError`; save/delete/backup atomic-write patterns narrowed inner and outer catches to `OSError`; cleanup `os.unlink` to `OSError`
+- [x] 6.4 In `ssh.py`: narrowed all 8 `except Exception` blocks to `(OSError, subprocess.SubprocessError)` — covers connection creation, checking, tunnel create/close, terminal opening (native, terminator, auto), and connection cleanup
+- [x] 6.5 Surveyed all remaining modules: `__main__.py` close loop narrowed to `(OSError, subprocess.SubprocessError)`, top-level safety net kept as `except Exception` with comment; `logging_module.py` narrowed 2 blocks to `OSError`; `command_mode.py` narrowed close loop and wizard handlers, kept top-level as `except Exception`; `ui.py` kept `ensure_terminal_compatibility` as `except Exception` (Rich rendering failures); `enumerate.py` narrowed import fallbacks to `ImportError`, base64 decoding to `(ValueError, UnicodeDecodeError)`, mkdir to `(OSError, ValueError)`; updated 1 test mock to raise `OSError` instead of bare `Exception`
+- [x] 6.6 Run `make check && make test` — zero ruff violations, zero mypy errors, 955 tests passed, 97.04% branch coverage, build clean
 
 ### [ ] Step 7: Add parametrized tests
 

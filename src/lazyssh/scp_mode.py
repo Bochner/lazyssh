@@ -220,8 +220,8 @@ class SCPModeCompleter(Completer):
                 for f in file_list:
                     if not word_before_cursor or f.startswith(word_before_cursor):
                         yield Completion(f, start_position=-len(word_before_cursor))
-        except Exception:  # pragma: no cover  # noqa: S110
-            pass
+        except (OSError, subprocess.SubprocessError, ValueError):  # pragma: no cover
+            pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
     def _complete_put(
         self, words: list[str], text: str, word_before_cursor: str
@@ -247,8 +247,8 @@ class SCPModeCompleter(Completer):
                 if not filename_part or f.startswith(filename_part):
                     full_path = str(Path(base_dir) / f) if base_dir else f
                     yield Completion(full_path, start_position=-len(partial_path))
-        except Exception:  # pragma: no cover  # noqa: S110
-            pass
+        except (OSError, ValueError):  # pragma: no cover
+            pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
     def _complete_cd(
         self, words: list[str], text: str, word_before_cursor: str, complete_event: Any
@@ -314,8 +314,8 @@ class SCPModeCompleter(Completer):
                 for d in dir_list:
                     if not word_before_cursor or d.startswith(word_before_cursor):
                         yield Completion(d, start_position=-len(word_before_cursor))
-        except Exception:  # pragma: no cover  # noqa: S110
-            pass
+        except (OSError, subprocess.SubprocessError, ValueError):  # pragma: no cover
+            pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
     def _complete_local(
         self, words: list[str], text: str, word_before_cursor: str
@@ -337,8 +337,8 @@ class SCPModeCompleter(Completer):
                         if path_obj.is_dir():
                             result_path = str(path_obj)
                             yield Completion(result_path, start_position=0)
-                except Exception:  # pragma: no cover  # noqa: S110
-                    pass
+                except (OSError, ValueError):  # pragma: no cover
+                    pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
             else:  # pragma: no cover - local completion path
                 try:
                     partial_path = words[1]
@@ -355,8 +355,8 @@ class SCPModeCompleter(Completer):
                         if (not dirname_part or d.startswith(dirname_part)) and path_obj.is_dir():
                             result_path = str(path_obj) if base_dir else d
                             yield Completion(result_path, start_position=-len(partial_path))
-                except Exception:  # pragma: no cover  # noqa: S110
-                    pass
+                except (OSError, ValueError):  # pragma: no cover
+                    pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
         elif (
             len(words) == 3 and words[1] in ["download", "upload"] and not text.endswith(" ")
         ):  # pragma: no cover - local completion
@@ -375,8 +375,8 @@ class SCPModeCompleter(Completer):
                     if (not dirname_part or d.startswith(dirname_part)) and dir_path_obj.is_dir():
                         result_path = str(dir_path_obj) if base_dir else d
                         yield Completion(result_path, start_position=-len(partial_path))
-            except Exception:  # pragma: no cover  # noqa: S110
-                pass
+            except (OSError, ValueError):  # pragma: no cover
+                pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
     def _complete_lls(
         self, words: list[str], text: str, word_before_cursor: str
@@ -433,8 +433,8 @@ class SCPModeCompleter(Completer):
                 if (not dirname_part or d.startswith(dirname_part)) and lcd_path_obj.is_dir():
                     result_path = str(lcd_path_obj) if base_dir else d
                     yield Completion(result_path, start_position=-len(partial_path))
-        except Exception:  # pragma: no cover  # noqa: S110
-            pass
+        except (OSError, ValueError):  # pragma: no cover
+            pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
 
 class SCPMode:
@@ -575,7 +575,10 @@ class SCPMode:
             else:  # pragma: no cover - SSH pwd error handling
                 self.current_remote_dir = "~"
                 self.remote_home_dir = None
-        except Exception:  # pragma: no cover - SSH pwd exception handling
+        except (
+            OSError,
+            subprocess.SubprocessError,
+        ):  # pragma: no cover - SSH pwd exception handling
             self.current_remote_dir = "~"
             self.remote_home_dir = None
 
@@ -768,7 +771,7 @@ class SCPMode:
 
             result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603  # args are constructed from validated SSH parameters
             return result
-        except Exception as e:  # pragma: no cover - SSH error handling
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - SSH error handling
             display_error(f"SSH command error: {str(e)}")
             return None
 
@@ -819,7 +822,7 @@ class SCPMode:
                 continue
             except EOFError:
                 break
-            except Exception as e:
+            except Exception as e:  # top-level command loop; genuinely unknown errors possible
                 display_error(f"Error: {str(e)}")
 
     def _select_connection(self) -> bool:
@@ -914,7 +917,7 @@ class SCPMode:
                 return 0
             # Get size of local file
             return Path(path).stat().st_size
-        except Exception:
+        except (OSError, subprocess.SubprocessError, ValueError):
             return 0
 
     def cmd_put(self, args: list[str]) -> None:
@@ -1032,7 +1035,7 @@ class SCPMode:
                 )
             else:  # pragma: no cover - upload error
                 display_error(f"Upload failed: {stderr}")
-        except Exception as e:  # pragma: no cover - upload exception
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - upload exception
             display_error(f"Upload error: {str(e)}")
 
     def cmd_get(self, args: list[str]) -> None:
@@ -1073,7 +1076,11 @@ class SCPMode:
             else:  # pragma: no cover - remote file error
                 display_error(f"File not found or cannot access: {remote_path}")
                 return
-        except Exception as e:  # pragma: no cover - exception handling
+        except (
+            OSError,
+            subprocess.SubprocessError,
+            ValueError,
+        ) as e:  # pragma: no cover - exception handling
             display_error(f"Error checking file: {str(e)}")
             return
 
@@ -1236,7 +1243,7 @@ class SCPMode:
                 )
             else:  # pragma: no cover - download error
                 display_error(f"Download failed: {stderr}")
-        except Exception as e:  # pragma: no cover - download exception
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - download exception
             display_error(f"Download error: {str(e)}")
 
     def cmd_ls(self, args: list[str]) -> bool:
@@ -1326,8 +1333,8 @@ class SCPMode:
                     else:  # pragma: no cover
                         # Fall back to original if parsing fails  # pragma: no cover
                         date = date_str  # pragma: no cover
-                except Exception:  # pragma: no cover
-                    # If any error, just use the original  # pragma: no cover
+                except (ValueError, OverflowError):  # pragma: no cover
+                    # If any date-parsing error, just use the original  # pragma: no cover
                     date = f"{date1} {date2} {date3}"  # pragma: no cover
 
                 # Color the filename based on type  # pragma: no cover
@@ -1354,7 +1361,7 @@ class SCPMode:
             console.print(table)
 
             return True
-        except Exception as e:  # pragma: no cover
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
             display_error(f"Error listing directory: {str(e)}")
             return False
 
@@ -1389,7 +1396,7 @@ class SCPMode:
 
             display_success(f"Changed to directory: {self.current_remote_dir}")
             return True
-        except Exception as e:  # pragma: no cover - exception handling
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - exception handling
             display_error(f"Failed to change directory: {str(e)}")
             return False
 
@@ -1425,7 +1432,7 @@ class SCPMode:
                 return False
 
             return self._mget_download(matched_files, file_sizes, total_size)
-        except Exception as e:  # pragma: no cover - mget exception
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - mget exception
             display_error(f"Error during mget: {str(e)}")
             return False
 
@@ -1628,7 +1635,10 @@ class SCPMode:
                         )
                         total_downloaded_bytes += final_size
 
-                except Exception as e:  # pragma: no cover - download exception
+                except (
+                    OSError,
+                    subprocess.SubprocessError,
+                ) as e:  # pragma: no cover - download exception
                     display_error(f"Failed to download {filename}: {str(e)}")
 
         elapsed_time = time.time() - start_time
@@ -1693,7 +1703,7 @@ class SCPMode:
                     display_success(f"Local upload directory set to: {new_path}")
 
                 return True
-            except Exception as e:  # pragma: no cover - exception
+            except OSError as e:  # pragma: no cover - exception
                 display_error(f"Failed to set local directory: {str(e)}")
                 return False
         else:
@@ -1724,7 +1734,7 @@ class SCPMode:
                     "Note: Use 'local download <path>' or 'local upload <path>' to set specific directories"
                 )
                 return True
-            except Exception as e:  # pragma: no cover - exception
+            except OSError as e:  # pragma: no cover - exception
                 display_error(f"Failed to set local directory: {str(e)}")
                 return False
 
@@ -1983,7 +1993,7 @@ class SCPMode:
 
             return True
 
-        except Exception as e:  # pragma: no cover
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
             display_error(f"Error listing directory: {str(e)}")
             return False
 
@@ -2082,7 +2092,7 @@ class SCPMode:
 
             return True
 
-        except Exception as e:  # pragma: no cover
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
             display_error(f"Error displaying directory tree: {str(e)}")
             return False
 
@@ -2115,7 +2125,7 @@ class SCPMode:
             self.local_download_dir = new_path
             display_success(f"Local download directory set to: {new_path}")
             return True
-        except Exception as e:
+        except OSError as e:
             display_error(f"Failed to change local directory: {str(e)}")
             return False
 
@@ -2165,5 +2175,8 @@ class SCPMode:
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)  # noqa: S603  # args are constructed from validated SSH parameters
             return result.returncode == 0
-        except Exception:  # pragma: no cover - connection check exception
+        except (
+            OSError,
+            subprocess.SubprocessError,
+        ):  # pragma: no cover - connection check exception
             return False

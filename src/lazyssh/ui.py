@@ -580,7 +580,7 @@ def ensure_terminal_compatibility() -> bool:
         test_console = Console()
         test_console.print("[success]Test[/success]")
         return True
-    except Exception:
+    except Exception:  # Rich rendering can fail in many ways on incompatible terminals
         # Fallback to basic text output
         return False
 

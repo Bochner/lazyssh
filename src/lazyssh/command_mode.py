@@ -408,7 +408,7 @@ class CommandMode:
                         CMD_LOGGER.info("User interrupted command mode (Ctrl+C or Ctrl+D)")
                     break
 
-        except Exception as e:
+        except Exception as e:  # top-level safety net; genuinely unknown errors possible
             display_error(f"Error in command mode: {str(e)}")
             if CMD_LOGGER:
                 CMD_LOGGER.exception(f"Unhandled error in command mode: {str(e)}")
@@ -1314,7 +1314,7 @@ class CommandMode:
                 try:
                     if self.ssh_manager.close_connection(socket_path):
                         successful_closures += 1
-                except Exception as e:
+                except (OSError, subprocess.SubprocessError) as e:
                     display_warning(f"Failed to close connection for {socket_path}: {str(e)}")
 
             # Report closure results
@@ -1695,7 +1695,7 @@ class CommandMode:
         except (KeyboardInterrupt, EOFError):
             display_info("\nWizard cancelled")
             return False
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError, ValueError) as e:
             display_error(f"Error in wizard: {str(e)}")
             if CMD_LOGGER:
                 CMD_LOGGER.error(f"Error in wizard lazyssh: {str(e)}")
@@ -1801,7 +1801,7 @@ class CommandMode:
         except (KeyboardInterrupt, EOFError):
             display_info("\nWizard cancelled")
             return False
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError, ValueError) as e:
             display_error(f"Error in wizard: {str(e)}")
             if CMD_LOGGER:
                 CMD_LOGGER.error(f"Error in wizard tunnel: {str(e)}")

@@ -84,7 +84,7 @@ def ensure_log_directory(log_dir: Path | str | None = None) -> bool:
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             log_dir.chmod(0o700)  # Secure permissions
-        except Exception as e:
+        except OSError as e:
             from .console_instance import display_error
 
             display_error(f"Error creating log directory: {e}")
@@ -143,7 +143,7 @@ def setup_logger(
             file_handler.setFormatter(logging.Formatter(FILE_LOG_FORMAT))
             file_handler.setLevel(level)  # File handler always uses the specified level
             logger.addHandler(file_handler)
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to set up file logging: {e}")
 
     return logger

@@ -28,7 +28,7 @@ def ensure_runtime_plugins_dir() -> None:
         RUNTIME_PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
         # Enforce permissions 0700
         RUNTIME_PLUGINS_DIR.chmod(0o700)
-    except Exception as e:
+    except OSError as e:
         if APP_LOGGER:
             APP_LOGGER.warning(f"Failed to ensure runtime plugins dir {RUNTIME_PLUGINS_DIR}: {e}")
 
@@ -77,7 +77,7 @@ class PluginManager:
                     # add user-executable bit if missing
                     if not os.access(entry, os.X_OK):
                         entry.chmod(mode | 0o100)
-        except Exception as e:
+        except OSError as e:
             if APP_LOGGER:
                 APP_LOGGER.debug(f"Failed to enforce exec bit on built-in plugins: {e}")
 
@@ -104,7 +104,7 @@ class PluginManager:
 
             try:
                 resolved_base = base.resolve()
-            except Exception:
+            except OSError:
                 resolved_base = base
 
             for entry in base.iterdir():
@@ -119,7 +119,7 @@ class PluginManager:
                 # Resolve safely and ensure stays within its base directory
                 try:
                     resolved_path = candidate_path.resolve(strict=False)
-                except Exception as e:
+                except OSError as e:
                     if APP_LOGGER:
                         APP_LOGGER.debug(
                             f"Skipping plugin entry due to resolution failure: {candidate_path} ({e})"
@@ -130,7 +130,7 @@ class PluginManager:
                     is_within = resolved_path == resolved_base or resolved_path.is_relative_to(
                         resolved_base
                     )
-                except Exception:
+                except (ValueError, OSError):  # ValueError from is_relative_to on unrelated paths
                     is_within = False
 
                 if not is_within:
@@ -227,7 +227,7 @@ class PluginManager:
                             version = line.split("PLUGIN_VERSION:", 1)[1].strip()
                         elif "PLUGIN_REQUIREMENTS:" in line:
                             requirements = line.split("PLUGIN_REQUIREMENTS:", 1)[1].strip()
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             validation_warnings.append(f"Failed to read file: {e}")
 
         # Validate plugin
@@ -280,7 +280,7 @@ class PluginManager:
                 executable = os.access(plugin_file, os.X_OK)
                 if executable and APP_LOGGER:
                     APP_LOGGER.debug("Repaired execute bit for python plugin %s", plugin_file)
-            except Exception as exc:
+            except OSError as exc:
                 if APP_LOGGER:
                     APP_LOGGER.debug("Failed to repair execute bit for %s: %s", plugin_file, exc)
 
@@ -303,7 +303,7 @@ class PluginManager:
                     else:
                         validation_errors.append("Missing shebang (#!)")
                         return False
-        except Exception as e:
+        except OSError as e:
             if plugin_type == "python":
                 validation_warnings.append(f"Failed to check shebang: {e}")
             else:
@@ -453,7 +453,7 @@ class PluginManager:
 
             return success, output, execution_time
 
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             execution_time = time.time() - start_time
             error_msg = f"Failed to execute plugin '{plugin_name}': {e}"
             if APP_LOGGER:
@@ -581,7 +581,7 @@ class PluginManager:
                             on_chunk(("stderr", remaining_err))
                     break
 
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             message = f"Failed to execute plugin '{plugin_name}': {e}\n"
             if on_chunk is None:
                 yield ("stderr", message)
@@ -595,8 +595,8 @@ class PluginManager:
                 rc = None
                 try:
                     rc = process.returncode  # process may be unbound if Popen failed
-                except Exception:  # noqa: S110  # exception handling deferred to Step 6
-                    pass
+                except UnboundLocalError:
+                    pass  # Popen failed before assignment; rc stays None
                 APP_LOGGER.debug(
                     f"Streaming plugin {plugin_name} finished (rc={rc}) in {execution_time:.2f}s"
                 )
