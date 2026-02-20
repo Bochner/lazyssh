@@ -137,6 +137,9 @@ select = [
     "B",      # flake8-bugbear
     "C4",     # flake8-comprehensions
     "SIM",    # flake8-simplify
+    "S",      # flake8-bandit (security)
+    "PT",     # flake8-pytest-style
+    "RET",    # flake8-return
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
@@ -145,6 +148,15 @@ ignore = [
     "SIM108", # ternary operator (can reduce readability)
     "SIM117", # nested with statements (often clearer for multiple mock patches)
     "B904",   # raise from (not always appropriate)
+    "RET504", # unnecessary assignment before return (named variables improve readability)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101",   # assert is expected in tests
+    "S108",   # /tmp paths are intentional in test fixtures
+    "S604",   # shell command strings are used in mock assertions
+    "PT009",  # unittest-style assertions are valid in TestCase subclasses
 ]
 
 [tool.ruff.lint.isort]

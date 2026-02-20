@@ -290,10 +290,8 @@ def test_priority_findings_and_json_payload() -> None:
     assert json_payload["probe_count"] == sum(len(group) for group in probes.values())
     assert len(json_payload["priority_findings"]) == len(expected_keys)
     assert json_payload["categories"]["users"]["id"]["stdout"].startswith("uid=1000")
-    assert (
-        "summary_text" in json_payload
-        and "LazySSH Enumeration Summary" in json_payload["summary_text"]
-    )
+    assert "summary_text" in json_payload
+    assert "LazySSH Enumeration Summary" in json_payload["summary_text"]
 
 
 def test_render_plain_includes_warnings() -> None:

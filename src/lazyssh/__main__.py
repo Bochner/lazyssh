@@ -177,7 +177,7 @@ def main(debug: bool, config: str | None) -> None:
         display_warning("\nUse the exit command to safely exit LazySSH.")
         try:
             input("\nPress Enter to continue...")
-            return None  # Return to caller
+            return  # Return to caller
         except KeyboardInterrupt:
             if APP_LOGGER:
                 APP_LOGGER.info("LazySSH terminated by user (KeyboardInterrupt)")

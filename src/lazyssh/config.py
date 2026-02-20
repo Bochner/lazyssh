@@ -35,7 +35,7 @@ def load_config() -> dict[str, Any]:
     config = {
         "ssh_path": os.environ.get("LAZYSSH_SSH_PATH", "/usr/bin/ssh"),
         "terminal_emulator": os.environ.get("LAZYSSH_TERMINAL", "terminator"),
-        "control_path_base": os.environ.get("LAZYSSH_CONTROL_PATH", "/tmp/"),
+        "control_path_base": os.environ.get("LAZYSSH_CONTROL_PATH", "/tmp/"),  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         "terminal_method": get_terminal_method(),
     }
     return config
@@ -56,7 +56,7 @@ def get_config_file_path(custom_path: str | None = None) -> Path:
     """
     if custom_path:
         return Path(custom_path)
-    return Path("/tmp/lazyssh/connections.conf")
+    return Path("/tmp/lazyssh/connections.conf")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
 
 def ensure_config_directory() -> bool:
@@ -67,7 +67,7 @@ def ensure_config_directory() -> bool:
         True if directory exists or was created successfully, False otherwise
     """
     try:
-        config_dir = Path("/tmp/lazyssh")
+        config_dir = Path("/tmp/lazyssh")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         config_dir.mkdir(parents=True, exist_ok=True)
         config_dir.chmod(0o700)
         if APP_LOGGER:

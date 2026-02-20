@@ -15,7 +15,7 @@ from pathlib import Path
 from .logging_module import APP_LOGGER
 from .models import SSHConnection
 
-RUNTIME_PLUGINS_DIR = Path("/tmp/lazyssh/plugins")
+RUNTIME_PLUGINS_DIR = Path("/tmp/lazyssh/plugins")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
 
 def ensure_runtime_plugins_dir() -> None:
@@ -369,7 +369,7 @@ class PluginManager:
         # Execute plugin (streaming under the hood, while preserving combined output return)
         start_time = time.time()
         try:
-            process = subprocess.Popen(
+            process = subprocess.Popen(  # noqa: S603  # args are constructed from validated SSH parameters
                 cmd,
                 env=env,
                 stdout=subprocess.PIPE,
@@ -381,9 +381,9 @@ class PluginManager:
             stdout_buffer: list[str] = []
             stderr_buffer: list[str] = []
 
-            # File descriptors for select
-            assert process.stdout is not None
-            assert process.stderr is not None
+            # File descriptors for select — guaranteed non-None by stdout=PIPE
+            if process.stdout is None or process.stderr is None:
+                raise RuntimeError("subprocess pipes not available")  # pragma: no cover
             stdout_fd = process.stdout.fileno()
             stderr_fd = process.stderr.fileno()
 
@@ -516,7 +516,7 @@ class PluginManager:
 
         start_time = time.time()
         try:
-            process = subprocess.Popen(
+            process = subprocess.Popen(  # noqa: S603  # args are constructed from validated SSH parameters
                 cmd,
                 env=env,
                 stdout=subprocess.PIPE,
@@ -524,8 +524,9 @@ class PluginManager:
                 text=True,
                 bufsize=1,
             )
-            assert process.stdout is not None
-            assert process.stderr is not None
+            # Guaranteed non-None by stdout=PIPE
+            if process.stdout is None or process.stderr is None:
+                raise RuntimeError("subprocess pipes not available")  # pragma: no cover
 
             stdout_fd = process.stdout.fileno()
             stderr_fd = process.stderr.fileno()
@@ -594,7 +595,7 @@ class PluginManager:
                 rc = None
                 try:
                     rc = process.returncode  # type: ignore[name-defined]
-                except Exception:
+                except Exception:  # noqa: S110  # exception handling deferred to Step 6
                     pass
                 APP_LOGGER.debug(
                     f"Streaming plugin {plugin_name} finished (rc={rc}) in {execution_time:.2f}s"

@@ -1,7 +1,7 @@
 """Command mode interface for LazySSH using prompt_toolkit"""
 
-import os
 import shlex
+import subprocess
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -363,7 +363,7 @@ class CommandMode:
         }
 
         # Initialize history in /tmp/lazyssh
-        self.history_dir = Path("/tmp/lazyssh")
+        self.history_dir = Path("/tmp/lazyssh")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         if not self.history_dir.exists():  # pragma: no cover - first run only
             self.history_dir.mkdir(parents=True, exist_ok=True)
             self.history_dir.chmod(0o700)
@@ -560,7 +560,7 @@ class CommandMode:
                 return False
 
             # Check if the socket name already exists
-            socket_path = f"/tmp/{params['socket']}"
+            socket_path = f"/tmp/{params['socket']}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
             if socket_path in self.ssh_manager.connections:  # pragma: no cover - interactive prompt
                 display_warning(f"Socket name '{params['socket']}' is already in use.")
                 # Use Rich's Confirm.ask for a color-coded prompt (same as prompt mode)
@@ -578,7 +578,7 @@ class CommandMode:
                         )
                         return False
                     params["socket"] = new_socket
-                    socket_path = f"/tmp/{params['socket']}"
+                    socket_path = f"/tmp/{params['socket']}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
             # Create the connection object
             conn = SSHConnection(
@@ -644,7 +644,7 @@ class CommandMode:
             return False
 
         ssh_id, tunnel_type, local_port, remote_host, remote_port = args
-        socket_path = f"/tmp/{ssh_id}"
+        socket_path = f"/tmp/{ssh_id}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         try:
             local_port_int = int(local_port)
@@ -790,7 +790,7 @@ class CommandMode:
 
             # Update config_data with normalized socket_name
             config_data["socket_name"] = socket_name
-            socket_path = f"/tmp/{socket_name}"
+            socket_path = f"/tmp/{socket_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
             # Check if socket name is already in use
             if socket_path in self.ssh_manager.connections:  # pragma: no cover - interactive prompt
@@ -809,7 +809,7 @@ class CommandMode:
                     )
                     return False
                 config_data["socket_name"] = new_socket
-                socket_path = f"/tmp/{new_socket}"
+                socket_path = f"/tmp/{new_socket}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
             conn = SSHConnection(
                 host=config_data["host"],
@@ -926,9 +926,9 @@ class CommandMode:
             if CMD_LOGGER:
                 CMD_LOGGER.info(f"Configuration '{config_name}' saved successfully")
             return True
-        else:  # pragma: no cover - error handling
-            display_error(f"Failed to save configuration '{config_name}'")
-            return False
+        # pragma: no cover - error handling
+        display_error(f"Failed to save configuration '{config_name}'")
+        return False
 
     def cmd_delete_config(self, args: list[str]) -> bool:
         """Handle delete-config command for deleting a saved configuration"""
@@ -963,9 +963,9 @@ class CommandMode:
                     f"Configuration '{config_name}' deleted successfully"
                 )  # pragma: no cover
             return True  # pragma: no cover
-        else:  # pragma: no cover
-            display_error(f"Failed to delete configuration '{config_name}'")  # pragma: no cover
-            return False  # pragma: no cover
+        # pragma: no cover
+        display_error(f"Failed to delete configuration '{config_name}'")  # pragma: no cover
+        return False  # pragma: no cover
 
     def cmd_backup_config(self, args: list[str]) -> bool:
         """Handle backup-config command for backing up the connections configuration file"""
@@ -976,11 +976,10 @@ class CommandMode:
             if CMD_LOGGER:
                 CMD_LOGGER.info("Configuration backup created successfully")
             return True
-        else:
-            display_error(message)
-            if CMD_LOGGER:
-                CMD_LOGGER.warning(f"Configuration backup failed: {message}")
-            return False
+        display_error(message)
+        if CMD_LOGGER:
+            CMD_LOGGER.warning(f"Configuration backup failed: {message}")
+        return False
 
     def cmd_help(self, args: list[str]) -> bool:
         """Handle help command"""
@@ -1397,8 +1396,7 @@ class CommandMode:
 
     def cmd_clear(self, args: list[str]) -> bool:
         """Clear the terminal screen"""
-        # Implementation for clearing the screen
-        os.system("clear")
+        subprocess.run(["/usr/bin/clear"], check=False)  # noqa: S603  # fixed path, no user input
         return True
 
     def cmd_terminal(self, args: list[str]) -> bool:
@@ -1418,13 +1416,13 @@ class CommandMode:
                 if CMD_LOGGER:
                     CMD_LOGGER.info(f"Terminal method changed to: {arg}")
                 return True
-            else:  # pragma: no cover - terminal method always succeeds
-                if CMD_LOGGER:  # pragma: no cover
-                    CMD_LOGGER.error(f"Failed to set terminal method: {arg}")  # pragma: no cover
-                return False  # pragma: no cover
+            # pragma: no cover - terminal method always succeeds
+            if CMD_LOGGER:  # pragma: no cover
+                CMD_LOGGER.error(f"Failed to set terminal method: {arg}")  # pragma: no cover
+            return False  # pragma: no cover
 
         # Check if user provided an SSH connection name (common mistake)
-        socket_path = f"/tmp/{raw_arg}"
+        socket_path = f"/tmp/{raw_arg}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         if socket_path in self.ssh_manager.connections:
             display_error(f"To open a terminal, use: open {raw_arg}")
             display_info("The 'terminal' command is only for changing terminal methods.")
@@ -1448,7 +1446,7 @@ class CommandMode:
 
         # Treat it as an SSH connection name
         conn_name = args[0]
-        socket_path = f"/tmp/{conn_name}"
+        socket_path = f"/tmp/{conn_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         # First check if the connection exists
         if socket_path not in self.ssh_manager.connections:
@@ -1488,7 +1486,7 @@ class CommandMode:
             return False
 
         conn_name = args[0]
-        socket_path = f"/tmp/{conn_name}"
+        socket_path = f"/tmp/{conn_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         if socket_path not in self.ssh_manager.connections:
             display_error(f"SSH connection '{conn_name}' not found")
@@ -1512,7 +1510,7 @@ class CommandMode:
             selected_connection = args[0]
 
             # Validate the connection exists
-            socket_path = f"/tmp/{selected_connection}"
+            socket_path = f"/tmp/{selected_connection}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
             if socket_path not in self.ssh_manager.connections:
                 display_error(f"Connection '{selected_connection}' not found")
                 return False
@@ -1579,12 +1577,11 @@ class CommandMode:
 
         if workflow == "lazyssh":
             return self._wizard_lazyssh()  # pragma: no cover - interactive wizard
-        elif workflow == "tunnel":
+        if workflow == "tunnel":
             return self._wizard_tunnel()  # pragma: no cover - interactive wizard
-        else:
-            display_error(f"Unknown workflow: {workflow}")
-            display_info("Available workflows: lazyssh, tunnel")
-            return False
+        display_error(f"Unknown workflow: {workflow}")
+        display_info("Available workflows: lazyssh, tunnel")
+        return False
 
     def _wizard_lazyssh(self) -> bool:
         """Guided workflow for SSH connection creation"""
@@ -1627,7 +1624,7 @@ class CommandMode:
                 return False
 
             # Check if socket name already exists
-            socket_path = f"/tmp/{socket_name}"
+            socket_path = f"/tmp/{socket_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
             if socket_path in self.ssh_manager.connections:
                 display_warning(f"Connection name '{socket_name}' is already in use.")
                 if not Confirm.ask(
@@ -1644,7 +1641,7 @@ class CommandMode:
                         )
                         return False
                     socket_name = new_socket
-                    socket_path = f"/tmp/{socket_name}"
+                    socket_path = f"/tmp/{socket_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
             # Ask about optional settings
             display_info("\n[warning]Optional Settings:[/warning]")
@@ -1756,9 +1753,8 @@ class CommandMode:
                         )
 
                 return True
-            else:
-                display_error("Failed to create connection")
-                return False
+            display_error("Failed to create connection")
+            return False
 
         except (KeyboardInterrupt, EOFError):
             display_info("\nWizard cancelled")
@@ -1863,9 +1859,8 @@ class CommandMode:
                 display_success(f"{tunnel_type_str.capitalize()} tunnel created successfully!")
                 display_info(f"Tunnel mapping: {tunnel_desc}")
                 return True
-            else:
-                display_error("Failed to create tunnel")
-                return False
+            display_error("Failed to create tunnel")
+            return False
 
         except (KeyboardInterrupt, EOFError):
             display_info("\nWizard cancelled")
@@ -1893,23 +1888,23 @@ class CommandMode:
 
         if subcommand == "list":
             return self._plugin_list()
-        elif subcommand == "run":
+        if subcommand == "run":
             if len(args) < 3:
                 display_error("Usage: plugin run <plugin_name> <socket_name>")
                 return False
             plugin_name = args[1]
             socket_name = args[2]
             return self._plugin_run(plugin_name, socket_name)
-        elif subcommand == "info":
+        if subcommand == "info":
             if len(args) < 2:
                 display_error("Usage: plugin info <plugin_name>")
                 return False
             plugin_name = args[1]
             return self._plugin_info(plugin_name)
-        else:  # pragma: no cover - subcommand validated at completer level
-            display_error(f"Unknown plugin subcommand: {subcommand}")
-            display_info("Available subcommands: list, run, info")
-            return False
+        # pragma: no cover - subcommand validated at completer level
+        display_error(f"Unknown plugin subcommand: {subcommand}")
+        display_info("Available subcommands: list, run, info")
+        return False
 
     def _plugin_list(self) -> bool:
         """List all available plugins"""

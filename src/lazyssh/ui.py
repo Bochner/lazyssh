@@ -678,11 +678,10 @@ def create_efficient_progress_bar() -> Progress:
             TextColumn("[progress.description]{task.description}"),
             console=console,
         )
-    else:
-        return Progress(
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        )
+    return Progress(
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    )
 
 
 def batch_render_updates(updates: list[tuple[str, str]]) -> None:

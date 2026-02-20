@@ -74,18 +74,24 @@ Eliminate command injection risk by converting subprocess calls from string comm
 - [x] 2.3 Update tests in `tests/` that assert on the subprocess `cmd` argument for tunnel operations — no changes needed; existing assertions use `"-R" in captured_cmd[0]` which works for both strings and lists
 - [x] 2.4 Run `make check && make test` to verify all tests pass and coverage holds — 955 passed, 97.38% coverage, zero lint/type errors
 
-### [ ] Step 3: Expand Ruff rules and add per-file ignores
+### [x] Step 3: Expand Ruff rules and add per-file ignores
+<!-- chat-id: 7eeff2d7-ed06-497b-a3b4-4c0d168b673e -->
 
 Enable security (`S`), pytest-style (`PT`), and return-statement (`RET`) Ruff rules. Triage and resolve all findings.
 
-- [ ] 3.1 In `pyproject.toml`, add `"S"`, `"PT"`, `"RET"` to `[tool.ruff.lint] select`
-- [ ] 3.2 Add `[tool.ruff.lint.per-file-ignores]` section: `"tests/*" = ["S101", "S108"]`
-- [ ] 3.3 Run `ruff check src tests` and triage all new findings:
-  - Fix genuine issues
-  - Add `# noqa:` with explanatory comments for intentional patterns (e.g., `S603` for controlled subprocess calls, `S607` for `ssh`/`scp` partial paths, `S108` for `/tmp/lazyssh`)
-- [ ] 3.4 Fix any PT-rule violations (fixture style, `pytest.raises` usage, parametrize format)
-- [ ] 3.5 Fix any RET-rule violations (unnecessary else after return, etc.)
-- [ ] 3.6 Run `make check && make test` to verify zero violations and all tests pass
+- [x] 3.1 In `pyproject.toml`, add `"S"`, `"PT"`, `"RET"` to `[tool.ruff.lint] select`
+- [x] 3.2 Add `[tool.ruff.lint.per-file-ignores]` section: `"tests/*" = ["S101", "S108", "S604", "PT009"]`
+- [x] 3.3 Run `ruff check src tests` and triage all new findings (240 initial violations):
+  - Fixed `os.system("clear")` → `subprocess.run(["/usr/bin/clear"])` (S605/S607)
+  - Fixed `assert` in production code → `if`/`raise RuntimeError` guards (S101)
+  - Fixed `shutil.which("tput")` → use resolved full path (S607)
+  - Added `# noqa: S108` to 32 intentional `/tmp/lazyssh` usages
+  - Added `# noqa: S603` to 16 controlled subprocess calls
+  - Added `# noqa: S110` to 8 silent except-pass blocks (deferred to Step 6)
+  - Added `RET504` to global ignores (named return variables improve readability)
+- [x] 3.4 Fix PT-rule violations: PT022 (yield→return in fixture), PT018 (composite assertions split)
+- [x] 3.5 Fix RET-rule violations: 27 RET505/RET507/RET502 auto-fixed, RET501 explicit return None fixed
+- [x] 3.6 Run `make check && make test` — zero violations, 955 tests passed, 97.26% branch coverage
 
 ### [ ] Step 4: Strengthen mypy configuration
 

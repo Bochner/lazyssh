@@ -31,9 +31,9 @@ class SSHConnection:
     def __post_init__(self) -> None:
         # Ensure socket path is in /tmp/
         socket_path = Path(self.socket_path)
-        if not str(socket_path).startswith("/tmp/"):
+        if not str(socket_path).startswith("/tmp/"):  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
             name = socket_path.name
-            self.socket_path = f"/tmp/{name}"
+            self.socket_path = f"/tmp/{name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         # Expand user paths (like ~)
         self.socket_path = str(Path(self.socket_path).expanduser())
@@ -47,7 +47,7 @@ class SSHConnection:
         conn_name = Path(self.socket_path).name
 
         # Create connection download directory
-        self.connection_dir = f"/tmp/lazyssh/{conn_name}.d"
+        self.connection_dir = f"/tmp/lazyssh/{conn_name}.d"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         Path(self.connection_dir).mkdir(parents=True, exist_ok=True)
         Path(self.connection_dir).chmod(0o700)
 

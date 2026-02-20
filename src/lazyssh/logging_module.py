@@ -25,7 +25,7 @@ LOG_LEVELS = {
 }
 
 # Default log directory
-DEFAULT_LOG_DIR = Path("/tmp/lazyssh/logs")
+DEFAULT_LOG_DIR = Path("/tmp/lazyssh/logs")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 FILE_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 
@@ -33,8 +33,8 @@ FILE_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 DEBUG_MODE = False
 
 # Global settings
-LOG_DIR = Path("/tmp/lazyssh/logs")
-CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"
+LOG_DIR = Path("/tmp/lazyssh/logs")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
+CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 DEFAULT_LOG_LEVEL = "INFO"
 
 # Global console instance for Rich logging

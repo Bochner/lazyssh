@@ -103,9 +103,9 @@ def get_terminal_width() -> int:
 
     # Try tput command
     try:
-        result = shutil.which("tput")
-        if result:
-            cols = subprocess.check_output(["tput", "cols"], text=True).strip()
+        tput_path = shutil.which("tput")
+        if tput_path:
+            cols = subprocess.check_output([tput_path, "cols"], text=True).strip()  # noqa: S603  # tput_path resolved via shutil.which
             return int(cols)
     except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
         pass
@@ -213,12 +213,11 @@ def get_theme_for_config(config: dict[str, Any]) -> Theme:
                 "progress.bar.complete": "default",
             }
         )
-    elif config["high_contrast"]:
+    if config["high_contrast"]:
         return create_high_contrast_theme()
-    elif config["colorblind_mode"]:
+    if config["colorblind_mode"]:
         return create_colorblind_friendly_theme()
-    else:
-        return LAZYSSH_THEME
+    return LAZYSSH_THEME
 
 
 def create_console_with_config(config: dict[str, Any]) -> Console:

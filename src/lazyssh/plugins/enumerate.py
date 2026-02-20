@@ -43,7 +43,7 @@ try:  # pragma: no cover - logging module may be unavailable when packaged separ
     from lazyssh.logging_module import APP_LOGGER, CONNECTION_LOG_DIR_TEMPLATE
 except Exception:  # pragma: no cover - provide safe fallbacks
     APP_LOGGER = None  # type: ignore[assignment]
-    CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"
+    CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
 from lazyssh.plugins._enumeration_plan import (
     PRIORITY_HEURISTICS,
@@ -836,13 +836,13 @@ def _resolve_log_dir() -> Path:
     )
     if connection_name and "/" in connection_name:
         connection_name = Path(connection_name).name
-    template = CONNECTION_LOG_DIR_TEMPLATE or "/tmp/lazyssh/{connection_name}.d/logs"
+    template = CONNECTION_LOG_DIR_TEMPLATE or "/tmp/lazyssh/{connection_name}.d/logs"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
     path = Path(template.format(connection_name=connection_name))
     try:
         path.mkdir(parents=True, exist_ok=True)
         return path
     except Exception:
-        fallback = Path("/tmp/lazyssh/logs")
+        fallback = Path("/tmp/lazyssh/logs")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         fallback.mkdir(parents=True, exist_ok=True)
         return fallback
 
