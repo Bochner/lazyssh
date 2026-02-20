@@ -204,4 +204,19 @@ exclude_lines = [
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = true
+strict_equality = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = [
+    "paramiko.*",
+    "pexpect.*",
+    "prompt_toolkit.*",
+    "art.*",
+    "tomli_w.*",
+    "colorama.*",
+]
 ignore_missing_imports = true

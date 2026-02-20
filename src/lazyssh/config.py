@@ -27,7 +27,7 @@ def get_terminal_method() -> TerminalMethod:
         # Invalid value, default to auto
         return "auto"
 
-    return method  # type: ignore
+    return method  # type: ignore[return-value]  # validated by guard above
 
 
 def load_config() -> dict[str, Any]:

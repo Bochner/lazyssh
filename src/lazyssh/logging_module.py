@@ -9,6 +9,7 @@ import os
 # import sys
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
 import rich.logging
 from rich.console import Console
@@ -47,8 +48,17 @@ SCP_LOGGER: logging.Logger | None = None
 CMD_LOGGER: logging.Logger | None = None
 CONFIG_LOGGER: logging.Logger | None = None
 
+
+class TransferStats(TypedDict):
+    """Per-connection file transfer statistics."""
+
+    total_files: int
+    total_bytes: int
+    last_updated: datetime
+
+
 # Track file transfer statistics per connection
-transfer_stats: dict[str, dict[str, int | datetime]] = {}
+transfer_stats: dict[str, TransferStats] = {}
 
 
 def set_debug_mode(enabled: bool = True) -> None:
@@ -320,9 +330,9 @@ def update_transfer_stats(connection_name: str, files_count: int, bytes_count: i
         stats["total_files"] = 1
     else:
         # Multiple file transfer (from mget) - additive
-        stats["total_files"] += files_count  # type: ignore
+        stats["total_files"] += files_count
 
-    stats["total_bytes"] += bytes_count  # type: ignore
+    stats["total_bytes"] += bytes_count
     stats["last_updated"] = datetime.now()
 
     # Log the updated stats

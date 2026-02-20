@@ -93,16 +93,17 @@ Enable security (`S`), pytest-style (`PT`), and return-statement (`RET`) Ruff ru
 - [x] 3.5 Fix RET-rule violations: 27 RET505/RET507/RET502 auto-fixed, RET501 explicit return None fixed
 - [x] 3.6 Run `make check && make test` — zero violations, 955 tests passed, 97.26% branch coverage
 
-### [ ] Step 4: Strengthen mypy configuration
+### [x] Step 4: Strengthen mypy configuration
+<!-- chat-id: 0b5ef1f4-08f5-4875-8ff8-aaade71b84de -->
 
 Tighten mypy settings incrementally. Move from global `ignore_missing_imports` to per-module overrides and enable stricter type checking.
 
-- [ ] 4.1 In `pyproject.toml`, add `disallow_untyped_defs = true`, `strict_equality = true`, `no_implicit_optional = true`, `warn_unused_ignores = true`, `warn_redundant_casts = true` to `[tool.mypy]`
-- [ ] 4.2 Add `[[tool.mypy.overrides]]` for third-party modules (`paramiko`, `pexpect`, `prompt_toolkit`, `art`, `tomli_w`, `colorama`) with `ignore_missing_imports = true`
-- [ ] 4.3 Remove the global `ignore_missing_imports = true`
-- [ ] 4.4 Run `mypy src` and fix all new errors (add return type annotations, fix type narrowing issues)
-- [ ] 4.5 Resolve all `# type: ignore` comments: add error codes and explanatory comments per spec section 2.3
-- [ ] 4.6 Run `make check && make test` to verify zero mypy errors and all tests pass
+- [x] 4.1 In `pyproject.toml`, add `disallow_untyped_defs = true`, `strict_equality = true`, `no_implicit_optional = true`, `warn_unused_ignores = true`, `warn_redundant_casts = true` to `[tool.mypy]`
+- [x] 4.2 Add `[[tool.mypy.overrides]]` for third-party modules (`paramiko`, `pexpect`, `prompt_toolkit`, `art`, `tomli_w`, `colorama`) with `ignore_missing_imports = true`
+- [x] 4.3 Remove the global `ignore_missing_imports = true`
+- [x] 4.4 Run `mypy src` and fix all new errors — 3 unused `type: ignore` comments fixed (plugin_manager.py, enumerate.py)
+- [x] 4.5 Resolve all `# type: ignore` comments: added error codes and explanatory comments; replaced `dict[str, int | datetime]` with `TransferStats` TypedDict in `logging_module.py` to eliminate 2 `type: ignore` comments entirely; 6 remaining `type: ignore` comments all have error codes and explanations
+- [x] 4.6 Run `make check && make test` — zero ruff/mypy errors, 955 tests passed, 97.22% branch coverage, build clean
 
 ### [ ] Step 5: Refactor high-complexity functions
 

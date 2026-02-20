@@ -594,7 +594,7 @@ class PluginManager:
             if APP_LOGGER:
                 rc = None
                 try:
-                    rc = process.returncode  # type: ignore[name-defined]
+                    rc = process.returncode  # process may be unbound if Popen failed
                 except Exception:  # noqa: S110  # exception handling deferred to Step 6
                     pass
                 APP_LOGGER.debug(

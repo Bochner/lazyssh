@@ -34,15 +34,15 @@ try:  # pragma: no cover - optional Rich import for fallback modes
     from rich.table import Table
     from rich.text import Text
 except Exception:  # pragma: no cover - Rich disabled or unavailable
-    box = None  # type: ignore[assignment,misc]
-    Panel = None  # type: ignore[assignment,misc]
-    Table = None  # type: ignore[assignment,misc]
-    Text = None  # type: ignore[assignment,misc]
+    box = None  # type: ignore[assignment]  # fallback when Rich is unavailable
+    Panel = None  # type: ignore[assignment,misc]  # fallback when Rich is unavailable
+    Table = None  # type: ignore[assignment,misc]  # fallback when Rich is unavailable
+    Text = None  # type: ignore[assignment,misc]  # fallback when Rich is unavailable
 
 try:  # pragma: no cover - logging module may be unavailable when packaged separately
     from lazyssh.logging_module import APP_LOGGER, CONNECTION_LOG_DIR_TEMPLATE
 except Exception:  # pragma: no cover - provide safe fallbacks
-    APP_LOGGER = None  # type: ignore[assignment]
+    APP_LOGGER = None  # fallback when logging module is unavailable
     CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
 from lazyssh.plugins._enumeration_plan import (

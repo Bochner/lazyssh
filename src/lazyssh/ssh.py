@@ -604,7 +604,7 @@ class SSHManager:
             display_info("Valid methods: auto, native, terminator")
             return False
 
-        self.terminal_method = method  # type: ignore
+        self.terminal_method = method  # type: ignore[assignment]  # validated by guard above
         display_success(f"Terminal method set to: {method}")
 
         if SSH_LOGGER:
