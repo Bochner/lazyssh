@@ -621,6 +621,10 @@ class PluginManager:
             "LAZYSSH_PLUGIN_API_VERSION": "1",
         }
 
+        # Add connection workspace directory
+        if hasattr(connection, "connection_dir") and connection.connection_dir:
+            env["LAZYSSH_CONNECTION_DIR"] = connection.connection_dir
+
         # Add optional fields
         if connection.identity_file:
             env["LAZYSSH_SSH_KEY"] = connection.identity_file

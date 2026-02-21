@@ -183,7 +183,8 @@ Add the Quick Wins summary section to Rich and plain-text output, add `critical`
 
 **Spec references:** Section 1.6
 
-### [ ] Step 7: Architecture Detection and Upload-Exec Plugin
+### [x] Step 7: Architecture Detection and Upload-Exec Plugin
+<!-- chat-id: 5da8dd42-720f-4027-bd34-c667861d5186 -->
 
 Create the remote architecture detection module and the complete upload-and-execute plugin with CLI, interactive mode, and msfvenom integration.
 
