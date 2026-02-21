@@ -13,6 +13,7 @@ from lazyssh.plugins._autopwn import (
     AutopwnResult,
     ExploitAttempt,
     _confirm,
+    _sanitize_docker_command,
     _ssh_exec,
 )
 
@@ -293,7 +294,8 @@ class TestAutopwnEngineWritablePasswd:
             )
         ]
 
-        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+        # First True confirms banner, second False declines exploit
+        with mock.patch("lazyssh.plugins._autopwn._confirm", side_effect=[True, False]):
             engine = AutopwnEngine(snapshot, findings, dry_run=False)
             result = engine.run()
             assert len(result.attempts) == 0
@@ -486,7 +488,8 @@ class TestAutopwnEngineDockerEscape:
             )
         ]
 
-        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+        # First True confirms banner, second False declines exploit
+        with mock.patch("lazyssh.plugins._autopwn._confirm", side_effect=[True, False]):
             engine = AutopwnEngine(snapshot, findings, dry_run=False)
             result = engine.run()
             assert len(result.attempts) == 0
@@ -1036,7 +1039,8 @@ class TestAutopwnSuidEdgeCases:
             )
         ]
 
-        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+        # First True confirms banner, second False declines exploit
+        with mock.patch("lazyssh.plugins._autopwn._confirm", side_effect=[True, False]):
             engine = AutopwnEngine(snapshot, findings, dry_run=False)
             result = engine.run()
             assert len(result.attempts) == 0
@@ -1133,7 +1137,8 @@ class TestAutopwnSudoEdgeCases:
             )
         ]
 
-        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+        # First True confirms banner, second False declines exploit
+        with mock.patch("lazyssh.plugins._autopwn._confirm", side_effect=[True, False]):
             engine = AutopwnEngine(snapshot, findings, dry_run=False)
             result = engine.run()
             assert len(result.attempts) == 0
@@ -1317,7 +1322,8 @@ class TestAutopwnCronEdgeCases:
             )
         ]
 
-        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+        # First True confirms banner, second False declines exploit
+        with mock.patch("lazyssh.plugins._autopwn._confirm", side_effect=[True, False]):
             engine = AutopwnEngine(snapshot, findings, dry_run=False)
             result = engine.run()
             assert len(result.attempts) == 0
@@ -1415,7 +1421,8 @@ class TestAutopwnServiceEdgeCases:
             )
         ]
 
-        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+        # First True confirms banner, second False declines exploit
+        with mock.patch("lazyssh.plugins._autopwn._confirm", side_effect=[True, False]):
             engine = AutopwnEngine(snapshot, findings, dry_run=False)
             result = engine.run()
             assert len(result.attempts) == 0
@@ -1508,3 +1515,902 @@ class TestAutopwnGenericDisplayEdgeCases:
         result = engine.run()
         # Generic display doesn't create attempts
         assert len(result.attempts) == 0
+
+
+class TestSshExecStdinIsolation:
+    """Tests that _ssh_exec passes stdin=subprocess.DEVNULL to prevent hangs."""
+
+    def test_stdin_devnull_passed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Verify subprocess.run is called with stdin=subprocess.DEVNULL."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+        monkeypatch.delenv("LAZYSSH_PORT", raising=False)
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "ok"
+        mock_result.stderr = ""
+
+        import subprocess as sp
+
+        with mock.patch("subprocess.run", return_value=mock_result) as mock_run:
+            _ssh_exec("echo hello")
+            call_kwargs = mock_run.call_args[1]
+            assert call_kwargs.get("stdin") is sp.DEVNULL
+
+    def test_stdin_devnull_with_port(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Verify stdin=DEVNULL is set even when port is specified."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+        monkeypatch.setenv("LAZYSSH_PORT", "2222")
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        import subprocess as sp
+
+        with mock.patch("subprocess.run", return_value=mock_result) as mock_run:
+            _ssh_exec("id")
+            call_kwargs = mock_run.call_args[1]
+            assert call_kwargs.get("stdin") is sp.DEVNULL
+
+
+class TestSanitizeDockerCommand:
+    """Tests for _sanitize_docker_command()."""
+
+    def test_strip_dash_it(self) -> None:
+        result = _sanitize_docker_command("docker run -v /:/hostfs -it alpine chroot /hostfs bash")
+        assert "-it" not in result
+        assert "--rm" in result
+        assert "alpine" in result
+
+    def test_strip_dash_ti(self) -> None:
+        result = _sanitize_docker_command("docker run -ti -v /:/mnt alpine sh")
+        assert "-ti" not in result
+        assert "--rm" in result
+
+    def test_strip_long_interactive(self) -> None:
+        result = _sanitize_docker_command("docker run --interactive --tty -v /:/mnt alpine sh")
+        assert "--interactive" not in result
+        assert "--tty" not in result
+        assert "--rm" in result
+
+    def test_add_rm_if_missing(self) -> None:
+        result = _sanitize_docker_command("docker run -v /:/hostfs alpine sh")
+        assert "--rm" in result
+
+    def test_no_duplicate_rm(self) -> None:
+        result = _sanitize_docker_command("docker run --rm -v /:/hostfs alpine sh")
+        assert result.count("--rm") == 1
+
+    def test_passthrough_non_docker(self) -> None:
+        cmd = "echo hello world"
+        assert _sanitize_docker_command(cmd) == cmd
+
+    def test_passthrough_ssh_command(self) -> None:
+        cmd = "ssh -o StrictHostKeyChecking=no user@host"
+        assert _sanitize_docker_command(cmd) == cmd
+
+    def test_podman_support(self) -> None:
+        result = _sanitize_docker_command("podman run -it -v /:/mnt alpine sh")
+        assert "-it" not in result
+        assert "--rm" in result
+        assert "podman run" in result
+
+    def test_idempotent(self) -> None:
+        cmd = "docker run -v /:/hostfs -it alpine chroot /hostfs bash"
+        first = _sanitize_docker_command(cmd)
+        second = _sanitize_docker_command(first)
+        assert first == second
+
+    def test_sudo_docker(self) -> None:
+        result = _sanitize_docker_command(
+            "sudo docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash"
+        )
+        assert "-it" not in result
+        assert "--rm" in result
+        assert "sudo docker run" in result
+
+    def test_combined_flags_with_others(self) -> None:
+        """Test -dit where d should be preserved."""
+        result = _sanitize_docker_command("docker run -dit -v /:/mnt alpine sh")
+        assert "-it" not in result
+        assert "-d" in result
+        assert "--rm" in result
+
+
+class TestAutopwnEngineDockerSanitization:
+    """Tests that docker escape sanitizes commands before use."""
+
+    def test_dry_run_docker_sanitized(self) -> None:
+        """Docker escape dry-run should sanitize -it flags from finding commands."""
+        snapshot = _snapshot({})
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="docker_escape",
+                category="container",
+                severity="high",
+                headline="Docker group access",
+                detail="Docker escape possible",
+                evidence=["User is in docker group"],
+                exploitation_difficulty="easy",
+                exploit_commands=["docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        assert len(result.attempts) == 1
+        cmd = result.attempts[0].command
+        assert "-it" not in cmd
+        assert "--rm" in cmd
+
+    def test_live_docker_sanitized(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Docker escape live mode should also sanitize commands."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        snapshot = _snapshot({})
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="docker_escape",
+                category="container",
+                severity="high",
+                headline="Docker escape",
+                detail="Docker accessible",
+                evidence=["Docker socket accessible"],
+                exploitation_difficulty="easy",
+                exploit_commands=["docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash"],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "root shell"
+        mock_result.stderr = ""
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+            cmd = result.attempts[0].command
+            assert "-it" not in cmd
+            assert "--rm" in cmd
+
+
+class TestExecWithProgress:
+    """Tests for _exec_with_progress method."""
+
+    def test_returns_timing_data(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that _exec_with_progress returns elapsed time >= 0."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "ok"
+        mock_result.stderr = ""
+
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=False)
+
+        with mock.patch("subprocess.run", return_value=mock_result):
+            exit_code, stdout, stderr, elapsed = engine._exec_with_progress("echo test")
+            assert exit_code == 0
+            assert stdout == "ok"
+            assert elapsed >= 0.0
+
+    def test_wraps_ssh_exec_with_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that _exec_with_progress passes timeout to _ssh_exec."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        snapshot = _snapshot({})
+        # Set engine timeout high enough so per-call timeout of 45 isn't capped
+        engine = AutopwnEngine(snapshot, [], dry_run=False, timeout=60)
+
+        with mock.patch("subprocess.run", return_value=mock_result) as mock_run:
+            engine._exec_with_progress("echo test", timeout=45)
+            call_kwargs = mock_run.call_args[1]
+            assert call_kwargs["timeout"] == 45
+
+    def test_uses_status_spinner(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that _exec_with_progress uses Rich Status context manager."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=False)
+
+        with (
+            mock.patch("subprocess.run", return_value=mock_result),
+            mock.patch("lazyssh.plugins._autopwn.Status") as mock_status,
+        ):
+            mock_ctx = mock.MagicMock()
+            mock_status.return_value.__enter__ = mock.MagicMock(return_value=mock_ctx)
+            mock_status.return_value.__exit__ = mock.MagicMock(return_value=False)
+
+            engine._exec_with_progress("echo test")
+            mock_status.assert_called_once()
+
+    def test_truncates_long_commands(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that long commands are truncated in status display."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=False)
+
+        long_cmd = "x" * 100
+
+        with (
+            mock.patch("subprocess.run", return_value=mock_result),
+            mock.patch("lazyssh.plugins._autopwn.Status") as mock_status,
+        ):
+            mock_ctx = mock.MagicMock()
+            mock_status.return_value.__enter__ = mock.MagicMock(return_value=mock_ctx)
+            mock_status.return_value.__exit__ = mock.MagicMock(return_value=False)
+
+            engine._exec_with_progress(long_cmd)
+            call_args = mock_status.call_args[0][0]
+            assert "..." in call_args
+            assert len(call_args) < len(long_cmd) + 50
+
+
+class TestDurationField:
+    """Tests for ExploitAttempt duration field."""
+
+    def test_default_duration(self) -> None:
+        attempt = ExploitAttempt(
+            technique="test",
+            target="/etc/passwd",
+            dry_run=True,
+            command="echo test",
+            success=True,
+            output="ok",
+        )
+        assert attempt.duration == 0.0
+
+    def test_custom_duration(self) -> None:
+        attempt = ExploitAttempt(
+            technique="test",
+            target="/etc/passwd",
+            dry_run=False,
+            command="echo test",
+            success=True,
+            output="ok",
+            duration=1.5,
+        )
+        assert attempt.duration == 1.5
+
+    def test_live_execution_populates_duration(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that live execution stores duration on attempts."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "writable": {
+                "writable_passwd": _probe("writable", "writable_passwd", "WRITABLE"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_passwd_file",
+                category="writable",
+                severity="critical",
+                headline="World-writable /etc/passwd",
+                detail="/etc/passwd is writable",
+                evidence=["/etc/passwd is world-writable"],
+                exploitation_difficulty="instant",
+                exploit_commands=[
+                    "echo 'hacker:hash:0:0::/root:/bin/bash' >> /etc/passwd",
+                    "su hacker",
+                ],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+            assert result.attempts[0].duration >= 0.0
+
+    def test_dry_run_duration_stays_zero(self) -> None:
+        """Test that dry-run attempts keep default duration of 0.0."""
+        probes = {
+            "writable": {
+                "writable_passwd": _probe("writable", "writable_passwd", "WRITABLE"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_passwd_file",
+                category="writable",
+                severity="critical",
+                headline="World-writable /etc/passwd",
+                detail="/etc/passwd is writable",
+                evidence=["/etc/passwd is world-writable"],
+                exploitation_difficulty="instant",
+                exploit_commands=[
+                    "echo 'hacker:hash:0:0::/root:/bin/bash' >> /etc/passwd",
+                    "su hacker",
+                ],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        assert len(result.attempts) == 1
+        assert result.attempts[0].duration == 0.0
+
+
+class TestTimeoutConfiguration:
+    """Tests for --timeout configuration on AutopwnEngine."""
+
+    def test_default_timeout_is_30(self) -> None:
+        """Engine should default to 30s timeout."""
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=True)
+        assert engine.timeout == 30
+
+    def test_custom_timeout(self) -> None:
+        """Engine should accept a custom timeout value."""
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=True, timeout=60)
+        assert engine.timeout == 60
+
+    def test_timeout_clamped_minimum(self) -> None:
+        """Timeout below 5 should be clamped to 5."""
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=True, timeout=1)
+        assert engine.timeout == 5
+
+    def test_timeout_clamped_maximum(self) -> None:
+        """Timeout above 120 should be clamped to 120."""
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=True, timeout=300)
+        assert engine.timeout == 120
+
+    def test_timeout_at_boundary_5(self) -> None:
+        """Timeout of exactly 5 should be preserved."""
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=True, timeout=5)
+        assert engine.timeout == 5
+
+    def test_timeout_at_boundary_120(self) -> None:
+        """Timeout of exactly 120 should be preserved."""
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=True, timeout=120)
+        assert engine.timeout == 120
+
+    def test_timeout_caps_per_exploit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Per-exploit timeout should be capped by global engine timeout."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=True, timeout=10)
+
+        with mock.patch(
+            "lazyssh.plugins._autopwn._ssh_exec", return_value=(0, "", "")
+        ) as mock_exec:
+            engine._exec_with_progress("echo test", timeout=60)
+            call_kwargs = mock_exec.call_args[1]
+            assert call_kwargs["timeout"] == 10
+
+    def test_timeout_passthrough_when_lower(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Per-exploit timeout lower than engine timeout should be used as-is."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        snapshot = _snapshot({})
+        engine = AutopwnEngine(snapshot, [], dry_run=True, timeout=60)
+
+        with mock.patch(
+            "lazyssh.plugins._autopwn._ssh_exec", return_value=(0, "", "")
+        ) as mock_exec:
+            engine._exec_with_progress("echo test", timeout=15)
+            call_kwargs = mock_exec.call_args[1]
+            assert call_kwargs["timeout"] == 15
+
+
+class TestModeBanner:
+    """Tests for mode banner display in run()."""
+
+    def test_dry_run_banner_no_confirm(self) -> None:
+        """Test that dry-run mode does NOT prompt for confirmation."""
+        probes = {
+            "writable": {
+                "writable_passwd": _probe("writable", "writable_passwd", "WRITABLE"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_passwd_file",
+                category="writable",
+                severity="critical",
+                headline="Writable /etc/passwd",
+                detail="/etc/passwd is writable",
+                evidence=["/etc/passwd"],
+                exploitation_difficulty="instant",
+                exploit_commands=[
+                    "echo 'hacker:hash:0:0::/root:/bin/bash' >> /etc/passwd",
+                ],
+            )
+        ]
+        with mock.patch("lazyssh.plugins._autopwn._confirm") as mock_confirm:
+            engine = AutopwnEngine(snapshot, findings, dry_run=True)
+            result = engine.run()
+            mock_confirm.assert_not_called()
+            assert len(result.attempts) == 1
+
+    def test_live_banner_confirmed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that live mode proceeds when banner is confirmed."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "writable": {
+                "writable_passwd": _probe("writable", "writable_passwd", "WRITABLE"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_passwd_file",
+                category="writable",
+                severity="critical",
+                headline="Writable /etc/passwd",
+                detail="/etc/passwd is writable",
+                evidence=["/etc/passwd"],
+                exploitation_difficulty="instant",
+                exploit_commands=[
+                    "echo 'hacker:hash:0:0::/root:/bin/bash' >> /etc/passwd",
+                ],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+
+    def test_live_banner_declined_aborts(self) -> None:
+        """Test that declining the live banner returns empty result immediately."""
+        snapshot = _snapshot({})
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_passwd_file",
+                category="writable",
+                severity="critical",
+                headline="Writable /etc/passwd",
+                detail="/etc/passwd is writable",
+                evidence=["/etc/passwd"],
+                exploitation_difficulty="instant",
+                exploit_commands=[
+                    "echo 'hacker:hash:0:0::/root:/bin/bash' >> /etc/passwd",
+                ],
+            )
+        ]
+        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 0
+
+
+class TestEnhancedSummary:
+    """Tests for the enhanced Rich table summary rendering."""
+
+    def test_summary_table_renders_with_attempts(self) -> None:
+        """Test that _render_summary runs without error with multiple attempt types."""
+        snapshot = _snapshot({})
+        findings: list[enumerate_plugin.PriorityFinding] = []
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        engine.result.attempts = [
+            ExploitAttempt(
+                technique="writable_passwd",
+                target="/etc/passwd",
+                dry_run=True,
+                command="echo test >> /etc/passwd",
+                success=True,
+                output="dry-run",
+                rollback_command="sed -i '/^hacker:/d' /etc/passwd",
+                duration=0.0,
+            ),
+            ExploitAttempt(
+                technique="gtfobins_suid",
+                target="/usr/bin/vim",
+                dry_run=False,
+                command="./vim -c ':py3 import os; os.execl...'",
+                success=False,
+                output="permission denied",
+                duration=1.5,
+            ),
+        ]
+        engine._render_summary()
+
+    def test_summary_with_rollback_table(self) -> None:
+        """Test that rollback sub-table renders when there are successful rollbacks."""
+        snapshot = _snapshot({})
+        findings: list[enumerate_plugin.PriorityFinding] = []
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        engine.result.attempts = [
+            ExploitAttempt(
+                technique="writable_cron",
+                target="/etc/crontab",
+                dry_run=False,
+                command="echo payload >> /etc/crontab",
+                success=True,
+                output="",
+                rollback_command="sed -i '/rootsh/d' /etc/crontab",
+                duration=0.3,
+            ),
+        ]
+        engine._render_summary()
+
+    def test_summary_no_attempts(self) -> None:
+        """Test summary with no attempts shows dim message."""
+        snapshot = _snapshot({})
+        findings: list[enumerate_plugin.PriorityFinding] = []
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        engine._render_summary()
+
+    def test_summary_long_command_truncated(self) -> None:
+        """Test that long commands are truncated in the summary table."""
+        snapshot = _snapshot({})
+        findings: list[enumerate_plugin.PriorityFinding] = []
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        long_cmd = "x" * 100
+        engine.result.attempts = [
+            ExploitAttempt(
+                technique="test",
+                target="test",
+                dry_run=True,
+                command=long_cmd,
+                success=True,
+                output="dry-run",
+            ),
+        ]
+        engine._render_summary()
+
+    def test_summary_mixed_statuses(self) -> None:
+        """Test summary with dry-run, success, and failure attempts."""
+        snapshot = _snapshot({})
+        findings: list[enumerate_plugin.PriorityFinding] = []
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        engine.result.attempts = [
+            ExploitAttempt("t1", "/a", True, "cmd1", True, "dry", duration=0.0),
+            ExploitAttempt("t2", "/b", False, "cmd2", True, "ok", duration=2.1),
+            ExploitAttempt("t3", "/c", False, "cmd3", False, "fail", duration=0.5),
+        ]
+        engine._render_summary()
+        assert engine.result.successes == 2
+        assert engine.result.failures == 1
+
+
+class TestClassifyInteractive:
+    """Tests for _classify_interactive function."""
+
+    def test_pkexec_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("pkexec /usr/bin/some-tool")
+        assert reason is not None
+        assert "pkexec" in reason
+
+    def test_docker_it_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("docker run -it alpine sh")
+        assert reason is not None
+        assert "TTY" in reason
+
+    def test_docker_ti_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("docker run -ti alpine sh")
+        assert reason is not None
+        assert "TTY" in reason
+
+    def test_podman_it_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("podman run -it alpine sh")
+        assert reason is not None
+        assert "TTY" in reason
+
+    def test_vim_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("sudo vim /etc/shadow")
+        assert reason is not None
+        assert "editor" in reason or "pager" in reason
+
+    def test_vi_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("vi /etc/passwd")
+        assert reason is not None
+
+    def test_less_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("less /var/log/syslog")
+        assert reason is not None
+
+    def test_more_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("more /etc/passwd")
+        assert reason is not None
+
+    def test_nano_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("nano /etc/hosts")
+        assert reason is not None
+
+    def test_man_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("man passwd")
+        assert reason is not None
+
+    def test_ed_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("ed /tmp/file")
+        assert reason is not None
+
+    def test_su_detected(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("su root")
+        assert reason is not None
+        assert "password" in reason.lower()
+
+    def test_safe_command_returns_none(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        assert _classify_interactive("echo hello world") is None
+
+    def test_safe_cat_command(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        assert _classify_interactive("cat /etc/passwd") is None
+
+    def test_safe_id_command(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        assert _classify_interactive("id") is None
+
+    def test_safe_docker_without_it(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        assert _classify_interactive("docker run --rm alpine cat /etc/passwd") is None
+
+    def test_pkexec_in_complex_command(self) -> None:
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        reason = _classify_interactive("sudo pkexec --user root /bin/bash")
+        assert reason is not None
+        assert "pkexec" in reason
+
+    def test_su_needs_trailing_space(self) -> None:
+        """'su' should only match with trailing space, not match 'sudo'."""
+        from lazyssh.plugins._autopwn import _classify_interactive
+
+        assert _classify_interactive("su root") is not None
+        assert _classify_interactive("sudo echo hello") is None
+
+
+class TestPrintInteractiveWarning:
+    """Tests for _print_interactive_warning function."""
+
+    def test_no_warning_for_safe_command(self) -> None:
+        from lazyssh.plugins._autopwn import _print_interactive_warning
+
+        result = _print_interactive_warning("echo hello", dry_run=True)
+        assert result == ""
+
+    def test_returns_reason_for_interactive_command(self) -> None:
+        from lazyssh.plugins._autopwn import _print_interactive_warning
+
+        result = _print_interactive_warning("pkexec /usr/bin/tool", dry_run=True)
+        assert "pkexec" in result
+
+    def test_dry_run_prints_interactive_badge(self) -> None:
+        from lazyssh.plugins._autopwn import _print_interactive_warning
+
+        with mock.patch("lazyssh.plugins._autopwn.console") as mock_console:
+            result = _print_interactive_warning("pkexec /usr/bin/tool", dry_run=True)
+            assert result != ""
+            call_args = mock_console.print.call_args[0][0]
+            assert "[INTERACTIVE]" in call_args
+
+    def test_live_prints_warning_icon(self) -> None:
+        from lazyssh.plugins._autopwn import _print_interactive_warning
+
+        with mock.patch("lazyssh.plugins._autopwn.console") as mock_console:
+            result = _print_interactive_warning("pkexec /usr/bin/tool", dry_run=False)
+            assert result != ""
+            call_args = mock_console.print.call_args[0][0]
+            assert "Interactive command" in call_args
+
+
+class TestInteractiveWarningField:
+    """Tests for interactive_warning field on ExploitAttempt."""
+
+    def test_default_empty(self) -> None:
+        attempt = ExploitAttempt(
+            technique="test",
+            target="/etc/passwd",
+            dry_run=True,
+            command="echo test",
+            success=True,
+            output="ok",
+        )
+        assert attempt.interactive_warning == ""
+
+    def test_custom_warning(self) -> None:
+        attempt = ExploitAttempt(
+            technique="test",
+            target="/etc/passwd",
+            dry_run=True,
+            command="pkexec /usr/bin/tool",
+            success=True,
+            output="ok",
+            interactive_warning="pkexec requires a polkit agent / password prompt",
+        )
+        assert "pkexec" in attempt.interactive_warning
+
+
+class TestInteractiveWarningInDryRun:
+    """Tests that interactive warnings are stored on attempts during dry-run."""
+
+    def test_suid_vim_dry_run_has_warning(self) -> None:
+        """SUID vim exploit should have interactive warning in dry-run."""
+        probes = {
+            "filesystem": {
+                "suid_files": _probe("filesystem", "suid_files", "/usr/bin/vim\n"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_suid",
+                category="filesystem",
+                severity="high",
+                headline="SUID exploitable",
+                detail="Found 1",
+                evidence=["/usr/bin/vim"],
+                exploitation_difficulty="instant",
+                exploit_commands=["./vim -c ':!/bin/sh'"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        assert len(result.attempts) >= 1
+        # vim SUID command contains 'vim' which triggers interactive warning
+        vim_attempts = [a for a in result.attempts if "vim" in a.command]
+        assert len(vim_attempts) >= 1
+        assert vim_attempts[0].interactive_warning != ""
+
+    def test_safe_command_dry_run_no_warning(self) -> None:
+        """Non-interactive exploit should have empty interactive_warning."""
+        probes = {
+            "writable": {
+                "writable_passwd": _probe("writable", "writable_passwd", "WRITABLE"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_passwd_file",
+                category="writable",
+                severity="critical",
+                headline="World-writable /etc/passwd",
+                detail="/etc/passwd is writable",
+                evidence=["/etc/passwd is world-writable"],
+                exploitation_difficulty="instant",
+                exploit_commands=[
+                    "echo 'hacker:hash:0:0::/root:/bin/bash' >> /etc/passwd",
+                ],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        assert len(result.attempts) == 1
+        assert result.attempts[0].interactive_warning == ""
+
+
+class TestInteractiveWarningInLiveMode:
+    """Tests that interactive warnings appear in live mode."""
+
+    def test_live_suid_vim_has_warning(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Live SUID vim exploit should have interactive warning."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "filesystem": {
+                "suid_files": _probe("filesystem", "suid_files", "/usr/bin/vim\n"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_suid",
+                category="filesystem",
+                severity="high",
+                headline="SUID exploitable",
+                detail="Found 1",
+                evidence=["/usr/bin/vim"],
+                exploitation_difficulty="instant",
+                exploit_commands=["./vim -c ':!/bin/sh'"],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "root shell"
+        mock_result.stderr = ""
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            vim_attempts = [a for a in result.attempts if "vim" in a.command]
+            assert len(vim_attempts) >= 1
+            assert vim_attempts[0].interactive_warning != ""

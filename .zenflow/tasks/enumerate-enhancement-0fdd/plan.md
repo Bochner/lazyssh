@@ -123,7 +123,7 @@ Color-code category panel borders based on finding severity and probe failures. 
 
 **Verification:** `make check && make test`
 
-### [ ] Step 4: Autopwn stdin isolation and docker command sanitization (R2.1, R2.3)
+### [x] Step 4: Autopwn stdin isolation and docker command sanitization (R2.1, R2.3)
 <!-- chat-id: a2d27d6a-a1e0-48a8-b717-bace34badb62 -->
 
 Fix the critical hang issue by isolating stdin and sanitizing docker commands at both source and runtime level.
@@ -159,7 +159,7 @@ Fix the critical hang issue by isolating stdin and sanitizing docker commands at
 
 **Verification:** `make check && make test`
 
-### [ ] Step 5: Autopwn interactive command detection (R2.2)
+### [x] Step 5: Autopwn interactive command detection (R2.2)
 <!-- chat-id: 812b0237-3763-4ed4-ba57-ce0e4901d261 -->
 
 Add pre-flight classification of interactive commands with appropriate warnings.
@@ -189,7 +189,8 @@ Add pre-flight classification of interactive commands with appropriate warnings.
 
 **Verification:** `make check && make test`
 
-### [ ] Step 6: Autopwn execution progress and timing (R2.4)
+### [x] Step 6: Autopwn execution progress and timing (R2.4)
+<!-- chat-id: 1f3b24f3-375b-4ef1-a5f4-9f59664d71f5 -->
 
 Add Rich spinner during command execution and timing data to exploit attempts.
 
@@ -216,7 +217,8 @@ Add Rich spinner during command execution and timing data to exploit attempts.
 
 **Verification:** `make check && make test`
 
-### [ ] Step 7: Autopwn mode banner and enhanced summary (R2.5, R2.6)
+### [x] Step 7: Autopwn mode banner and enhanced summary (R2.5, R2.6)
+<!-- chat-id: f8373caa-089c-4f8f-9b42-8b8b5a072a60 -->
 
 Add prominent mode banners and replace the summary with a Rich table.
 
@@ -238,7 +240,8 @@ Add prominent mode banners and replace the summary with a Rich table.
 
 **Verification:** `make check && make test`
 
-### [ ] Step 8: Autopwn timeout configuration (R2.7)
+### [x] Step 8: Autopwn timeout configuration (R2.7)
+<!-- chat-id: 82287172-fb82-437b-9b62-d7e35d6b21a8 -->
 
 Add `--timeout` CLI flag support.
 
@@ -266,7 +269,8 @@ Add `--timeout` CLI flag support.
 
 **Verification:** `make check && make test`
 
-### [ ] Step 9: Final verification and CHANGELOG
+### [x] Step 9: Final verification and CHANGELOG
+<!-- chat-id: 794fe2db-26d3-450c-a7e4-2859845f64b7 -->
 
 Run full verification suite and update CHANGELOG.
 

