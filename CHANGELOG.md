@@ -15,11 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quick Wins Tier Separators**: Tier groupings (Instant, Easy, Moderate) now visually separated with count headers and divider lines
 - **Human-Friendly Probe Display Names**: Category tables show readable names (e.g., "SUID Binaries" instead of `suid`) with raw key shown in dim text
 - **Evidence in Priority Findings**: Up to 4 evidence items now displayed inline in the Priority Findings detail column
-- **Autopwn Mode Banners**: Prominent dry-run and live mode banners displayed before exploitation begins, with confirmation gate for live mode
-- **Autopwn Rich Table Summary**: Results table with columns for technique, target, command, status badge, and duration, plus rollback sub-table when applicable
-- **Autopwn `--timeout` Flag**: Configurable execution timeout (5–120 seconds, default 30) for autopwn commands
-- **Autopwn Execution Progress**: Rich spinner with command preview during remote execution, plus elapsed time display on completion
-- **Autopwn Interactive Command Detection**: Pre-flight classification of commands requiring TTY or password prompts (pkexec, docker -it, vim, su) with `[INTERACTIVE]` badge in dry-run and warning in live mode
 - **Enumeration Probe Expansion**: Added ~40 new probes across 6 new categories for comprehensive privilege escalation scanning
   - **Capabilities**: Binary capability discovery (`getcap`) with dangerous capability filtering
   - **Container Escape**: Docker group membership, socket access, container indicators, Kubernetes service account detection
@@ -35,11 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kernel Exploit Suggester**: Built-in database of ~15 kernel CVEs (DirtyPipe, DirtyCOW, PwnKit, Overlayfs, Netfilter, Baron Samedit, Polkit, Sequoia, GameOver(lay), Looney Tunables, nf_tables, Dirty Cred, etc.)
   - Robust kernel version parsing (handles formats like `5.10.100-generic`, `4.15.0-213-generic`)
   - Automatic matching against running kernel version with CVE details and references
-- **Autopwn Engine**: Automated exploitation of discovered vulnerabilities with user confirmation
-  - Supports writable `/etc/passwd` exploitation, GTFOBins SUID/sudo exploitation, Docker container escape, writable cron injection, and writable systemd service modification
-  - `--autopwn` flag to enable automatic exploitation after enumeration
-  - `--dry-run` flag to preview exploitation commands without executing
-  - Interactive confirmation before each exploit attempt
 - **Quick Wins Summary**: New output section highlighting immediately exploitable findings
   - Findings grouped by exploitation difficulty: Instant, Easy, Moderate
   - Displayed at the top of enumeration output for rapid triage
@@ -61,15 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Maps to msfvenom-compatible architecture/platform strings
 - **New Environment Variable**: `LAZYSSH_CONNECTION_DIR` injected into plugin execution environment, providing the per-connection workspace directory path
 
-### Fixed
-- **Autopwn Engine Hang on Interactive Commands**: Fixed engine hanging indefinitely when encountering commands requiring TTY or password prompts (e.g., `pkexec`, `docker -it`) by adding `stdin=subprocess.DEVNULL` to all SSH subprocess calls
-- **Docker Escape Commands Using `-it` Flags**: Removed `-it` flags from docker/podman commands in GTFOBins database and enumerate plugin that require TTY allocation unavailable in non-interactive execution
-
 ### Changed
 - **Docker Commands Sanitized**: Docker/podman commands in GTFOBins database stripped of `-it`/`--interactive`/`--tty` flags and replaced with `--rm` for clean container lifecycle
-- **Autopwn Execution Shows Progress**: Remote command execution now displays Rich spinner with command preview and elapsed time feedback
 - **Enumeration JSON Output**: `exploitation_difficulty` and `exploit_commands` fields now included in priority findings JSON payload
 - **Enumeration Finding Detail**: Exploit commands displayed inline with finding evidence when available
+
+### Removed
+- **Autopwn Engine**: Removed the `--autopwn`, `--dry-run`, and `--timeout` CLI flags and the `_autopwn.py` module. Exploit command suggestions are now always displayed inline in the Quick Wins and Priority Findings sections of enumerate output—no flags needed
 
 ### Fixed
 - **Upload-Exec Plugin Hang**: Fixed plugin hanging indefinitely when run without arguments due to interactive prompts blocking on unavailable stdin in subprocess context. Now shows usage guide instead.

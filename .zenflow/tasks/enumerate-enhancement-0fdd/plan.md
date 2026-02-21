@@ -291,3 +291,10 @@ Run full verification suite and update CHANGELOG.
   - **Fixed**: Docker escape commands using `-it` flags that require TTY allocation
   - **Changed**: Docker commands in GTFOBins database stripped of `-it` flags, replaced with `--rm`
   - **Changed**: Autopwn execution now shows Rich spinner with progress feedback
+
+### [x] Step: remove autopwn and ensure updated documentation
+<!-- chat-id: eac58c0c-012e-4f44-95ae-b6e8cb77fc2d -->
+
+lets remove autopwn, but keep the "dry run" feature to always give suggestions at the bottom. It shouldnt require any additional flags, just part of the enumerate plugin.
+
+Lets also ensure all these new features are properly documentes in our user docs

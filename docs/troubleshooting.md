@@ -69,8 +69,12 @@ Quick fixes for the most common problems. If an issue persists, run LazySSH with
 - View warnings with `plugin info <name>`—the entry remains valid as long as no hard errors are listed.
 
 ### Where do enumeration summaries get saved?
-- `plugin run enumerate <connection>` prints a Rich summary highlighting `high`/`medium`/`info` findings and writes both JSON and plain-text artifacts to the connection log directory (see the saved path in the final success message).
-- Use `plugin run enumerate <connection> --json` to stream the structured payload, which includes the same `priority_findings` list that the UI highlights.
+- `plugin run enumerate <connection>` prints a Rich summary with Quick Wins (grouped by exploitation difficulty), Priority Findings with severity badges, and color-coded category panels. Both JSON and plain-text artifacts are written to the connection log directory (see the saved path in the final success message).
+- Use `plugin run enumerate <connection> --json` to stream the structured payload, which includes the same `priority_findings` list with `exploit_commands` and `exploitation_difficulty` fields.
+
+### Enumeration output looks plain or missing colors
+- Ensure Rich is installed (`pip install rich`). LazySSH falls back to plain-text output when Rich is unavailable.
+- Set `LAZYSSH_PLAIN_TEXT=true` to intentionally use plain-text mode with full feature parity (Quick Wins, severity badges, evidence items).
 
 ### Plugin exits with SSH errors
 - Plugins reuse the existing control socket. Confirm the connection is active (`list`).
