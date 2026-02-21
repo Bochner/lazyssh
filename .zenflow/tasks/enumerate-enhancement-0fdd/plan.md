@@ -124,6 +124,7 @@ Color-code category panel borders based on finding severity and probe failures. 
 **Verification:** `make check && make test`
 
 ### [ ] Step 4: Autopwn stdin isolation and docker command sanitization (R2.1, R2.3)
+<!-- chat-id: a2d27d6a-a1e0-48a8-b717-bace34badb62 -->
 
 Fix the critical hang issue by isolating stdin and sanitizing docker commands at both source and runtime level.
 
