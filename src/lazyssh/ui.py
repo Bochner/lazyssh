@@ -580,7 +580,7 @@ def ensure_terminal_compatibility() -> bool:
         test_console = Console()
         test_console.print("[success]Test[/success]")
         return True
-    except Exception:
+    except Exception:  # Rich rendering can fail in many ways on incompatible terminals
         # Fallback to basic text output
         return False
 
@@ -678,11 +678,10 @@ def create_efficient_progress_bar() -> Progress:
             TextColumn("[progress.description]{task.description}"),
             console=console,
         )
-    else:
-        return Progress(
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        )
+    return Progress(
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    )
 
 
 def batch_render_updates(updates: list[tuple[str, str]]) -> None:

@@ -29,7 +29,7 @@ except Exception:  # pragma: no cover
 try:  # pragma: no cover - logging may be unavailable when packaged separately
     from lazyssh.logging_module import APP_LOGGER
 except Exception:  # pragma: no cover
-    APP_LOGGER = None  # type: ignore[assignment]
+    APP_LOGGER = None
 
 from lazyssh.plugins._gtfobins_data import lookup_sudo, lookup_suid
 from lazyssh.plugins.enumerate import (
@@ -101,7 +101,7 @@ def _ssh_exec(command: str, timeout: int = 30) -> tuple[int, str, str]:
 def _confirm(prompt: str) -> bool:
     """Ask user for confirmation via Rich Confirm.ask()."""
     if Confirm is not None:
-        return Confirm.ask(prompt, default=False)  # type: ignore[no-any-return]
+        return Confirm.ask(prompt, default=False)
     # Fallback if Rich is unavailable
     response = input(f"{prompt} [y/N]: ")  # pragma: no cover
     return response.strip().lower() in ("y", "yes")  # pragma: no cover

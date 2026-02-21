@@ -17,7 +17,7 @@ class SSHManager:
         self.connections: dict[str, SSHConnection] = {}
 
         # Set the base path for control sockets
-        self.control_path_base = "/tmp/"
+        self.control_path_base = "/tmp/"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         # Initialize terminal method from configuration
         self.terminal_method = get_terminal_method()
@@ -106,7 +106,7 @@ class SSHManager:
                 return False
 
             # Execute the command
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603  # args are constructed from validated SSH parameters
 
             if result.returncode != 0:
                 display_error(f"SSH connection failed: {result.stderr}")
@@ -149,7 +149,7 @@ class SSHManager:
                 self.open_terminal(conn.socket_path)
 
             return True
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error creating SSH connection: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error creating SSH connection: {str(e)}")
@@ -167,7 +167,7 @@ class SSHManager:
 
             # Check the connection
             cmd = ["ssh", "-S", socket_path, "-O", "check", "dummy"]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603  # args are constructed from validated SSH parameters
             success = result.returncode == 0
 
             if success:
@@ -178,7 +178,7 @@ class SSHManager:
                     SSH_LOGGER.debug(f"Connection check failed: {socket_path}")
 
             return success
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error checking connection: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Error checking connection: {str(e)}")
@@ -204,18 +204,23 @@ class SSHManager:
 
             conn = self.connections[socket_path]
 
-            # Build the command
-            if reverse:
-                tunnel_args = f"-O forward -R {local_port}:{remote_host}:{remote_port}"
-            else:
-                tunnel_args = f"-O forward -L {local_port}:{remote_host}:{remote_port}"
-
-            cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
+            # Build the command as an argument list to avoid shell injection
+            tunnel_spec = f"{local_port}:{remote_host}:{remote_port}"
+            cmd = [
+                "ssh",
+                "-S",
+                socket_path,
+                "-O",
+                "forward",
+                "-R" if reverse else "-L",
+                tunnel_spec,
+                "dummy",
+            ]
             if SSH_LOGGER:
-                SSH_LOGGER.debug(f"Tunnel command: {cmd}")
+                SSH_LOGGER.debug(f"Tunnel command: {' '.join(cmd)}")
 
             # Execute the command
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603  # args are constructed from validated SSH parameters
 
             if result.returncode != 0:
                 display_error(f"Failed to create tunnel: {result.stderr}")
@@ -231,7 +236,7 @@ class SSHManager:
             log_tunnel_creation(socket_path, local_port, remote_host, remote_port, reverse)
 
             return True
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error creating tunnel: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error creating tunnel: {str(e)}")
@@ -256,22 +261,23 @@ class SSHManager:
                     SSH_LOGGER.error(f"Tunnel {tunnel_id} not found for {socket_path}")
                 return False
 
-            # Build the command
-            if tunnel.type == "reverse":
-                tunnel_args = (
-                    f"-O cancel -R {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
-                )
-            else:
-                tunnel_args = (
-                    f"-O cancel -L {tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
-                )
-
-            cmd = f"ssh -S {socket_path} {tunnel_args} dummy"
+            # Build the command as an argument list to avoid shell injection
+            tunnel_spec = f"{tunnel.local_port}:{tunnel.remote_host}:{tunnel.remote_port}"
+            cmd = [
+                "ssh",
+                "-S",
+                socket_path,
+                "-O",
+                "cancel",
+                "-R" if tunnel.type == "reverse" else "-L",
+                tunnel_spec,
+                "dummy",
+            ]
             if SSH_LOGGER:
-                SSH_LOGGER.debug(f"Close tunnel command: {cmd}")
+                SSH_LOGGER.debug(f"Close tunnel command: {' '.join(cmd)}")
 
             # Execute the command
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603  # args are constructed from validated SSH parameters
 
             if result.returncode != 0:
                 display_error(f"Failed to close tunnel: {result.stderr}")
@@ -285,7 +291,7 @@ class SSHManager:
                 SSH_LOGGER.info(f"Tunnel {tunnel_id} closed for {socket_path}")
 
             return True
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error closing tunnel: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error closing tunnel: {str(e)}")
@@ -342,22 +348,21 @@ class SSHManager:
 
             # Run SSH as subprocess and wait for it to complete
             # User can exit with 'exit' or Ctrl+D to return to LazySSH
-            result = subprocess.run(ssh_args)
+            result = subprocess.run(ssh_args)  # noqa: S603  # args are constructed from validated SSH parameters
 
             if result.returncode == 0:
                 display_success("Terminal session ended")
                 if SSH_LOGGER:
                     SSH_LOGGER.info(f"Native terminal session completed for {socket_path}")
                 return True
-            else:
-                display_warning(f"Terminal session ended with exit code {result.returncode}")
-                if SSH_LOGGER:
-                    SSH_LOGGER.warning(
-                        f"Native terminal session ended with exit code {result.returncode} for {socket_path}"
-                    )
-                return False
+            display_warning(f"Terminal session ended with exit code {result.returncode}")
+            if SSH_LOGGER:
+                SSH_LOGGER.warning(
+                    f"Native terminal session ended with exit code {result.returncode} for {socket_path}"
+                )
+            return False
 
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error opening native terminal: {str(e)}")
             console.print("\n[warning]You can manually connect using:[/warning]")
             console.print(
@@ -417,7 +422,7 @@ class SSHManager:
                 )
 
             # Run terminator
-            process = subprocess.Popen(
+            process = subprocess.Popen(  # noqa: S603  # args are constructed from validated SSH parameters
                 [terminator_path, "-e", ssh_cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
 
@@ -430,15 +435,14 @@ class SSHManager:
                     f"[success]Success:[/success] Terminal opened for [header]{conn.host}[/]"
                 )
                 return True
-            else:
-                # Check if there was an error
-                _, stderr = process.communicate()
-                display_error(f"Terminator failed to start: {stderr.decode().strip()}")
-                if SSH_LOGGER:
-                    SSH_LOGGER.error(f"Terminator failed to start: {stderr.decode().strip()}")
-                return False
+            # Check if there was an error
+            _, stderr = process.communicate()
+            display_error(f"Terminator failed to start: {stderr.decode().strip()}")
+            if SSH_LOGGER:
+                SSH_LOGGER.error(f"Terminator failed to start: {stderr.decode().strip()}")
+            return False
 
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error opening Terminator terminal: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Unexpected error opening Terminator terminal: {str(e)}")
@@ -486,30 +490,27 @@ class SSHManager:
                     display_info("Please install Terminator or set LAZYSSH_TERMINAL_METHOD=native")
                     return False
                 return True
-            elif terminal_method == "native":
+            if terminal_method == "native":
                 # User explicitly requested native terminal
                 return self.open_terminal_native(socket_path)
-            else:  # "auto"
-                # Try Terminator first, fallback to native
-                if shutil.which("terminator"):
+            # "auto"
+            # Try Terminator first, fallback to native
+            if shutil.which("terminator"):
+                if SSH_LOGGER:
+                    SSH_LOGGER.debug("Attempting to use Terminator (auto mode)")
+                if not self.open_terminal_terminator(socket_path):
+                    # Terminator failed, fallback to native
                     if SSH_LOGGER:
-                        SSH_LOGGER.debug("Attempting to use Terminator (auto mode)")
-                    if not self.open_terminal_terminator(socket_path):
-                        # Terminator failed, fallback to native
-                        if SSH_LOGGER:
-                            SSH_LOGGER.debug("Terminator failed, falling back to native terminal")
-                        display_warning("Terminator failed, falling back to native terminal")
-                        return self.open_terminal_native(socket_path)
-                    return True
-                else:
-                    # Terminator not available, use native
-                    if SSH_LOGGER:
-                        SSH_LOGGER.debug(
-                            "Terminator not available, using native terminal (auto mode)"
-                        )
+                        SSH_LOGGER.debug("Terminator failed, falling back to native terminal")
+                    display_warning("Terminator failed, falling back to native terminal")
                     return self.open_terminal_native(socket_path)
+                return True
+            # Terminator not available, use native
+            if SSH_LOGGER:
+                SSH_LOGGER.debug("Terminator not available, using native terminal (auto mode)")
+            return self.open_terminal_native(socket_path)
 
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_error(f"Error opening terminal: {str(e)}")
             console.print("\n[warning]You can manually connect using:[/warning]")
             console.print(
@@ -549,7 +550,7 @@ class SSHManager:
             if SSH_LOGGER:
                 SSH_LOGGER.debug(f"Close connection command: {' '.join(cmd)}")
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603  # args are constructed from validated SSH parameters
 
             if result.returncode != 0:
                 # Don't show warning to user if the error is just that the socket doesn't exist
@@ -572,7 +573,7 @@ class SSHManager:
 
             display_success("SSH connection closed")
             return True
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_warning(f"Error during connection cleanup: {str(e)}")
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Error during connection cleanup: {str(e)}")
@@ -603,7 +604,7 @@ class SSHManager:
             display_info("Valid methods: auto, native, terminator")
             return False
 
-        self.terminal_method = method  # type: ignore
+        self.terminal_method = method  # type: ignore[assignment]  # validated by guard above
         display_success(f"Terminal method set to: {method}")
 
         if SSH_LOGGER:

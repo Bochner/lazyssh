@@ -127,8 +127,8 @@ class TestCloseAllConnections:
         )
         main_module.ssh_manager.connections["/tmp/testexc"] = conn
 
-        def mock_close(path):
-            raise Exception("Close failed")
+        def mock_close(path: str) -> bool:
+            raise OSError("Close failed")
 
         monkeypatch.setattr(main_module.ssh_manager, "close_connection", mock_close)
 

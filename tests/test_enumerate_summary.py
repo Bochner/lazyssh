@@ -309,10 +309,8 @@ def test_priority_findings_and_json_payload() -> None:
     json_payload = enumerate_plugin.build_json_payload(snapshot, findings, plain_report)
     assert json_payload["probe_count"] == sum(len(group) for group in probes.values())
     assert json_payload["categories"]["users"]["id"]["stdout"].startswith("uid=1000")
-    assert (
-        "summary_text" in json_payload
-        and "LazySSH Enumeration Summary" in json_payload["summary_text"]
-    )
+    assert "summary_text" in json_payload
+    assert "LazySSH Enumeration Summary" in json_payload["summary_text"]
 
     # Verify new PriorityFinding fields appear in JSON output
     for finding_dict in json_payload["priority_findings"]:

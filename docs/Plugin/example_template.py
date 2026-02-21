@@ -17,6 +17,7 @@ Environment Variables Available:
     LAZYSSH_USER          - SSH username
     LAZYSSH_SOCKET_PATH   - Full path to control socket file
     LAZYSSH_SSH_KEY       - SSH key path (if key-based auth)
+    LAZYSSH_SHELL         - Preferred shell (if configured)
     LAZYSSH_PLUGIN_API_VERSION - Plugin API version
 
 Usage:

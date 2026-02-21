@@ -27,7 +27,7 @@ from lazyssh.console_instance import console
 try:  # pragma: no cover - logging may be unavailable when packaged separately
     from lazyssh.logging_module import APP_LOGGER
 except Exception:  # pragma: no cover
-    APP_LOGGER = None  # type: ignore[assignment]
+    APP_LOGGER = None
 
 from lazyssh.plugins._arch_detection import RemoteArch, detect_remote_arch
 
@@ -181,7 +181,7 @@ def _ssh_exec(command: str, timeout: int = 300) -> tuple[int, str, str]:
 
 def _create_staging_dir() -> tuple[bool, str]:
     """Create remote staging directory. Returns (success, path)."""
-    staging = "/tmp/.lazyssh_exec"
+    staging = "/tmp/.lazyssh_exec"  # noqa: S108  # remote staging dir on target host, not local temp
     exit_code, _, stderr = _ssh_exec(f"mkdir -p {staging} && chmod 700 {staging}")
     if exit_code != 0:
         console.print(f"[error]Failed to create staging dir: {stderr}[/error]")

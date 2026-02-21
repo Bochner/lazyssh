@@ -19,7 +19,7 @@ LazySSH is a comprehensive SSH automation toolkit for managing persistent connec
 
 ### Key Python Libraries
 - **rich** (13.0.0+) - Rich text formatting, plugin output rendering, progress visualization
-- **prompt_toolkit** (3.0.39) - Interactive command mode with history and tab completion
+- **prompt_toolkit** (>=3.0.39, <3.1.0) - Interactive command mode with history and tab completion
 - **click** (8.0.0+) - CLI option parsing for entry point flags
 - **paramiko** (3.0.0+) - SSH protocol implementation
 - **pexpect** (4.8.0+) - Interactive process control for SCP mode
@@ -54,9 +54,8 @@ Test and coverage reports are generated into the `artifacts/` directory:
 
 **Formatting:**
 - Line length: 100 characters (enforced by Ruff)
-- Target Python version: 3.11
 - Import sorting: Ruff (isort-compatible)
-- Type hints: Preferred but not strictly enforced
+- Type hints: Strictly enforced via mypy (`disallow_untyped_defs = true`)
 
 **Naming Conventions:**
 - Modules: `snake_case` (e.g., `command_mode.py`, `logging_module.py`, `scp_mode.py`)
@@ -149,7 +148,7 @@ Test and coverage reports are generated into the `artifacts/` directory:
 - Test classes: `Test*` prefix
 
 **Coverage:**
-- **100% test coverage required** - the test suite must maintain full coverage
+- **97% branch coverage required** - enforced via `fail_under = 97` in pyproject.toml
 - Source tracking enabled for `src/` directory
 - Tests excluded from coverage reports
 - Run with: `make test` (wraps `hatch run test`) or `hatch test` for multi-version testing

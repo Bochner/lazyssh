@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 
 # Include logging module in the package exports
-from .logging_module import (  # noqa: F401
+from .logging_module import (  # noqa: F401 — re-exported as public package API
     APP_LOGGER,
     CMD_LOGGER,
     SCP_LOGGER,
