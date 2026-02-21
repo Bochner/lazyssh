@@ -2008,3 +2008,322 @@ class TestNewCategoryOrderAndProbes:
     def test_critical_severity_style(self) -> None:
         """Verify 'critical' severity is in SEVERITY_STYLES."""
         assert "critical" in enumerate_plugin.SEVERITY_STYLES
+
+
+class TestGroupQuickWins:
+    """Tests for _group_quick_wins helper."""
+
+    def test_groups_by_difficulty(self) -> None:
+        """Test that findings are grouped by exploitation difficulty."""
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="critical",
+                headline="Instant Win",
+                detail="detail",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=["cmd1"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="b",
+                category="test",
+                severity="high",
+                headline="Easy Win",
+                detail="detail",
+                evidence=[],
+                exploitation_difficulty="easy",
+                exploit_commands=["cmd2"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="c",
+                category="test",
+                severity="medium",
+                headline="Moderate Win",
+                detail="detail",
+                evidence=[],
+                exploitation_difficulty="moderate",
+                exploit_commands=["cmd3"],
+            ),
+        ]
+        groups = enumerate_plugin._group_quick_wins(findings)
+        assert len(groups["instant"]) == 1
+        assert len(groups["easy"]) == 1
+        assert len(groups["moderate"]) == 1
+
+    def test_excludes_no_exploit_commands(self) -> None:
+        """Test that findings without exploit commands are excluded."""
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="high",
+                headline="No Exploit",
+                detail="detail",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=[],
+            ),
+        ]
+        groups = enumerate_plugin._group_quick_wins(findings)
+        assert groups == {}
+
+    def test_excludes_unknown_difficulty(self) -> None:
+        """Test that findings with empty difficulty are excluded."""
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="high",
+                headline="Unknown Diff",
+                detail="detail",
+                evidence=[],
+                exploitation_difficulty="",
+                exploit_commands=["cmd1"],
+            ),
+        ]
+        groups = enumerate_plugin._group_quick_wins(findings)
+        assert groups == {}
+
+    def test_empty_findings(self) -> None:
+        """Test with no findings."""
+        groups = enumerate_plugin._group_quick_wins([])
+        assert groups == {}
+
+
+class TestRenderPlainQuickWins:
+    """Tests for Quick Wins rendering in render_plain."""
+
+    def test_quick_wins_section_present(self) -> None:
+        """Test that Quick Wins section appears when exploit findings exist."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test_instant",
+                category="test",
+                severity="critical",
+                headline="Writable Passwd",
+                detail="detail",
+                evidence=["ev1"],
+                exploitation_difficulty="instant",
+                exploit_commands=["echo 'hacker:...' >> /etc/passwd", "su hacker"],
+            ),
+        ]
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        assert "Quick Wins:" in report
+        assert "[INSTANT]" in report
+        assert "Writable Passwd" in report
+        assert "$ echo" in report
+        assert "$ su hacker" in report
+
+    def test_quick_wins_multiple_tiers(self) -> None:
+        """Test Quick Wins with multiple difficulty tiers."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="critical",
+                headline="Instant Thing",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=["cmd_instant"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="b",
+                category="test",
+                severity="high",
+                headline="Easy Thing",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="easy",
+                exploit_commands=["cmd_easy"],
+            ),
+        ]
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        assert "[INSTANT]" in report
+        assert "[EASY]" in report
+        assert "$ cmd_instant" in report
+        assert "$ cmd_easy" in report
+
+    def test_no_quick_wins_section_when_none(self) -> None:
+        """Test that Quick Wins section is absent when no exploit findings."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="No Exploit",
+                detail="detail",
+                evidence=["ev1"],
+            ),
+        ]
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        assert "Quick Wins:" not in report
+
+    def test_exploit_commands_inline_in_findings(self) -> None:
+        """Test that exploit commands appear inline under findings."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="Exploitable",
+                detail="some detail",
+                evidence=["ev1"],
+                exploitation_difficulty="easy",
+                exploit_commands=["# comment line", "exploit_cmd"],
+            ),
+        ]
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        assert "Exploit commands:" in report
+        assert "# comment line" in report
+        assert "$ exploit_cmd" in report
+
+    def test_comment_lines_not_prefixed_with_dollar(self) -> None:
+        """Test that comment lines in exploit commands are not prefixed with $."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="Test",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="easy",
+                exploit_commands=["# this is a comment"],
+            ),
+        ]
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        # Comment lines should appear without $ prefix
+        assert "      # this is a comment" in report
+        assert "$ # this is a comment" not in report
+
+
+class TestRenderRichQuickWins:
+    """Tests for Quick Wins rendering in render_rich."""
+
+    def test_render_rich_with_quick_wins(self) -> None:
+        """Test render_rich displays Quick Wins panel without crashing."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="critical",
+                headline="Quick Win Finding",
+                detail="detail",
+                evidence=["ev1"],
+                exploitation_difficulty="instant",
+                exploit_commands=["exploit_cmd1", "# comment"],
+            ),
+        ]
+        # Should not crash
+        enumerate_plugin.render_rich(snapshot, findings)
+
+    def test_render_rich_no_quick_wins(self) -> None:
+        """Test render_rich without quick wins doesn't crash."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="No Exploits",
+                detail="detail",
+                evidence=["ev1"],
+            ),
+        ]
+        enumerate_plugin.render_rich(snapshot, findings)
+
+    def test_render_rich_exploit_commands_in_findings(self) -> None:
+        """Test render_rich shows exploit commands in findings detail."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="With Exploits",
+                detail="exploit available",
+                evidence=["ev1"],
+                exploitation_difficulty="easy",
+                exploit_commands=["# info", "some_exploit_cmd", "another_cmd"],
+            ),
+        ]
+        enumerate_plugin.render_rich(snapshot, findings)
+
+
+class TestJsonPayloadNewFields:
+    """Tests for new fields in JSON payload output."""
+
+    def test_json_payload_includes_exploitation_fields(self) -> None:
+        """Test that JSON payload includes exploitation_difficulty and exploit_commands."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="critical",
+                headline="Test",
+                detail="detail",
+                evidence=["ev1"],
+                exploitation_difficulty="instant",
+                exploit_commands=["cmd1", "cmd2"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="test2",
+                category="test",
+                severity="high",
+                headline="Test2",
+                detail="detail2",
+                evidence=[],
+            ),
+        ]
+        plain = enumerate_plugin.render_plain(snapshot, findings)
+        payload = enumerate_plugin.build_json_payload(snapshot, findings, plain)
+
+        # Both findings should have the fields
+        for f_dict in payload["priority_findings"]:
+            assert "exploitation_difficulty" in f_dict
+            assert "exploit_commands" in f_dict
+
+        # First finding has populated fields
+        assert payload["priority_findings"][0]["exploitation_difficulty"] == "instant"
+        assert payload["priority_findings"][0]["exploit_commands"] == ["cmd1", "cmd2"]
+
+        # Second finding has default empty fields
+        assert payload["priority_findings"][1]["exploitation_difficulty"] == ""
+        assert payload["priority_findings"][1]["exploit_commands"] == []

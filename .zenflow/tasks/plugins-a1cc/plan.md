@@ -163,7 +163,8 @@ Create the autopwn exploitation engine that takes enumeration findings and attem
 
 **Spec references:** Section 1.5
 
-### [ ] Step 6: Output Enhancements — Quick Wins and Severity
+### [x] Step 6: Output Enhancements — Quick Wins and Severity
+<!-- chat-id: f19fd969-c617-40e6-9125-77a4b4257b1b -->
 
 Add the Quick Wins summary section to Rich and plain-text output, add `critical` severity level, and display exploit commands in findings output.
 

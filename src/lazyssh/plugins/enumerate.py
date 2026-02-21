@@ -1223,6 +1223,25 @@ def render_plain(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindi
     lines.append("=" * 80)
     lines.append(f"Collected: {snapshot.collected_at.isoformat(timespec='seconds')}")
     lines.append("")
+
+    # --- Quick Wins summary ---
+    quick_wins = _group_quick_wins(findings)
+    if quick_wins:
+        lines.append("Quick Wins:")
+        for tier in ("instant", "easy", "moderate"):
+            tier_findings = quick_wins.get(tier)
+            if not tier_findings:
+                continue
+            lines.append(f"  [{tier.upper()}]")
+            for finding in tier_findings:
+                lines.append(f"    - {finding.headline}")
+                for cmd in finding.exploit_commands[:4]:
+                    if cmd.startswith("#"):
+                        lines.append(f"        {cmd}")
+                    else:
+                        lines.append(f"        $ {cmd}")
+        lines.append("")
+
     lines.append("Priority Findings:")
     if not findings:
         lines.append("- None detected by heuristics.")
@@ -1232,6 +1251,13 @@ def render_plain(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindi
             lines.append(f"  {finding.detail}")
             for evidence in finding.evidence[:4]:
                 lines.append(f"    • {evidence}")
+            if finding.exploit_commands:
+                lines.append("    Exploit commands:")
+                for cmd in finding.exploit_commands[:4]:
+                    if cmd.startswith("#"):
+                        lines.append(f"      {cmd}")
+                    else:
+                        lines.append(f"      $ {cmd}")
     if snapshot.warnings:
         lines.append("")
         lines.append("Warnings:")
@@ -1255,6 +1281,21 @@ def render_plain(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindi
     return report
 
 
+def _group_quick_wins(
+    findings: Sequence[PriorityFinding],
+) -> dict[str, list[PriorityFinding]]:
+    """Group findings with exploit commands by exploitation difficulty tier."""
+    tiers: dict[str, list[PriorityFinding]] = {
+        "instant": [],
+        "easy": [],
+        "moderate": [],
+    }
+    for finding in findings:
+        if finding.exploitation_difficulty in tiers and finding.exploit_commands:
+            tiers[finding.exploitation_difficulty].append(finding)
+    return {k: v for k, v in tiers.items() if v}
+
+
 def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFinding]) -> None:
     if (
         Table is None or Panel is None or Text is None or box is None
@@ -1264,6 +1305,44 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
 
     console.rule("[header]LazySSH Enumeration[/header]")
 
+    # --- Quick Wins summary ---
+    quick_wins = _group_quick_wins(findings)
+    if quick_wins:
+        qw_table = Table(box=box.ROUNDED, expand=True, show_header=True, padding=(0, 1))
+        qw_table.add_column(
+            "Difficulty", justify="center", style="panel.title", no_wrap=True, width=12
+        )
+        qw_table.add_column("Finding", style="foreground", overflow="fold", ratio=2, min_width=20)
+        qw_table.add_column("Exploit Commands", style="dim", overflow="fold", ratio=3, min_width=32)
+        tier_styles = {"instant": "error", "easy": "warning", "moderate": "info"}
+        for tier in ("instant", "easy", "moderate"):
+            for finding in quick_wins.get(tier, []):
+                style = tier_styles.get(tier, "foreground")
+                cmds_text = Text()
+                for i, cmd in enumerate(finding.exploit_commands[:4]):
+                    if i > 0:
+                        cmds_text.append("\n")
+                    if cmd.startswith("#"):
+                        cmds_text.append(cmd, style="dim")
+                    else:
+                        cmds_text.append(cmd, style="foreground")
+                qw_table.add_row(
+                    f"[{style}]{tier.upper()}[/]",
+                    finding.headline,
+                    cmds_text,
+                )
+        console.print(
+            Panel(
+                qw_table,
+                title="[panel.title]Quick Wins[/panel.title]",
+                border_style="error",
+                box=box.ROUNDED,
+                padding=(1, 2),
+                expand=True,
+            )
+        )
+
+    # --- Priority Findings ---
     summary_table = Table(box=box.ROUNDED, expand=True, show_header=True, padding=(0, 1))
     summary_table.add_column(
         "Severity", justify="center", style="panel.title", no_wrap=True, width=9
@@ -1274,10 +1353,19 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
     if findings:
         for finding in findings:
             style = SEVERITY_STYLES.get(finding.severity, "foreground")
+            detail_text = Text(finding.detail, style="dim")
+            if finding.exploit_commands:
+                detail_text.append("\n")
+                for cmd in finding.exploit_commands[:3]:
+                    detail_text.append("\n")
+                    if cmd.startswith("#"):
+                        detail_text.append(f"  {cmd}", style="dim")
+                    else:
+                        detail_text.append(f"  $ {cmd}", style="foreground")
             summary_table.add_row(
                 f"[{style}]{finding.severity.upper()}[/]",
                 finding.headline,
-                finding.detail,
+                detail_text,
             )
     else:
         summary_table.add_row(
