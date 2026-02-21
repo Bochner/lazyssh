@@ -47,8 +47,15 @@ Concise reference for commands, flags, environments, and configuration used acro
 
 #### Built-In `enumerate` Plugin
 - Collects system, user, network, filesystem, and security telemetry with a single batched remote script to minimize round trips.
-- Highlights high-signal `sudo`, SUID/SGID, world-writable, exposed service, weak SSH, and scheduled task findings in a Dracula-themed Rich summary (set `--json` for structured output).
+- **Quick Wins** section at the top groups exploitable findings by difficulty tier (Instant, Easy, Moderate) with actionable exploit commands prefixed by `$`.
+- **Priority Findings** table with severity badges (critical, high, medium, info), inline exploit commands, and up to 4 evidence items per finding.
+- **Category panels** with color-coded borders: red for categories containing critical findings, yellow for probe failures, green for clean categories.
+- Human-friendly probe display names (e.g., "SUID Binaries" instead of `suid`) with raw key shown in dim text.
+- GTFOBins cross-reference for SUID binaries, sudo-allowed commands, and capabilities.
+- Kernel exploit suggester matching ~15 CVEs against the running kernel version.
+- Full plain-text parity for all Rich features (accessible via `LAZYSSH_PLAIN_TEXT=true`).
 - Persists both `survey_<timestamp>.json` (structured payload with `priority_findings`) and a plain-text summary in the connection log directory for later triage.
+- Use `--json` for machine-readable structured output.
 
 ## SCP Mode Commands
 Enter with `scp <connection>` or simply `scp` to choose from active connections.

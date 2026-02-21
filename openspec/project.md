@@ -118,17 +118,20 @@ Test and coverage reports are generated into the `artifacts/` directory:
 
 **Enumerate Plugin (v2.0.0):**
 - **Batched script execution**: Executes a single remote script gathering all telemetry in one SSH round-trip for minimal latency
-- **Priority findings summary**: Heuristics flag elevated risks including:
+- **Quick Wins section**: Exploitable findings grouped by difficulty tier (Instant, Easy, Moderate) with actionable `$`-prefixed exploit commands
+- **Priority findings summary**: Heuristics flag elevated risks with severity badges (critical, high, medium, info), inline exploit commands, and evidence items. Includes:
   - Sudo/wheel group membership and passwordless sudo entries
-  - SUID/SGID binaries
+  - SUID/SGID binaries with GTFOBins cross-reference (~100 exploitable binaries)
   - World-writable directories outside temp paths
   - Externally accessible network listeners
   - Insecure sshd configuration (PermitRootLogin, PasswordAuthentication, etc.)
   - Suspicious scheduled tasks (cron jobs with curl, wget, nc, etc.)
-  - Kernel version drift from package inventory
-- **JSON export**: Use `--json` flag for machine-readable output
+  - Kernel version drift and kernel exploit suggestions (~15 CVEs)
+  - Capabilities, container escape vectors, credential files, library hijack opportunities
+- **Category panels**: Color-coded borders (red for critical findings, yellow for probe failures, green for clean) with human-friendly probe display names
+- **JSON export**: Use `--json` flag for machine-readable output with `exploit_commands` and `exploitation_difficulty` fields
 - **Log persistence**: Survey results saved to connection workspace (`/tmp/lazyssh/{socket}.d/logs/survey_*.json` and `.txt`)
-- **Dracula-themed Rich output**: Styled tables and panels with severity indicators (high/medium/info)
+- **Dracula-themed Rich output**: Styled tables and panels with full plain-text parity via `LAZYSSH_PLAIN_TEXT=true`
 
 **UI Configuration:**
 - `console_instance.py` centralizes Rich console setup, Dracula-themed defaults, and accessibility variants

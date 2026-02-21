@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Enumerate Summary Statistics Header**: New header block showing total findings count, severity breakdown, and probe failure rate at the top of enumeration output
+- **Enhanced Severity Badges**: Bold/reverse-styled badges for critical and high severity findings with distinct color coding across all output sections
+- **Exploit Command Highlighting**: Executable commands now display with `$` prefix and distinct `highlight` color for immediate visual recognition
+- **Category Panel Border Color Coding**: Panel borders color-coded by severity — red for categories with critical findings, yellow for probe failures, green for clean categories
+- **Quick Wins Tier Separators**: Tier groupings (Instant, Easy, Moderate) now visually separated with count headers and divider lines
+- **Human-Friendly Probe Display Names**: Category tables show readable names (e.g., "SUID Binaries" instead of `suid`) with raw key shown in dim text
+- **Evidence in Priority Findings**: Up to 4 evidence items now displayed inline in the Priority Findings detail column
 - **Enumeration Probe Expansion**: Added ~40 new probes across 6 new categories for comprehensive privilege escalation scanning
   - **Capabilities**: Binary capability discovery (`getcap`) with dangerous capability filtering
   - **Container Escape**: Docker group membership, socket access, container indicators, Kubernetes service account detection
@@ -23,11 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kernel Exploit Suggester**: Built-in database of ~15 kernel CVEs (DirtyPipe, DirtyCOW, PwnKit, Overlayfs, Netfilter, Baron Samedit, Polkit, Sequoia, GameOver(lay), Looney Tunables, nf_tables, Dirty Cred, etc.)
   - Robust kernel version parsing (handles formats like `5.10.100-generic`, `4.15.0-213-generic`)
   - Automatic matching against running kernel version with CVE details and references
-- **Autopwn Engine**: Automated exploitation of discovered vulnerabilities with user confirmation
-  - Supports writable `/etc/passwd` exploitation, GTFOBins SUID/sudo exploitation, Docker container escape, writable cron injection, and writable systemd service modification
-  - `--autopwn` flag to enable automatic exploitation after enumeration
-  - `--dry-run` flag to preview exploitation commands without executing
-  - Interactive confirmation before each exploit attempt
 - **Quick Wins Summary**: New output section highlighting immediately exploitable findings
   - Findings grouped by exploitation difficulty: Instant, Easy, Moderate
   - Displayed at the top of enumeration output for rapid triage
@@ -50,8 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New Environment Variable**: `LAZYSSH_CONNECTION_DIR` injected into plugin execution environment, providing the per-connection workspace directory path
 
 ### Changed
+- **Docker Commands Sanitized**: Docker/podman commands in GTFOBins database stripped of `-it`/`--interactive`/`--tty` flags and replaced with `--rm` for clean container lifecycle
 - **Enumeration JSON Output**: `exploitation_difficulty` and `exploit_commands` fields now included in priority findings JSON payload
 - **Enumeration Finding Detail**: Exploit commands displayed inline with finding evidence when available
+
+### Removed
+- **Autopwn Engine**: Removed the `--autopwn`, `--dry-run`, and `--timeout` CLI flags and the `_autopwn.py` module. Exploit command suggestions are now always displayed inline in the Quick Wins and Priority Findings sections of enumerate output—no flags needed
 
 ### Fixed
 - **Upload-Exec Plugin Hang**: Fixed plugin hanging indefinitely when run without arguments due to interactive prompts blocking on unavailable stdin in subprocess context. Now shows usage guide instead.

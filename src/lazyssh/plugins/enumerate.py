@@ -89,6 +89,57 @@ SEVERITY_STYLES: dict[str, str] = {
     "info": "info",
 }
 
+PROBE_DISPLAY_NAMES: dict[str, str] = {
+    "suid_files": "SUID Binaries",
+    "sgid_files": "SGID Binaries",
+    "world_writable_dirs": "World-Writable Directories",
+    "docker_group": "Docker Group Membership",
+    "docker_socket": "Docker Socket Access",
+    "ssh_config": "SSH Configuration",
+    "ssh_effective_config": "SSH Effective Config",
+    "kernel": "Kernel Version",
+    "os_release": "OS Release",
+    "current_user": "Current User",
+    "sudo_rules": "Sudo Rules",
+    "sudo_check": "Sudo Privileges",
+    "sudoers": "Sudoers File",
+    "writable_passwd": "Passwd File Permissions",
+    "shadow_readable": "Shadow File Access",
+    "cron_user": "User Crontab",
+    "cron_system": "System Crontab",
+    "cron_d": "Cron.d Directory",
+    "cron_daily": "Cron Daily",
+    "at_jobs": "At Jobs",
+    "systemd_timers": "Systemd Timers",
+    "listening_services": "Listening Services",
+    "nfs_exports": "NFS Exports",
+    "cap_interesting": "Linux Capabilities",
+    "env_vars": "Environment Variables",
+    "ld_preload": "LD_PRELOAD",
+    "ld_library_path": "LD_LIBRARY_PATH",
+    "writable_path_dirs": "Writable PATH Dirs",
+    "writable_cron": "Writable Cron Files",
+    "writable_services": "Writable Services",
+    "container_detection": "Container Detection",
+    "lxc_check": "LXC/LXD Check",
+    "cloud_credentials": "Cloud Credentials",
+    "ssh_keys": "SSH Keys",
+    "history_files": "History Files",
+    "config_credentials": "Config Credentials",
+    "backup_files": "Backup Files",
+    "recently_modified": "Recently Modified",
+    "package_inventory": "Package Inventory",
+    "package_manager": "Package Manager",
+    "id": "User Identity",
+    "hostname": "Hostname",
+    "network_interfaces": "Network Interfaces",
+    "arp_cache": "ARP Cache",
+    "routes": "Routing Table",
+    "iptables": "Firewall Rules",
+    "processes": "Running Processes",
+    "writable_scripts": "Writable Scripts",
+}
+
 DEFAULT_REMOTE_TIMEOUT = 240
 
 
@@ -763,7 +814,7 @@ def _evaluate_docker_escape(
         evidence=evidence,
         exploitation_difficulty="easy",
         exploit_commands=[
-            "docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash",
+            "docker run --rm -v /:/hostfs alpine chroot /hostfs /bin/bash",
         ],
     )
 
@@ -1219,11 +1270,82 @@ def generate_priority_findings(snapshot: EnumerationSnapshot) -> list[PriorityFi
     return findings
 
 
+def _severity_badge(severity: str) -> Text:
+    """Return a Rich Text severity badge with appropriate styling."""
+    sev_upper = severity.upper()
+    if severity in ("critical", "high"):
+        return Text(f" {sev_upper} ", style="bold reverse error")
+    if severity == "medium":
+        return Text(sev_upper, style="bold warning")
+    return Text(sev_upper, style="info")
+
+
+def _severity_badge_plain(severity: str) -> str:
+    """Return a plain-text severity badge."""
+    return f"[{severity.upper()}]"
+
+
+def _render_stats_header(
+    findings: Sequence[PriorityFinding],
+    snapshot: EnumerationSnapshot,
+) -> Text:
+    """Build a summary statistics Text line showing severity counts and probe stats."""
+    from collections import Counter
+
+    severity_counts = Counter(f.severity for f in findings)
+    total_probes = sum(len(mapping) for mapping in snapshot.probes.values())
+    failed_probes = sum(
+        1 for mapping in snapshot.probes.values() for probe in mapping.values() if probe.status != 0
+    )
+
+    stats = Text()
+    stats.append("Findings: ", style="dim")
+    parts: list[tuple[int, str, str]] = [
+        (severity_counts.get("critical", 0), "critical", SEVERITY_STYLES["critical"]),
+        (severity_counts.get("high", 0), "high", SEVERITY_STYLES["high"]),
+        (severity_counts.get("medium", 0), "medium", SEVERITY_STYLES["medium"]),
+        (severity_counts.get("info", 0), "info", SEVERITY_STYLES["info"]),
+    ]
+    for i, (count, label, style) in enumerate(parts):
+        if i > 0:
+            stats.append(", ", style="dim")
+        stats.append(f"{count} {label}", style=f"bold {style}" if count > 0 else "dim")
+    stats.append("  |  ", style="dim")
+    stats.append("Probes: ", style="dim")
+    stats.append(f"{total_probes} total", style="dim")
+    stats.append(", ", style="dim")
+    fail_style = "bold error" if failed_probes > 0 else "dim"
+    stats.append(f"{failed_probes} failed", style=fail_style)
+    return stats
+
+
+def _render_stats_header_plain(
+    findings: Sequence[PriorityFinding],
+    snapshot: EnumerationSnapshot,
+) -> str:
+    """Build a plain-text summary statistics line."""
+    from collections import Counter
+
+    severity_counts = Counter(f.severity for f in findings)
+    total_probes = sum(len(mapping) for mapping in snapshot.probes.values())
+    failed_probes = sum(
+        1 for mapping in snapshot.probes.values() for probe in mapping.values() if probe.status != 0
+    )
+    return (
+        f"Findings: {severity_counts.get('critical', 0)} critical, "
+        f"{severity_counts.get('high', 0)} high, "
+        f"{severity_counts.get('medium', 0)} medium, "
+        f"{severity_counts.get('info', 0)} info | "
+        f"Probes: {total_probes} total, {failed_probes} failed"
+    )
+
+
 def render_plain(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFinding]) -> str:
     lines: list[str] = []
     lines.append("LazySSH Enumeration Summary")
     lines.append("=" * 80)
     lines.append(f"Collected: {snapshot.collected_at.isoformat(timespec='seconds')}")
+    lines.append(_render_stats_header_plain(findings, snapshot))
     lines.append("")
 
     # --- Quick Wins summary ---
@@ -1273,8 +1395,9 @@ def render_plain(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindi
             continue
         lines.append(f"[{category.upper()}]")
         for key, result in sorted(category_results.items()):
+            display_name = PROBE_DISPLAY_NAMES.get(key, key)
             summary = _summarize_text(result.stdout)
-            lines.append(f"- {key}: {summary}")
+            lines.append(f"- {display_name}: {summary}")
             if result.status != 0 and result.stderr.strip():
                 first_error = _first_nonempty_line(result.stderr)
                 lines.append(f"  ! exit {result.status}: {first_error}")
@@ -1306,6 +1429,8 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
         return
 
     console.rule("[header]LazySSH Enumeration[/header]")
+    console.print(_render_stats_header(findings, snapshot))
+    console.print()
 
     # --- Quick Wins summary ---
     quick_wins = _group_quick_wins(findings)
@@ -1317,8 +1442,21 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
         qw_table.add_column("Finding", style="foreground", overflow="fold", ratio=2, min_width=20)
         qw_table.add_column("Exploit Commands", style="dim", overflow="fold", ratio=3, min_width=32)
         tier_styles = {"instant": "error", "easy": "warning", "moderate": "info"}
+        first_tier = True
         for tier in ("instant", "easy", "moderate"):
-            for finding in quick_wins.get(tier, []):
+            tier_findings = quick_wins.get(tier, [])
+            if not tier_findings:
+                continue
+            if not first_tier:
+                qw_table.add_section()
+            first_tier = False
+            tier_style = tier_styles.get(tier, "foreground")
+            qw_table.add_row(
+                f"[bold {tier_style}]{tier.upper()}[/]",
+                f"[bold]{len(tier_findings)} findings[/bold]",
+                "",
+            )
+            for finding in tier_findings:
                 style = tier_styles.get(tier, "foreground")
                 cmds_text = Text()
                 for i, cmd in enumerate(finding.exploit_commands[:4]):
@@ -1327,7 +1465,7 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
                     if cmd.startswith("#"):
                         cmds_text.append(cmd, style="dim")
                     else:
-                        cmds_text.append(cmd, style="foreground")
+                        cmds_text.append(f"$ {cmd}", style="highlight")
                 qw_table.add_row(
                     f"[{style}]{tier.upper()}[/]",
                     finding.headline,
@@ -1354,7 +1492,6 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
 
     if findings:
         for finding in findings:
-            style = SEVERITY_STYLES.get(finding.severity, "foreground")
             detail_text = Text(finding.detail, style="dim")
             if finding.exploit_commands:
                 detail_text.append("\n")
@@ -1363,9 +1500,13 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
                     if cmd.startswith("#"):
                         detail_text.append(f"  {cmd}", style="dim")
                     else:
-                        detail_text.append(f"  $ {cmd}", style="foreground")
+                        detail_text.append(f"  $ {cmd}", style="highlight")
+            if finding.evidence:
+                detail_text.append("\n")
+                for ev in finding.evidence[:4]:
+                    detail_text.append(f"\n  * {ev}", style="accent")
             summary_table.add_row(
-                f"[{style}]{finding.severity.upper()}[/]",
+                _severity_badge(finding.severity),
                 finding.headline,
                 detail_text,
             )
@@ -1385,6 +1526,12 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
         )
     )
 
+    categories_with_criticals: set[str] = {f.category for f in findings if f.severity == "critical"}
+    categories_with_failures: set[str] = set()
+    for cat, mapping in snapshot.probes.items():
+        if any(p.status != 0 for p in mapping.values()):
+            categories_with_failures.add(cat)
+
     for category in SELECTED_CATEGORY_ORDER:
         category_results = snapshot.probes.get(category)
         if not category_results:
@@ -1400,6 +1547,7 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
             width=8,
         )
         for key, result in sorted(category_results.items()):
+            display_name = PROBE_DISPLAY_NAMES.get(key, key)
             summary = _summarize_text(result.stdout)
             status_style = "success" if result.status == 0 else "error"
             status_icon = "✔" if result.status == 0 else "✖"
@@ -1408,16 +1556,26 @@ def render_rich(snapshot: EnumerationSnapshot, findings: Sequence[PriorityFindin
                 first_error = _first_nonempty_line(result.stderr)
                 summary_text.append("\n", style="foreground")
                 summary_text.append(f"exit {result.status}: {first_error}", style="error")
+            check_label = Text()
+            check_label.append(display_name, style="accent")
+            if display_name != key:
+                check_label.append(f" ({key})", style="dim")
             table.add_row(
-                f"[accent]{key}[/accent]",
+                check_label,
                 summary_text,
                 f"[{status_style}]{status_icon}[/]",
             )
+        if category in categories_with_criticals:
+            panel_border = "error"
+        elif category in categories_with_failures:
+            panel_border = "warning"
+        else:
+            panel_border = "success"
         console.print(
             Panel(
                 table,
                 title=f"[panel.title]{category.capitalize()}[/panel.title]",
-                border_style="border",
+                border_style=panel_border,
                 box=box.ROUNDED,
                 padding=(1, 2),
                 expand=True,
@@ -1495,8 +1653,6 @@ def main() -> int:  # pragma: no cover - CLI entry point
     ui_config = get_ui_config()
     use_plain = ui_config.get("plain_text") or ui_config.get("no_rich")
     is_json_output = "--json" in sys.argv
-    is_autopwn = "--autopwn" in sys.argv
-    is_dry_run = "--dry-run" in sys.argv
 
     try:
         snapshot = collect_remote_snapshot()
@@ -1527,12 +1683,6 @@ def main() -> int:  # pragma: no cover - CLI entry point
         console.print(f"[success]Saved survey to {json_path}[/success]")
         if txt_path:
             console.print(f"[dim]Plain-text copy: {txt_path}[/dim]")
-
-    if is_autopwn:
-        from lazyssh.plugins._autopwn import AutopwnEngine
-
-        engine = AutopwnEngine(snapshot, findings, dry_run=is_dry_run)
-        engine.run()
 
     return 0
 
