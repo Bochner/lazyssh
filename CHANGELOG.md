@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-02-20
+
 ### Fixed
 - **Resource Leaks**: Explicitly close `subprocess.Popen` stdout/stderr pipes after plugin execution to prevent `ResourceWarning` for unclosed files
 - **Resource Leaks**: Close logging `FileHandler` objects before clearing handler lists in tests, preventing unclosed file descriptor warnings

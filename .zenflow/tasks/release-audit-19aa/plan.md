@@ -225,3 +225,14 @@ Fix ResourceWarning errors in CI test suite caused by unclosed file descriptors.
 - [x] In `test_logging_module.py`: replaced all `logger.handlers.clear()` with `_close_handlers(logger)` helper that calls `handler.close()` before clearing
 - [x] In `pyproject.toml`: promoted `ResourceWarning` from `"default"` to `"error"` (removed the downgrade exception) so these never silently regress
 - [x] Run `make check && make test` — zero ruff violations, zero mypy errors, 966 tests passed, 97.04% branch coverage, zero warnings
+
+### [x] Step: bump to 1.6.4
+<!-- chat-id: 3f223083-3aae-447d-ae85-450f6edb8358 -->
+
+accidently didnt merge before push, need hatch bumped to 1.6.4
+
+- [x] Bumped version from 1.6.3 to 1.6.4 via `hatch version 1.6.4`
+- [x] Moved CHANGELOG `[Unreleased]` entries to `[1.6.4] - 2026-02-20` section
+- [x] Verified `make check` — zero ruff violations, zero mypy errors, version prints 1.6.4
+- [x] Verified `make test` — 966 tests passed, 97.04% branch coverage
+- [x] Verified `make build` — `lazyssh-1.6.4` sdist and wheel built, `twine check` passed
