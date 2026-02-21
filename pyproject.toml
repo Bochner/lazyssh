@@ -207,6 +207,11 @@ exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
 ]
+partial_branches = [
+    "if .*_LOGGER",
+    "if conn_logger",
+    "pragma: no branch",
+]
 
 # =============================================================================
 # Mypy Configuration

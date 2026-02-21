@@ -1202,8 +1202,10 @@ print("hi")
     assert any("finished" in m.lower() for m in messages)
 
 
-def test_columns_env_variable(tmp_path: Path, monkeypatch) -> None:
+def test_columns_env_variable(tmp_path: Path) -> None:
     """Test that COLUMNS is set from terminal size."""
+    from unittest import mock
+
     plugins_dir = tmp_path / "plugins"
     plugins_dir.mkdir()
 
@@ -1216,20 +1218,22 @@ print(f"COLUMNS={os.environ.get('COLUMNS', 'not set')}")
 """,
     )
 
-    # Mock terminal size
-    monkeypatch.setattr("shutil.get_terminal_size", lambda fallback: os.terminal_size((120, 40)))
-
     pm = PluginManager(plugins_dir=plugins_dir)
     conn = SSHConnection(host="1.2.3.4", port=22, username="test", socket_path="/tmp/test")
 
-    success, output, elapsed = pm.execute_plugin("coltest", conn)
+    # Use mock.patch context manager to scope the mock tightly around execute_plugin,
+    # preventing pytest-sugar from seeing it during test report rendering.
+    with mock.patch("shutil.get_terminal_size", return_value=os.terminal_size((120, 40))):
+        success, output, elapsed = pm.execute_plugin("coltest", conn)
 
     assert success is True
     assert "COLUMNS=120" in output
 
 
-def test_columns_env_variable_oserror(tmp_path: Path, monkeypatch) -> None:
+def test_columns_env_variable_oserror(tmp_path: Path) -> None:
     """Test COLUMNS when get_terminal_size raises OSError."""
+    from unittest import mock
+
     plugins_dir = tmp_path / "plugins"
     plugins_dir.mkdir()
 
@@ -1242,15 +1246,13 @@ print(f"COLUMNS={os.environ.get('COLUMNS', 'not set')}")
 """,
     )
 
-    def mock_terminal_size(fallback):
-        raise OSError("No terminal")
-
-    monkeypatch.setattr("shutil.get_terminal_size", mock_terminal_size)
-
     pm = PluginManager(plugins_dir=plugins_dir)
     conn = SSHConnection(host="1.2.3.4", port=22, username="test", socket_path="/tmp/test")
 
-    success, output, elapsed = pm.execute_plugin("colerr", conn)
+    # Use mock.patch to scope the mock tightly around only execute_plugin,
+    # preventing pytest-sugar from seeing it during test report rendering.
+    with mock.patch("shutil.get_terminal_size", side_effect=OSError("No terminal")):
+        success, output, elapsed = pm.execute_plugin("colerr", conn)
 
     assert success is True
     # COLUMNS should not be set when terminal size fails

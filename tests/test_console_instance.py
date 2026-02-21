@@ -1,6 +1,7 @@
 """Tests for console_instance module - console creation, themes, accessibility."""
 
 import os
+from unittest import mock
 
 import pytest
 
@@ -107,7 +108,13 @@ class TestGetUIConfig:
 
 
 class TestGetTerminalWidth:
-    """Tests for get_terminal_width function."""
+    """Tests for get_terminal_width function.
+
+    NOTE: Tests that mock shutil.get_terminal_size use mock.patch context managers
+    instead of monkeypatch.setattr to scope the mock tightly. monkeypatch teardown
+    runs AFTER pytest-sugar's pytest_runtest_logreport hook, so a monkeypatched
+    shutil.get_terminal_size that raises OSError would crash pytest-sugar.
+    """
 
     def test_from_columns_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test getting width from COLUMNS env var."""
@@ -118,95 +125,86 @@ class TestGetTerminalWidth:
         """Test fallback when COLUMNS is invalid."""
         monkeypatch.setenv("COLUMNS", "invalid")
 
-        # Mock get_terminal_size to return valid size
-        monkeypatch.setattr(
+        with mock.patch(
             "shutil.get_terminal_size",
-            lambda fallback: os.terminal_size((100, 40)),
-        )
-
-        assert console_instance.get_terminal_width() == 100
+            return_value=os.terminal_size((100, 40)),
+        ):
+            assert console_instance.get_terminal_width() == 100
 
     def test_from_terminal_size(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test getting width from terminal size."""
         monkeypatch.delenv("COLUMNS", raising=False)
-        monkeypatch.setattr(
+        with mock.patch(
             "shutil.get_terminal_size",
-            lambda fallback: os.terminal_size((90, 30)),
-        )
-
-        assert console_instance.get_terminal_width() == 90
+            return_value=os.terminal_size((90, 30)),
+        ):
+            assert console_instance.get_terminal_width() == 90
 
     def test_terminal_size_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test fallback when terminal size is zero."""
         monkeypatch.delenv("COLUMNS", raising=False)
-        monkeypatch.setattr(
-            "shutil.get_terminal_size",
-            lambda fallback: os.terminal_size((0, 0)),
-        )
-        # Mock tput to fail
-        monkeypatch.setattr("shutil.which", lambda x: None)
-
-        assert console_instance.get_terminal_width() == 80
+        with (
+            mock.patch(
+                "shutil.get_terminal_size",
+                return_value=os.terminal_size((0, 0)),
+            ),
+            mock.patch("shutil.which", return_value=None),
+        ):
+            assert console_instance.get_terminal_width() == 80
 
     def test_terminal_size_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test fallback when terminal size raises exception."""
         monkeypatch.delenv("COLUMNS", raising=False)
 
-        def raise_os_error(fallback):
-            raise OSError("No terminal")
-
-        monkeypatch.setattr("shutil.get_terminal_size", raise_os_error)
-        monkeypatch.setattr("shutil.which", lambda x: None)
-
-        assert console_instance.get_terminal_width() == 80
+        with (
+            mock.patch("shutil.get_terminal_size", side_effect=OSError("No terminal")),
+            mock.patch("shutil.which", return_value=None),
+        ):
+            assert console_instance.get_terminal_width() == 80
 
     def test_from_tput(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test getting width from tput command."""
         monkeypatch.delenv("COLUMNS", raising=False)
-        monkeypatch.setattr(
-            "shutil.get_terminal_size",
-            lambda fallback: os.terminal_size((0, 0)),
-        )
-        monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/tput")
-        monkeypatch.setattr(
-            "subprocess.check_output",
-            lambda cmd, text: "132\n",
-        )
-
-        assert console_instance.get_terminal_width() == 132
+        with (
+            mock.patch(
+                "shutil.get_terminal_size",
+                return_value=os.terminal_size((0, 0)),
+            ),
+            mock.patch("shutil.which", return_value="/usr/bin/tput"),
+            mock.patch("subprocess.check_output", return_value="132\n"),
+        ):
+            assert console_instance.get_terminal_width() == 132
 
     def test_tput_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test fallback when tput fails."""
         import subprocess
 
         monkeypatch.delenv("COLUMNS", raising=False)
-        monkeypatch.setattr(
-            "shutil.get_terminal_size",
-            lambda fallback: os.terminal_size((0, 0)),
-        )
-        monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/tput")
-
-        def raise_subprocess_error(cmd, text):
-            raise subprocess.CalledProcessError(1, cmd)
-
-        monkeypatch.setattr("subprocess.check_output", raise_subprocess_error)
-
-        assert console_instance.get_terminal_width() == 80
+        with (
+            mock.patch(
+                "shutil.get_terminal_size",
+                return_value=os.terminal_size((0, 0)),
+            ),
+            mock.patch("shutil.which", return_value="/usr/bin/tput"),
+            mock.patch(
+                "subprocess.check_output",
+                side_effect=subprocess.CalledProcessError(1, "tput"),
+            ),
+        ):
+            assert console_instance.get_terminal_width() == 80
 
     def test_tput_invalid_output(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test fallback when tput returns invalid output."""
         monkeypatch.delenv("COLUMNS", raising=False)
-        monkeypatch.setattr(
-            "shutil.get_terminal_size",
-            lambda fallback: os.terminal_size((0, 0)),
-        )
-        monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/tput")
-        monkeypatch.setattr(
-            "subprocess.check_output",
-            lambda cmd, text: "invalid\n",
-        )
-
-        assert console_instance.get_terminal_width() == 80
+        with (
+            mock.patch(
+                "shutil.get_terminal_size",
+                return_value=os.terminal_size((0, 0)),
+            ),
+            mock.patch("shutil.which", return_value="/usr/bin/tput"),
+            mock.patch("subprocess.check_output", return_value="invalid\n"),
+        ):
+            assert console_instance.get_terminal_width() == 80
 
 
 class TestThemes:

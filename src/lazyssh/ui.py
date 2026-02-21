@@ -102,7 +102,7 @@ def display_ssh_status(
     table.add_column("Socket Path", style="dim", justify="center")
 
     for socket_path, conn in connections.items():
-        if isinstance(conn, SSHConnection):
+        if isinstance(conn, SSHConnection):  # pragma: no branch - type guard
             name = Path(socket_path).name
             table.add_row(
                 name,
@@ -471,7 +471,7 @@ def update_live_status(live: Live, status_text: str, details: str = "") -> None:
         status_panel = create_info_panel(f"{status_text}\n{details}", "Status")
         # Type assertion: we know renderable is a Layout when it has update method
         layout = live.renderable
-        if isinstance(layout, Layout):
+        if isinstance(layout, Layout):  # pragma: no branch - type guard
             layout["main"].update(status_panel)
 
 
@@ -509,7 +509,7 @@ def update_live_connections(live: Live, connections: dict[str, SSHConnection]) -
         table.add_column("Tunnels", style="info")
 
         for socket_path, conn in connections.items():
-            if isinstance(conn, SSHConnection):
+            if isinstance(conn, SSHConnection):  # pragma: no branch - type guard
                 name = Path(socket_path).name
                 status = "Connected"  # This would be determined by actual connection status
                 tunnels = str(len(conn.tunnels))
@@ -517,7 +517,7 @@ def update_live_connections(live: Live, connections: dict[str, SSHConnection]) -
 
         # Type assertion: we know renderable is a Layout when it has update method
         layout = live.renderable
-        if isinstance(layout, Layout):
+        if isinstance(layout, Layout):  # pragma: no branch - type guard
             layout["main"].update(table)
 
 

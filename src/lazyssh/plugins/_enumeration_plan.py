@@ -278,6 +278,245 @@ REMOTE_PROBES: tuple[RemoteProbe, ...] = (
     RemoteProbe(
         "hardware", "usb_devices", "lsusb 2>/dev/null || echo 'lsusb not installed'", timeout=4
     ),
+    # Capabilities
+    RemoteProbe(
+        "capabilities",
+        "cap_binaries",
+        "getcap -r / 2>/dev/null",
+        timeout=10,
+    ),
+    RemoteProbe(
+        "capabilities",
+        "cap_interesting",
+        "getcap -r / 2>/dev/null | grep -iE 'cap_setuid|cap_setgid|cap_dac_override|cap_sys_admin|cap_sys_ptrace|cap_net_raw|cap_chown|cap_fowner'",
+        timeout=10,
+    ),
+    # Container detection
+    RemoteProbe(
+        "container",
+        "docker_group",
+        "id -nG 2>/dev/null | tr ' ' '\\n' | grep -q docker && echo 'IN_DOCKER_GROUP' || echo 'NOT_IN_DOCKER_GROUP'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "container",
+        "docker_socket",
+        "test -r /var/run/docker.sock && echo 'DOCKER_SOCKET_READABLE' || echo 'DOCKER_SOCKET_NOT_READABLE'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "container",
+        "container_detection",
+        "if [ -f /.dockerenv ]; then echo 'DOCKER_CONTAINER'; "
+        "elif grep -q docker /proc/1/cgroup 2>/dev/null; then echo 'DOCKER_CONTAINER_CGROUP'; "
+        "elif grep -q lxc /proc/1/cgroup 2>/dev/null; then echo 'LXC_CONTAINER'; "
+        "elif [ -d /run/lxc ] || [ -f /dev/lxd/sock ]; then echo 'LXC_CONTAINER'; "
+        "else echo 'NOT_CONTAINER'; fi",
+        timeout=6,
+    ),
+    RemoteProbe(
+        "container",
+        "lxc_check",
+        "if [ -S /dev/lxd/sock ] || command -v lxc >/dev/null 2>&1; then "
+        "echo 'LXD_PRESENT'; lxc list 2>/dev/null || echo 'LXC_LIST_DENIED'; "
+        "else echo 'NO_LXD'; fi",
+        timeout=4,
+    ),
+    # Credentials
+    RemoteProbe(
+        "credentials",
+        "shadow_readable",
+        "cat /etc/shadow 2>/dev/null | head -5 || echo 'SHADOW_NOT_READABLE'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "credentials",
+        "ssh_keys",
+        "find /root/.ssh /home/*/.ssh -name 'id_*' ! -name '*.pub' -readable 2>/dev/null || echo 'NO_READABLE_KEYS'",
+        timeout=8,
+    ),
+    RemoteProbe(
+        "credentials",
+        "history_files",
+        "for f in ~/.bash_history ~/.zsh_history ~/.python_history /root/.bash_history; do "
+        'if [ -r "$f" ]; then grep -iE \'pass(word)?=|token=|secret=|api_key=\' "$f" 2>/dev/null | head -5 && echo "FILE:$f"; fi; done || echo \'NO_HISTORY_SECRETS\'',
+        timeout=8,
+    ),
+    RemoteProbe(
+        "credentials",
+        "config_credentials",
+        "find / -maxdepth 4 \\( -name '.env' -o -name '.htpasswd' -o -name 'wp-config.php' \\) -readable 2>/dev/null | head -20 || echo 'NONE_FOUND'",
+        timeout=8,
+    ),
+    RemoteProbe(
+        "credentials",
+        "cloud_credentials",
+        "ls -la ~/.aws/credentials ~/.config/gcloud/application_default_credentials.json ~/.azure/accessTokens.json 2>/dev/null || echo 'NO_CLOUD_CREDS'; "
+        "curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/ 2>/dev/null | head -5 && echo 'AWS_METADATA_AVAILABLE' || echo 'NO_CLOUD_METADATA'",
+        timeout=8,
+    ),
+    RemoteProbe(
+        "credentials",
+        "git_credentials",
+        "cat ~/.git-credentials 2>/dev/null | head -5; "
+        "grep -E 'credential|password|token' ~/.gitconfig 2>/dev/null || echo 'NO_GIT_CREDS'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "credentials",
+        "database_configs",
+        "cat ~/.my.cnf ~/.pgpass 2>/dev/null | head -10; "
+        "find /etc -maxdepth 2 -name 'mongod.conf' -readable 2>/dev/null || echo 'NO_DB_CONFIGS'",
+        timeout=4,
+    ),
+    # Writable critical files
+    RemoteProbe(
+        "writable",
+        "writable_passwd",
+        "test -w /etc/passwd && echo 'WRITABLE' || echo 'NOT_WRITABLE'",
+        timeout=3,
+    ),
+    RemoteProbe(
+        "writable",
+        "writable_shadow",
+        "test -w /etc/shadow && echo 'WRITABLE' || echo 'NOT_WRITABLE'",
+        timeout=3,
+    ),
+    RemoteProbe(
+        "writable",
+        "writable_sudoers",
+        "test -w /etc/sudoers && echo 'WRITABLE'; "
+        'for f in /etc/sudoers.d/*; do test -w "$f" 2>/dev/null && echo "WRITABLE:$f"; done; '
+        "echo 'DONE'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "writable",
+        "writable_cron",
+        "for f in /etc/crontab /etc/cron.d /etc/cron.daily /etc/cron.hourly /etc/cron.weekly /etc/cron.monthly; do "
+        'test -w "$f" 2>/dev/null && echo "WRITABLE:$f"; done; echo \'DONE\'',
+        timeout=6,
+    ),
+    RemoteProbe(
+        "writable",
+        "writable_services",
+        "find /etc/systemd/system /usr/lib/systemd/system -type f -writable 2>/dev/null | head -20 || echo 'NONE_WRITABLE'",
+        timeout=8,
+    ),
+    RemoteProbe(
+        "writable",
+        "writable_path_dirs",
+        'IFS=:; for d in $PATH; do test -w "$d" 2>/dev/null && echo "WRITABLE:$d"; done; echo \'DONE\'',
+        timeout=6,
+    ),
+    RemoteProbe(
+        "writable",
+        "writable_profile",
+        "for f in /etc/profile /etc/bash.bashrc /etc/bashrc /etc/environment; do "
+        'test -w "$f" 2>/dev/null && echo "WRITABLE:$f"; done; echo \'DONE\'',
+        timeout=4,
+    ),
+    RemoteProbe(
+        "writable",
+        "writable_init_scripts",
+        "find /etc/init.d -type f -writable 2>/dev/null | head -20 || echo 'NONE_WRITABLE'",
+        timeout=4,
+    ),
+    # Library hijack
+    RemoteProbe(
+        "library_hijack",
+        "ld_preload",
+        "echo \"LD_PRELOAD=$LD_PRELOAD\"; cat /etc/ld.so.preload 2>/dev/null || echo 'NO_LD_PRELOAD_FILE'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "library_hijack",
+        "ld_library_path",
+        'echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"; '
+        'IFS=:; for d in $LD_LIBRARY_PATH; do test -w "$d" 2>/dev/null && echo "WRITABLE:$d"; done; echo \'DONE\'',
+        timeout=4,
+    ),
+    RemoteProbe(
+        "library_hijack",
+        "python_path",
+        'echo "PYTHONPATH=$PYTHONPATH"; '
+        "python3 -c 'import sys; [print(p) for p in sys.path]' 2>/dev/null | while read -r d; do "
+        'test -w "$d" 2>/dev/null && echo "WRITABLE:$d"; done; echo \'DONE\'',
+        timeout=6,
+    ),
+    RemoteProbe(
+        "library_hijack",
+        "rpath_runpath",
+        "find / -xdev -perm -4000 -type f 2>/dev/null | head -10 | while read -r f; do "
+        "readelf -d \"$f\" 2>/dev/null | grep -E 'RPATH|RUNPATH' && echo \"BINARY:$f\"; done; echo 'DONE'",
+        timeout=8,
+    ),
+    # Interesting files
+    RemoteProbe(
+        "interesting_files",
+        "backup_files",
+        "ls -la /var/backups/ 2>/dev/null; "
+        "find / -maxdepth 3 \\( -name '*.bak' -o -name '*.old' -o -name '*.backup' -o -name '*.sql' \\) -readable 2>/dev/null | head -20 || echo 'NO_BACKUPS'",
+        timeout=6,
+    ),
+    RemoteProbe(
+        "interesting_files",
+        "mail_files",
+        "ls -la /var/mail/ /var/spool/mail/ 2>/dev/null || echo 'NO_MAIL'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "interesting_files",
+        "opt_contents",
+        "ls -la /opt/ 2>/dev/null || echo 'EMPTY_OPT'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "interesting_files",
+        "tmp_interesting",
+        "find /tmp /var/tmp /dev/shm -type f \\( -name '*.sh' -o -name '*.py' -o -name '*.pl' -o -perm -111 \\) 2>/dev/null | head -20 || echo 'NONE_FOUND'",
+        timeout=8,
+    ),
+    RemoteProbe(
+        "interesting_files",
+        "recently_modified",
+        "find /etc /usr/local/bin /usr/local/sbin -type f -mtime -1 2>/dev/null | head -20 || echo 'NONE_RECENT'",
+        timeout=8,
+    ),
+    # Additions to existing categories
+    # filesystem additions
+    RemoteProbe(
+        "filesystem",
+        "nfs_exports",
+        "cat /etc/exports 2>/dev/null || echo 'NO_NFS_EXPORTS'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "filesystem",
+        "mounted_nfs",
+        "mount | grep -i nfs 2>/dev/null || echo 'NO_NFS_MOUNTS'",
+        timeout=4,
+    ),
+    # users additions
+    RemoteProbe(
+        "users",
+        "doas_conf",
+        "cat /etc/doas.conf 2>/dev/null || echo 'NO_DOAS'",
+        timeout=4,
+    ),
+    RemoteProbe(
+        "users",
+        "polkit_rules",
+        "find /etc/polkit-1 /usr/share/polkit-1 -type f -name '*.rules' -o -name '*.pkla' 2>/dev/null | head -10; "
+        "cat /etc/polkit-1/localauthority.conf.d/*.pkla 2>/dev/null || echo 'NO_POLKIT_RULES'",
+        timeout=6,
+    ),
+    RemoteProbe(
+        "users",
+        "pkexec_version",
+        "pkexec --version 2>/dev/null || echo 'PKEXEC_NOT_FOUND'",
+        timeout=3,
+    ),
 )
 
 
@@ -287,7 +526,7 @@ class PriorityHeuristic:
 
     key: str
     category: str
-    severity: Literal["high", "medium", "info"]
+    severity: Literal["critical", "high", "medium", "info"]
     headline: str
     description: str
 
@@ -348,5 +587,118 @@ PRIORITY_HEURISTICS: tuple[PriorityHeuristic, ...] = (
         severity="info",
         headline="Kernel release deviates from package baseline",
         description="Note when the running kernel differs from package manager inventory, indicating pending reboots or manual installs.",
+    ),
+    # New heuristics for expanded probe categories
+    PriorityHeuristic(
+        key="dangerous_capabilities",
+        category="capabilities",
+        severity="high",
+        headline="Binaries with dangerous Linux capabilities found",
+        description="Flag binaries with cap_setuid, cap_sys_admin, or other privilege-granting capabilities.",
+    ),
+    PriorityHeuristic(
+        key="writable_passwd_file",
+        category="writable",
+        severity="critical",
+        headline="World-writable /etc/passwd allows instant root",
+        description="If /etc/passwd is writable, a new root-level user can be appended for instant privilege escalation.",
+    ),
+    PriorityHeuristic(
+        key="docker_escape",
+        category="container",
+        severity="high",
+        headline="Docker group membership or socket access enables host escape",
+        description="User is in the docker group or can access the Docker socket, enabling host filesystem mount and root-level escape.",
+    ),
+    PriorityHeuristic(
+        key="writable_service_files",
+        category="writable",
+        severity="high",
+        headline="Writable systemd service files detected",
+        description="Writable service files run as root can be modified to execute arbitrary commands on service restart.",
+    ),
+    PriorityHeuristic(
+        key="credential_exposure",
+        category="credentials",
+        severity="high",
+        headline="Exposed credentials or sensitive authentication material",
+        description="Readable SSH private keys, shadow file, or credential files found on disk.",
+    ),
+    PriorityHeuristic(
+        key="gtfobins_sudo",
+        category="users",
+        severity="high",
+        headline="Sudo-allowed binaries exploitable via GTFOBins",
+        description="Cross-reference sudo-allowed commands against GTFOBins database for known shell escape techniques.",
+    ),
+    PriorityHeuristic(
+        key="gtfobins_suid",
+        category="filesystem",
+        severity="high",
+        headline="SUID binaries exploitable via GTFOBins",
+        description="Cross-reference SUID binaries against GTFOBins database for known privilege escalation techniques.",
+    ),
+    PriorityHeuristic(
+        key="writable_path",
+        category="writable",
+        severity="medium",
+        headline="Writable directories found in PATH",
+        description="Writable PATH directories allow binary planting for privilege escalation when higher-privileged users or services execute commands.",
+    ),
+    PriorityHeuristic(
+        key="writable_cron_files",
+        category="writable",
+        severity="medium",
+        headline="Writable cron files or directories detected",
+        description="Writable cron entries can be modified to execute arbitrary commands on schedule.",
+    ),
+    PriorityHeuristic(
+        key="nfs_no_root_squash",
+        category="filesystem",
+        severity="medium",
+        headline="NFS exports with no_root_squash allow remote root access",
+        description="NFS shares exported with no_root_squash preserve remote root UID, enabling privileged file creation.",
+    ),
+    PriorityHeuristic(
+        key="ld_preload_hijack",
+        category="library_hijack",
+        severity="medium",
+        headline="Library preload hijacking opportunity detected",
+        description="LD_PRELOAD or /etc/ld.so.preload configuration allows injecting shared libraries into privileged processes.",
+    ),
+    PriorityHeuristic(
+        key="container_detected",
+        category="container",
+        severity="medium",
+        headline="Running inside a container environment",
+        description="System appears to be running inside Docker or LXC, which may limit exploitation but also present escape vectors.",
+    ),
+    PriorityHeuristic(
+        key="cloud_environment",
+        category="credentials",
+        severity="info",
+        headline="Cloud credential files or metadata endpoint accessible",
+        description="AWS, GCP, or Azure credential files found, or cloud metadata endpoint is reachable.",
+    ),
+    PriorityHeuristic(
+        key="interesting_backups",
+        category="interesting_files",
+        severity="info",
+        headline="Accessible backup files found",
+        description="Backup files (.bak, .old, .sql) may contain sensitive data or previous configurations.",
+    ),
+    PriorityHeuristic(
+        key="recent_modifications",
+        category="interesting_files",
+        severity="info",
+        headline="Recently modified files in sensitive locations",
+        description="Files modified in the last 24 hours in /etc, /usr/local/bin, or /usr/local/sbin may indicate active changes.",
+    ),
+    PriorityHeuristic(
+        key="kernel_exploits",
+        category="system",
+        severity="high",
+        headline="Kernel version matches known privilege-escalation CVEs",
+        description="Running kernel version falls within the affected range of one or more public kernel exploits (Dirty Pipe, Dirty COW, PwnKit, etc.).",
     ),
 )

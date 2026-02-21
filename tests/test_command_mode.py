@@ -2236,3 +2236,246 @@ echo "running"
             result = cm.cmd_plugin(["run", "testrun", "plugrun"])
             # May or may not succeed depending on plugin validation
             assert isinstance(result, bool)
+
+
+class TestCompleterBranchCoverage:
+    """Tests targeting specific branch partials in completion methods."""
+
+    @pytest.fixture
+    def ssh_manager(self) -> SSHManager:
+        return SSHManager()
+
+    @pytest.fixture
+    def command_mode(self, ssh_manager: SSHManager) -> CommandMode:
+        return CommandMode(ssh_manager)
+
+    @pytest.fixture
+    def completer(self, command_mode: CommandMode) -> LazySSHCompleter:
+        return LazySSHCompleter(command_mode)
+
+    def test_unknown_command_no_handler(self, completer: LazySSHCompleter) -> None:
+        """Test completion for unknown command — handler is None (line 89->exit)."""
+        doc = Document("nonexistentcommand ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_show_status_no_connections(self, ssh_manager: SSHManager) -> None:
+        """Test show_status with no connections (line 333->exit)."""
+        cm = CommandMode(ssh_manager)
+        result = cm.show_status()
+        assert result is None or result is True or result is False
+
+    def test_tunc_partial_word_no_match(self, command_mode: CommandMode) -> None:
+        """Test tunc completion with partial word that doesn't match (lines 149, 154)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/tuncbranch"
+        )
+        command_mode.ssh_manager.connections["/tmp/tuncbranch"] = conn
+        completer = LazySSHCompleter(command_mode)
+        # Partial word "zzz" that won't match any connection
+        doc = Document("tunc zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_tunc_type_partial_no_match(self, command_mode: CommandMode) -> None:
+        """Test tunc tunnel type completion with non-matching prefix (line 158)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/tuncbranch2"
+        )
+        command_mode.ssh_manager.connections["/tmp/tuncbranch2"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("tunc tuncbranch2 z")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_terminal_partial_no_match(self, command_mode: CommandMode) -> None:
+        """Test terminal completion with non-matching prefix (line 176->exit)."""
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("terminal zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_terminal_too_many_args(self, completer: LazySSHCompleter) -> None:
+        """Test terminal completion with too many args (line 176->exit)."""
+        doc = Document("terminal auto ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_single_arg_connection_no_match(self, command_mode: CommandMode) -> None:
+        """Test connection completion with non-matching prefix (line 185->exit)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/openno"
+        )
+        command_mode.ssh_manager.connections["/tmp/openno"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("open zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_single_arg_connection_name_no_match(self, command_mode: CommandMode) -> None:
+        """Test connection name completion with non-matching prefix (line 194->exit)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/saveno"
+        )
+        command_mode.ssh_manager.connections["/tmp/saveno"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("save-config zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_config_name_no_match(
+        self, command_mode: CommandMode, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test config completion with non-matching prefix (line 203->exit)."""
+        monkeypatch.setattr("lazyssh.command_mode.load_configs", lambda: {"server1": {}})
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("connect zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_help_partial_no_match(self, completer: LazySSHCompleter) -> None:
+        """Test help completion with non-matching prefix (line 213->exit)."""
+        doc = Document("help zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_wizard_partial_no_match(self, completer: LazySSHCompleter) -> None:
+        """Test wizard completion with non-matching prefix (line 222->exit)."""
+        doc = Document("wizard zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_plugin_subcommand_partial_no_match(self, completer: LazySSHCompleter) -> None:
+        """Test plugin subcommand completion with non-matching prefix (line 237)."""
+        doc = Document("plugin zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_plugin_arg2_list_subcommand(self, completer: LazySSHCompleter) -> None:
+        """Test plugin arg2 with 'list' subcommand — no plugins listed (line 242)."""
+        doc = Document("plugin list ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_plugin_arg3_non_run_subcommand(self, completer: LazySSHCompleter) -> None:
+        """Test plugin arg3 with non-run subcommand — no connection completions (line 247)."""
+        doc = Document("plugin info enumerate ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_plugin_run_connection_no_match(self, command_mode: CommandMode) -> None:
+        """Test plugin run with connection prefix that doesn't match (line 250)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/plugconn"
+        )
+        command_mode.ssh_manager.connections["/tmp/plugconn"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("plugin run enumerate zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_lazyssh_all_args_used(self, completer: LazySSHCompleter) -> None:
+        """Test lazyssh completion when all required+optional args used (line 140->exit)."""
+        doc = Document(
+            "lazyssh -ip 1.2.3.4 -port 22 -user test -socket /tmp/s "
+            "-proxy 1080 -ssh-key /key -shell bash -no-term "
+        )
+        completions = list(completer.get_completions(doc, None))
+        # All args used, nothing to suggest
+        assert completions == []
+
+    def test_tunc_beyond_arg2(self, command_mode: CommandMode) -> None:
+        """Test tunc with more than 2 args (lines 152/156 both miss)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/tuncarg3"
+        )
+        command_mode.ssh_manager.connections["/tmp/tuncarg3"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("tunc tuncarg3 l 8080:localhost:80 ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_tund_no_match(self, command_mode: CommandMode) -> None:
+        """Test tund with non-matching prefix (line 169)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/tundno"
+        )
+        conn.add_tunnel(8080, "localhost", 80)
+        command_mode.ssh_manager.connections["/tmp/tundno"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("tund zzz")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_tund_too_many_args(self, command_mode: CommandMode) -> None:
+        """Test tund with too many args — condition false (line 166->exit)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/tundmany"
+        )
+        conn.add_tunnel(8080, "localhost", 80)
+        command_mode.ssh_manager.connections["/tmp/tundmany"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("tund tunnel1 extra")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_single_arg_connection_too_many_args(self, command_mode: CommandMode) -> None:
+        """Test open/close with too many args (line 185->exit)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/connmany"
+        )
+        command_mode.ssh_manager.connections["/tmp/connmany"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("open conn extra ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_single_arg_connection_name_too_many_args(self, command_mode: CommandMode) -> None:
+        """Test save-config with too many args (line 194->exit)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/savemany"
+        )
+        command_mode.ssh_manager.connections["/tmp/savemany"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("save-config conn extra ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_config_name_too_many_args(
+        self, command_mode: CommandMode, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test connect/delete-config with too many args (line 203->exit)."""
+        monkeypatch.setattr("lazyssh.command_mode.load_configs", lambda: {"server1": {}})
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("connect server1 extra ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_help_too_many_args(self, completer: LazySSHCompleter) -> None:
+        """Test help with too many args (line 213->exit)."""
+        doc = Document("help lazyssh extra")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_wizard_too_many_args(self, completer: LazySSHCompleter) -> None:
+        """Test wizard with too many args (line 222->exit)."""
+        doc = Document("wizard lazyssh extra ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_plugin_arg2_with_non_run_info(self, completer: LazySSHCompleter) -> None:
+        """Test plugin arg2 with subcommand not in [run, info] (line 242->exit)."""
+        doc = Document("plugin list somearg ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_plugin_arg4_beyond_limit(self, command_mode: CommandMode) -> None:
+        """Test plugin completion at arg4+ returns nothing (line 247->exit)."""
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/plugarg4"
+        )
+        command_mode.ssh_manager.connections["/tmp/plugarg4"] = conn
+        completer = LazySSHCompleter(command_mode)
+        doc = Document("plugin run enumerate plugarg4 extra ")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []

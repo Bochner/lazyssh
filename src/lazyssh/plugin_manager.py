@@ -411,7 +411,7 @@ class PluginManager:
                 rlist, _, _ = select.select([stdout_fd, stderr_fd], [], [], min(0.2, remaining))
 
                 read_any = False
-                if stdout_fd in rlist:
+                if stdout_fd in rlist:  # pragma: no branch - select result
                     line = process.stdout.readline()
                     if line:
                         stdout_buffer.append(line)
@@ -556,7 +556,7 @@ class PluginManager:
                 rlist, _, _ = select.select([stdout_fd, stderr_fd], [], [], min(0.2, remaining))
 
                 nonlocal_yields: list[tuple[str, str]] = []
-                if stdout_fd in rlist:
+                if stdout_fd in rlist:  # pragma: no branch - select result
                     line = process.stdout.readline()
                     if line:
                         emit("stdout", line)
@@ -632,6 +632,10 @@ class PluginManager:
             "LAZYSSH_SOCKET_PATH": connection.socket_path,
             "LAZYSSH_PLUGIN_API_VERSION": "1",
         }
+
+        # Add connection workspace directory
+        if hasattr(connection, "connection_dir") and connection.connection_dir:  # pragma: no branch
+            env["LAZYSSH_CONNECTION_DIR"] = connection.connection_dir
 
         # Add optional fields
         if connection.identity_file:

@@ -2443,3 +2443,46 @@ class TestLoggingBranches:
         assert any(
             "changed" in msg.lower() for level, msg in mock_logger.messages if level == "info"
         )
+
+
+class TestCreateConnectionBranchCoverage:
+    """Tests targeting specific branch partials in create_connection."""
+
+    def test_create_connection_no_port(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test create_connection with port=0 (lines 63->65, 82->84)."""
+        from unittest import mock
+
+        conn = SSHConnection(host="192.168.1.1", port=0, username="user", socket_path="/tmp/noport")
+        manager = SSHManager()
+        # Mock subprocess to avoid real SSH and Confirm.ask to skip prompt
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock_result)
+        monkeypatch.setattr("rich.prompt.Confirm.ask", lambda *a, **kw: True)
+        monkeypatch.setattr("lazyssh.ssh.display_success", lambda x: None)
+        monkeypatch.setattr("lazyssh.ssh.display_info", lambda x: None)
+        result = manager.create_connection(conn)
+        assert isinstance(result, bool)
+
+    def test_close_connection_error_socket_not_in_dict(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test close_connection error path where socket not in connections (line 581->583)."""
+        manager = SSHManager()
+        conn = SSHConnection(
+            host="192.168.1.1", port=22, username="user", socket_path="/tmp/closeerr"
+        )
+        manager.connections["/tmp/closeerr"] = conn
+
+        # Make subprocess.run raise an error
+        def raise_error(*args: object, **kwargs: object) -> None:
+            raise OSError("cleanup error")
+
+        monkeypatch.setattr("subprocess.run", raise_error)
+        monkeypatch.setattr("lazyssh.ssh.display_warning", lambda x: None)
+
+        result = manager.close_connection("/tmp/closeerr")
+        assert result is True
+        # Connection should be removed despite the error
+        assert "/tmp/closeerr" not in manager.connections

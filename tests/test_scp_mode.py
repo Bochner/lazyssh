@@ -1895,3 +1895,66 @@ class TestSCPModeHelpCommandSpecific:
     def test_help_unknown(self, scp_mode_instance: SCPMode) -> None:
         """Test help with unknown command."""
         scp_mode_instance.cmd_help(["unknown"])
+
+
+class TestSCPModeCompleterArgumentGuards:
+    """Tests for completion method argument count guards.
+
+    These test the early return paths when too many arguments are passed
+    to tab-completion methods.
+    """
+
+    @pytest.fixture
+    def ssh_manager(self) -> SSHManager:
+        return SSHManager()
+
+    @pytest.fixture
+    def scp_mode_instance(self, ssh_manager: SSHManager) -> SCPMode:
+        return SCPMode(ssh_manager)
+
+    @pytest.fixture
+    def completer(self, scp_mode_instance: SCPMode) -> SCPModeCompleter:
+        return SCPModeCompleter(scp_mode_instance)
+
+    def test_put_too_many_args(self, completer: SCPModeCompleter) -> None:
+        """Test put completion returns nothing with 3+ args (line 231)."""
+        doc = Document("put file1 file2 file3")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_lcd_too_many_args(self, completer: SCPModeCompleter) -> None:
+        """Test lcd completion returns nothing with 3+ args (line 418)."""
+        doc = Document("lcd dir1 dir2 extra")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_get_too_many_args(self, completer: SCPModeCompleter) -> None:
+        """Test get completion returns nothing with 3+ args (line 169)."""
+        doc = Document("get file1 file2 extra")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_get_no_trailing_space_one_word(self, completer: SCPModeCompleter) -> None:
+        """Test get with single word, no trailing space — no connection (line 171)."""
+        doc = Document("get ")
+        completions = list(completer.get_completions(doc, None))
+        # No active connection, so remote completions return nothing
+        assert completions == []
+
+    def test_cd_too_many_args(self, completer: SCPModeCompleter) -> None:
+        """Test cd completion returns nothing with 3+ args (line 258)."""
+        doc = Document("cd dir1 dir2 extra")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_local_too_many_args(self, completer: SCPModeCompleter) -> None:
+        """Test local completion returns nothing with 4+ args (line 325)."""
+        doc = Document("local download dir1 file1 extra")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
+
+    def test_lls_too_many_args(self, completer: SCPModeCompleter) -> None:
+        """Test lls completion returns nothing with 3+ args (line 160)."""
+        doc = Document("lls dir1 dir2 extra")
+        completions = list(completer.get_completions(doc, None))
+        assert completions == []
