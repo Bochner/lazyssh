@@ -16,8 +16,8 @@ from lazyssh.plugins.upload_exec import (
     PAYLOAD_PRESETS,
     MsfvenomConfig,
     _create_staging_dir,
-    _interactive_mode,
     _scp_upload,
+    _show_usage,
     _ssh_exec,
     build_parser,
     generate_msfvenom_payload,
@@ -802,148 +802,27 @@ class TestBuildParser:
 
 
 # ---------------------------------------------------------------------------
-# Interactive Mode Tests
+# Show Usage Tests
 # ---------------------------------------------------------------------------
 
 
-class TestInteractiveMode:
-    """Tests for _interactive_mode function."""
+class TestShowUsage:
+    """Tests for _show_usage function."""
 
-    def test_upload_mode(
-        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_zero(self) -> None:
         arch = RemoteArch("x86_64", "Linux", "x64", "linux")
-        test_file = str(tmp_path) + "/test_bin"  # type: ignore[operator]
-        with open(test_file, "w") as f:
-            f.write("test content\n")
+        result = _show_usage(arch)
+        assert result == 0
 
-        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
-        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
-        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+    def test_displays_architecture_info(self, capsys: pytest.CaptureFixture[str]) -> None:
+        arch = RemoteArch("aarch64", "Linux", "aarch64", "linux")
+        _show_usage(arch)
+        # Rich writes to its own console, so we check it returns 0 (non-blocking)
 
-        mock_result = mock.MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = ""
-        mock_result.stderr = ""
-
-        with (
-            mock.patch("lazyssh.plugins.upload_exec.Prompt") as mock_prompt,
-            mock.patch("lazyssh.plugins.upload_exec.Confirm") as mock_confirm,
-            mock.patch("lazyssh.plugins.upload_exec.IntPrompt"),
-            mock.patch("subprocess.run", return_value=mock_result),
-            mock.patch("lazyssh.plugins.upload_exec._scp_upload", return_value=True),
-        ):
-            mock_prompt.ask.side_effect = ["upload", test_file, ""]
-            mock_confirm.ask.return_value = False  # no background, cleanup=True
-            result = _interactive_mode(arch)
-            assert result == 0
-
-    def test_upload_file_not_found(self) -> None:
-        arch = RemoteArch("x86_64", "Linux", "x64", "linux")
-
-        with (
-            mock.patch("lazyssh.plugins.upload_exec.Prompt") as mock_prompt,
-            mock.patch("lazyssh.plugins.upload_exec.Confirm"),
-            mock.patch("lazyssh.plugins.upload_exec.IntPrompt"),
-        ):
-            mock_prompt.ask.side_effect = ["upload", "/nonexistent/file"]
-            result = _interactive_mode(arch)
-            assert result == 1
-
-    def test_msfvenom_mode_interactive(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        arch = RemoteArch("x86_64", "Linux", "x64", "linux")
-        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
-        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
-        monkeypatch.setenv("LAZYSSH_USER", "testuser")
-
-        with (
-            mock.patch("lazyssh.plugins.upload_exec.Prompt") as mock_prompt,
-            mock.patch("lazyssh.plugins.upload_exec.Confirm") as mock_confirm,
-            mock.patch("lazyssh.plugins.upload_exec.IntPrompt") as mock_int,
-            mock.patch("shutil.which", return_value="/usr/bin/msfvenom"),
-            mock.patch(
-                "lazyssh.plugins.upload_exec.generate_msfvenom_payload",
-                return_value=True,
-            ),
-            mock.patch("lazyssh.plugins.upload_exec.upload_and_execute", return_value=0),
-        ):
-            mock_prompt.ask.side_effect = [
-                "msfvenom",  # mode
-                PAYLOAD_PRESETS["x64"],  # payload
-                "10.0.0.1",  # lhost
-                "",  # encoder
-                "elf",  # format
-            ]
-            mock_int.ask.side_effect = [4444]  # lport
-            mock_confirm.ask.return_value = True  # background
-            result = _interactive_mode(arch)
-            assert result == 0
-
-    def test_upload_only_mode(
-        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        arch = RemoteArch("x86_64", "Linux", "x64", "linux")
-        test_file = str(tmp_path) + "/test_bin"  # type: ignore[operator]
-        with open(test_file, "w") as f:
-            f.write("test content\n")
-
-        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
-        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
-        monkeypatch.setenv("LAZYSSH_USER", "testuser")
-
-        mock_result = mock.MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = ""
-        mock_result.stderr = ""
-
-        with (
-            mock.patch("lazyssh.plugins.upload_exec.Prompt") as mock_prompt,
-            mock.patch("lazyssh.plugins.upload_exec.Confirm"),
-            mock.patch("lazyssh.plugins.upload_exec.IntPrompt"),
-            mock.patch("subprocess.run", return_value=mock_result),
-            mock.patch("lazyssh.plugins.upload_exec._scp_upload", return_value=True),
-        ):
-            mock_prompt.ask.side_effect = ["upload-only", test_file]
-            result = _interactive_mode(arch)
-            assert result == 0
-
-    def test_upload_only_failure(
-        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        arch = RemoteArch("x86_64", "Linux", "x64", "linux")
-        test_file = str(tmp_path) + "/test_bin"  # type: ignore[operator]
-        with open(test_file, "w") as f:
-            f.write("test\n")
-
-        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
-        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
-        monkeypatch.setenv("LAZYSSH_USER", "testuser")
-
-        mock_result = mock.MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = ""
-        mock_result.stderr = ""
-
-        with (
-            mock.patch("lazyssh.plugins.upload_exec.Prompt") as mock_prompt,
-            mock.patch("lazyssh.plugins.upload_exec.Confirm"),
-            mock.patch("lazyssh.plugins.upload_exec.IntPrompt"),
-            mock.patch("subprocess.run", return_value=mock_result),
-            mock.patch("lazyssh.plugins.upload_exec._scp_upload", return_value=False),
-        ):
-            mock_prompt.ask.side_effect = ["upload-only", test_file]
-            result = _interactive_mode(arch)
-            assert result == 1
-
-    def test_rich_unavailable(self) -> None:
-        arch = RemoteArch("x86_64", "Linux", "x64", "linux")
-        with (
-            mock.patch("lazyssh.plugins.upload_exec.Prompt", None),
-            mock.patch("lazyssh.plugins.upload_exec.Confirm", None),
-            mock.patch("lazyssh.plugins.upload_exec.IntPrompt", None),
-        ):
-            result = _interactive_mode(arch)
-            assert result == 1
+    def test_different_architectures(self) -> None:
+        for raw, msf in [("x86_64", "x64"), ("armv7l", "armle"), ("aarch64", "aarch64")]:
+            arch = RemoteArch(raw, "Linux", msf, "linux")
+            assert _show_usage(arch) == 0
 
 
 # ---------------------------------------------------------------------------

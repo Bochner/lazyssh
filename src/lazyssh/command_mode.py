@@ -1073,7 +1073,7 @@ class CommandMode:
                 "  [highlight]plugin list[/highlight]               - List all available plugins"
             )
             display_info(
-                "  [highlight]plugin run[/highlight] [number]<name>[/number] [number]<socket>[/number]    - Execute plugin on connection"
+                "  [highlight]plugin run[/highlight] [number]<name>[/number] [number]<socket>[/number] [args]  - Execute plugin on connection"
             )
             display_info(
                 "  [highlight]plugin info[/highlight] [number]<name>[/number]           - Show plugin details"
@@ -1895,11 +1895,12 @@ class CommandMode:
             return self._plugin_list()
         elif subcommand == "run":
             if len(args) < 3:
-                display_error("Usage: plugin run <plugin_name> <socket_name>")
+                display_error("Usage: plugin run <plugin_name> <socket_name> [plugin_args...]")
                 return False
             plugin_name = args[1]
             socket_name = args[2]
-            return self._plugin_run(plugin_name, socket_name)
+            plugin_args = args[3:] if len(args) > 3 else None
+            return self._plugin_run(plugin_name, socket_name, plugin_args=plugin_args)
         elif subcommand == "info":
             if len(args) < 2:
                 display_error("Usage: plugin info <plugin_name>")
@@ -1937,12 +1938,18 @@ class CommandMode:
         ui.display_plugin_info(plugin)
         return True
 
-    def _plugin_run(self, plugin_name: str, socket_name: str) -> bool:
+    def _plugin_run(
+        self,
+        plugin_name: str,
+        socket_name: str,
+        plugin_args: list[str] | None = None,
+    ) -> bool:
         """Execute a plugin on a connection
 
         Args:
             plugin_name: Name of the plugin to run
             socket_name: Name of the SSH socket/connection
+            plugin_args: Optional extra arguments to pass to the plugin
 
         Returns:
             True on success, False otherwise
@@ -1978,7 +1985,7 @@ class CommandMode:
         console.print()
 
         success, output, execution_time = self.plugin_manager.execute_plugin(
-            plugin_name, connection
+            plugin_name, connection, args=plugin_args
         )
 
         # Display output

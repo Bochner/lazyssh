@@ -38,10 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic remote staging directory creation and cleanup
   - `--msfvenom` flag for automatic payload generation with architecture-appropriate defaults
   - `PAYLOAD_PRESETS` with pre-configured payloads for Linux (x86, x64, ARM, MIPS) and architecture auto-detection
-  - Interactive mode with Rich prompts: choose upload, msfvenom generation, or upload-only workflows
+  - Usage guide displayed with detected architecture when run without arguments
   - `--dry-run` mode to preview all commands without execution
   - Background execution, timeout, and output capture options
   - Handler command generation for Metasploit multi/handler setup
+- **Plugin Argument Passing**: `plugin run` command now passes extra arguments to plugins
+  - Usage: `plugin run <name> <socket> [plugin_args...]`
 - **Architecture Auto-Detection**: Remote architecture detection module using SSH control socket
   - Detects OS and CPU architecture via `uname -m` and `uname -s`
   - Maps to msfvenom-compatible architecture/platform strings
@@ -50,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Enumeration JSON Output**: `exploitation_difficulty` and `exploit_commands` fields now included in priority findings JSON payload
 - **Enumeration Finding Detail**: Exploit commands displayed inline with finding evidence when available
+
+### Fixed
+- **Upload-Exec Plugin Hang**: Fixed plugin hanging indefinitely when run without arguments due to interactive prompts blocking on unavailable stdin in subprocess context. Now shows usage guide instead.
 
 ## [1.6.0] - 2026-01-24
 

