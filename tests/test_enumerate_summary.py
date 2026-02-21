@@ -63,6 +63,25 @@ class TestPriorityFinding:
         assert result["severity"] == "high"
         assert result["headline"] == "Test Headline"
         assert len(result["evidence"]) == 2
+        assert result["exploitation_difficulty"] == ""
+        assert result["exploit_commands"] == []
+
+    def test_to_dict_with_exploit_fields(self) -> None:
+        """Test PriorityFinding to_dict with exploit fields populated."""
+        finding = enumerate_plugin.PriorityFinding(
+            key="test_key",
+            category="test_cat",
+            severity="critical",
+            headline="Test Headline",
+            detail="Test detail",
+            evidence=["evidence1"],
+            exploitation_difficulty="instant",
+            exploit_commands=["echo 'exploit'"],
+        )
+        result = finding.to_dict()
+        assert result["severity"] == "critical"
+        assert result["exploitation_difficulty"] == "instant"
+        assert result["exploit_commands"] == ["echo 'exploit'"]
 
 
 class TestRemoteExecutionError:
@@ -270,6 +289,7 @@ def test_priority_findings_and_json_payload() -> None:
 
     findings = enumerate_plugin.generate_priority_findings(snapshot)
 
+    # Original 8 heuristics should fire with the original probes
     expected_keys = {
         "sudo_membership",
         "passwordless_sudo",
@@ -280,7 +300,7 @@ def test_priority_findings_and_json_payload() -> None:
         "suspicious_scheduled_tasks",
         "kernel_drift",
     }
-    assert {finding.key for finding in findings} == expected_keys
+    assert expected_keys.issubset({finding.key for finding in findings})
 
     plain_report = enumerate_plugin.render_plain(snapshot, findings)
     assert "LazySSH Enumeration Summary" in plain_report
@@ -288,12 +308,16 @@ def test_priority_findings_and_json_payload() -> None:
 
     json_payload = enumerate_plugin.build_json_payload(snapshot, findings, plain_report)
     assert json_payload["probe_count"] == sum(len(group) for group in probes.values())
-    assert len(json_payload["priority_findings"]) == len(expected_keys)
     assert json_payload["categories"]["users"]["id"]["stdout"].startswith("uid=1000")
     assert (
         "summary_text" in json_payload
         and "LazySSH Enumeration Summary" in json_payload["summary_text"]
     )
+
+    # Verify new PriorityFinding fields appear in JSON output
+    for finding_dict in json_payload["priority_findings"]:
+        assert "exploitation_difficulty" in finding_dict
+        assert "exploit_commands" in finding_dict
 
 
 def test_render_plain_includes_warnings() -> None:
@@ -1116,3 +1140,718 @@ class TestWriteArtifacts:
 
         # txt_path should be None when is_json_output=True
         assert txt_path is None
+
+
+def _get_heuristic(key: str) -> "enumerate_plugin.PriorityHeuristic":
+    """Helper to look up a heuristic by key."""
+    from lazyssh.plugins._enumeration_plan import PRIORITY_HEURISTICS
+
+    return next(h for h in PRIORITY_HEURISTICS if h.key == key)
+
+
+class TestNewEvaluators:
+    """Tests for new heuristic evaluator functions added in Step 1."""
+
+    # --- dangerous_capabilities ---
+
+    def test_evaluate_dangerous_capabilities_found(self) -> None:
+        probes = {
+            "capabilities": {
+                "cap_interesting": _probe(
+                    "capabilities",
+                    "cap_interesting",
+                    "/usr/bin/python3 cap_setuid=ep\n/usr/sbin/tcpdump cap_net_raw=ep\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_dangerous_capabilities(
+            snapshot, _get_heuristic("dangerous_capabilities")
+        )
+        assert result is not None
+        assert result.key == "dangerous_capabilities"
+        assert "2 binaries" in result.detail
+        assert result.exploitation_difficulty == "moderate"
+
+    def test_evaluate_dangerous_capabilities_empty(self) -> None:
+        probes = {
+            "capabilities": {
+                "cap_interesting": _probe("capabilities", "cap_interesting", ""),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_dangerous_capabilities(
+            snapshot, _get_heuristic("dangerous_capabilities")
+        )
+        assert result is None
+
+    def test_evaluate_dangerous_capabilities_missing(self) -> None:
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes={}, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_dangerous_capabilities(
+            snapshot, _get_heuristic("dangerous_capabilities")
+        )
+        assert result is None
+
+    # --- writable_passwd_file ---
+
+    def test_evaluate_writable_passwd_file_writable(self) -> None:
+        probes = {
+            "writable": {
+                "writable_passwd": _probe("writable", "writable_passwd", "WRITABLE"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_passwd_file(
+            snapshot, _get_heuristic("writable_passwd_file")
+        )
+        assert result is not None
+        assert result.severity == "critical"
+        assert result.exploitation_difficulty == "instant"
+        assert len(result.exploit_commands) > 0
+
+    def test_evaluate_writable_passwd_file_not_writable(self) -> None:
+        probes = {
+            "writable": {
+                "writable_passwd": _probe("writable", "writable_passwd", "NOT_WRITABLE"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_passwd_file(
+            snapshot, _get_heuristic("writable_passwd_file")
+        )
+        assert result is None
+
+    def test_evaluate_writable_passwd_file_missing(self) -> None:
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes={}, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_passwd_file(
+            snapshot, _get_heuristic("writable_passwd_file")
+        )
+        assert result is None
+
+    # --- docker_escape ---
+
+    def test_evaluate_docker_escape_in_group(self) -> None:
+        probes = {
+            "container": {
+                "docker_group": _probe("container", "docker_group", "IN_DOCKER_GROUP"),
+                "docker_socket": _probe("container", "docker_socket", "DOCKER_SOCKET_NOT_READABLE"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_docker_escape(snapshot, _get_heuristic("docker_escape"))
+        assert result is not None
+        assert "docker group" in result.evidence[0]
+        assert result.exploitation_difficulty == "easy"
+
+    def test_evaluate_docker_escape_socket_accessible(self) -> None:
+        probes = {
+            "container": {
+                "docker_group": _probe("container", "docker_group", "NOT_IN_DOCKER_GROUP"),
+                "docker_socket": _probe("container", "docker_socket", "DOCKER_SOCKET_READABLE"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_docker_escape(snapshot, _get_heuristic("docker_escape"))
+        assert result is not None
+        assert "Docker socket" in result.evidence[0]
+
+    def test_evaluate_docker_escape_neither(self) -> None:
+        probes = {
+            "container": {
+                "docker_group": _probe("container", "docker_group", "NOT_IN_DOCKER_GROUP"),
+                "docker_socket": _probe("container", "docker_socket", "DOCKER_SOCKET_NOT_READABLE"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_docker_escape(snapshot, _get_heuristic("docker_escape"))
+        assert result is None
+
+    # --- writable_service_files ---
+
+    def test_evaluate_writable_service_files_found(self) -> None:
+        probes = {
+            "writable": {
+                "writable_services": _probe(
+                    "writable",
+                    "writable_services",
+                    "/etc/systemd/system/custom.service\n/etc/systemd/system/another.service\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_service_files(
+            snapshot, _get_heuristic("writable_service_files")
+        )
+        assert result is not None
+        assert "2 writable" in result.detail
+
+    def test_evaluate_writable_service_files_none(self) -> None:
+        probes = {
+            "writable": {
+                "writable_services": _probe("writable", "writable_services", "NONE_WRITABLE"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_service_files(
+            snapshot, _get_heuristic("writable_service_files")
+        )
+        assert result is None
+
+    # --- credential_exposure ---
+
+    def test_evaluate_credential_exposure_shadow(self) -> None:
+        probes = {
+            "credentials": {
+                "shadow_readable": _probe(
+                    "credentials",
+                    "shadow_readable",
+                    "root:$6$abc:19000:0:99999:7:::\ndaemon:*:19000:0:99999:7:::",
+                ),
+                "ssh_keys": _probe("credentials", "ssh_keys", "NO_READABLE_KEYS"),
+                "history_files": _probe("credentials", "history_files", "NO_HISTORY_SECRETS"),
+                "config_credentials": _probe("credentials", "config_credentials", "NONE_FOUND"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_credential_exposure(
+            snapshot, _get_heuristic("credential_exposure")
+        )
+        assert result is not None
+        assert "/etc/shadow is readable" in result.evidence
+
+    def test_evaluate_credential_exposure_ssh_keys(self) -> None:
+        probes = {
+            "credentials": {
+                "shadow_readable": _probe("credentials", "shadow_readable", "SHADOW_NOT_READABLE"),
+                "ssh_keys": _probe(
+                    "credentials",
+                    "ssh_keys",
+                    "/home/user/.ssh/id_rsa\n/root/.ssh/id_rsa\n",
+                ),
+                "history_files": _probe("credentials", "history_files", "NO_HISTORY_SECRETS"),
+                "config_credentials": _probe("credentials", "config_credentials", "NONE_FOUND"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_credential_exposure(
+            snapshot, _get_heuristic("credential_exposure")
+        )
+        assert result is not None
+        assert any("SSH key" in e for e in result.evidence)
+
+    def test_evaluate_credential_exposure_none(self) -> None:
+        probes = {
+            "credentials": {
+                "shadow_readable": _probe("credentials", "shadow_readable", "SHADOW_NOT_READABLE"),
+                "ssh_keys": _probe("credentials", "ssh_keys", "NO_READABLE_KEYS"),
+                "history_files": _probe("credentials", "history_files", "NO_HISTORY_SECRETS"),
+                "config_credentials": _probe("credentials", "config_credentials", "NONE_FOUND"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_credential_exposure(
+            snapshot, _get_heuristic("credential_exposure")
+        )
+        assert result is None
+
+    # --- gtfobins_sudo ---
+
+    def test_evaluate_gtfobins_sudo_found(self) -> None:
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    (root) NOPASSWD: /usr/bin/vim\n"
+                    "    (root) NOPASSWD: /usr/bin/find\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
+        assert result is not None
+        assert result.exploitation_difficulty == "easy"
+        assert len(result.evidence) >= 2
+
+    def test_evaluate_gtfobins_sudo_safe(self) -> None:
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    (root) NOPASSWD: /usr/bin/systemctl\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
+        assert result is None
+
+    def test_evaluate_gtfobins_sudo_missing(self) -> None:
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes={}, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
+        assert result is None
+
+    # --- gtfobins_suid ---
+
+    def test_evaluate_gtfobins_suid_found(self) -> None:
+        probes = {
+            "filesystem": {
+                "suid_files": _probe(
+                    "filesystem",
+                    "suid_files",
+                    "/usr/bin/vim\n/usr/bin/find\n/usr/bin/passwd\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
+        assert result is not None
+        assert result.exploitation_difficulty == "easy"
+        # vim and find are dangerous, passwd is not in the dangerous set
+        assert "/usr/bin/vim" in result.evidence
+        assert "/usr/bin/find" in result.evidence
+
+    def test_evaluate_gtfobins_suid_only_safe(self) -> None:
+        probes = {
+            "filesystem": {
+                "suid_files": _probe(
+                    "filesystem",
+                    "suid_files",
+                    "/usr/bin/passwd\n/usr/bin/chfn\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
+        assert result is None
+
+    # --- writable_path ---
+
+    def test_evaluate_writable_path_found(self) -> None:
+        probes = {
+            "writable": {
+                "writable_path_dirs": _probe(
+                    "writable",
+                    "writable_path_dirs",
+                    "WRITABLE:/usr/local/bin\nWRITABLE:/home/user/bin\nDONE\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_path(snapshot, _get_heuristic("writable_path"))
+        assert result is not None
+        assert "2 writable" in result.detail
+        assert "/usr/local/bin" in result.evidence
+
+    def test_evaluate_writable_path_none(self) -> None:
+        probes = {
+            "writable": {
+                "writable_path_dirs": _probe("writable", "writable_path_dirs", "DONE\n"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_path(snapshot, _get_heuristic("writable_path"))
+        assert result is None
+
+    # --- writable_cron_files ---
+
+    def test_evaluate_writable_cron_files_found(self) -> None:
+        probes = {
+            "writable": {
+                "writable_cron": _probe(
+                    "writable",
+                    "writable_cron",
+                    "WRITABLE:/etc/crontab\nWRITABLE:/etc/cron.d\nDONE\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_cron_files(
+            snapshot, _get_heuristic("writable_cron_files")
+        )
+        assert result is not None
+        assert "2 writable" in result.detail
+
+    def test_evaluate_writable_cron_files_none(self) -> None:
+        probes = {
+            "writable": {
+                "writable_cron": _probe("writable", "writable_cron", "DONE\n"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_writable_cron_files(
+            snapshot, _get_heuristic("writable_cron_files")
+        )
+        assert result is None
+
+    # --- nfs_no_root_squash ---
+
+    def test_evaluate_nfs_no_root_squash_found(self) -> None:
+        probes = {
+            "filesystem": {
+                "nfs_exports": _probe(
+                    "filesystem",
+                    "nfs_exports",
+                    "/shared *(rw,no_root_squash)\n/data 10.0.0.0/24(rw,root_squash)\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_nfs_no_root_squash(
+            snapshot, _get_heuristic("nfs_no_root_squash")
+        )
+        assert result is not None
+        assert "1 NFS exports" in result.detail
+        assert "no_root_squash" in result.evidence[0]
+
+    def test_evaluate_nfs_no_root_squash_safe(self) -> None:
+        probes = {
+            "filesystem": {
+                "nfs_exports": _probe(
+                    "filesystem",
+                    "nfs_exports",
+                    "/data 10.0.0.0/24(rw,root_squash)\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_nfs_no_root_squash(
+            snapshot, _get_heuristic("nfs_no_root_squash")
+        )
+        assert result is None
+
+    def test_evaluate_nfs_no_root_squash_no_exports(self) -> None:
+        probes = {
+            "filesystem": {
+                "nfs_exports": _probe("filesystem", "nfs_exports", "NO_NFS_EXPORTS"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_nfs_no_root_squash(
+            snapshot, _get_heuristic("nfs_no_root_squash")
+        )
+        assert result is None
+
+    # --- ld_preload_hijack ---
+
+    def test_evaluate_ld_preload_hijack_preload_set(self) -> None:
+        probes = {
+            "library_hijack": {
+                "ld_preload": _probe(
+                    "library_hijack",
+                    "ld_preload",
+                    "LD_PRELOAD=/tmp/evil.so\nNO_LD_PRELOAD_FILE\n",
+                ),
+                "ld_library_path": _probe(
+                    "library_hijack", "ld_library_path", "LD_LIBRARY_PATH=\nDONE\n"
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_ld_preload_hijack(
+            snapshot, _get_heuristic("ld_preload_hijack")
+        )
+        assert result is not None
+        assert any("LD_PRELOAD" in e for e in result.evidence)
+
+    def test_evaluate_ld_preload_hijack_writable_lib_dir(self) -> None:
+        probes = {
+            "library_hijack": {
+                "ld_preload": _probe(
+                    "library_hijack",
+                    "ld_preload",
+                    "LD_PRELOAD=\nNO_LD_PRELOAD_FILE\n",
+                ),
+                "ld_library_path": _probe(
+                    "library_hijack",
+                    "ld_library_path",
+                    "LD_LIBRARY_PATH=/usr/local/lib\nWRITABLE:/usr/local/lib\nDONE\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_ld_preload_hijack(
+            snapshot, _get_heuristic("ld_preload_hijack")
+        )
+        assert result is not None
+        assert any("Writable LD_LIBRARY_PATH" in e for e in result.evidence)
+
+    def test_evaluate_ld_preload_hijack_clean(self) -> None:
+        probes = {
+            "library_hijack": {
+                "ld_preload": _probe(
+                    "library_hijack",
+                    "ld_preload",
+                    "LD_PRELOAD=\nNO_LD_PRELOAD_FILE\n",
+                ),
+                "ld_library_path": _probe(
+                    "library_hijack", "ld_library_path", "LD_LIBRARY_PATH=\nDONE\n"
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_ld_preload_hijack(
+            snapshot, _get_heuristic("ld_preload_hijack")
+        )
+        assert result is None
+
+    # --- container_detected ---
+
+    def test_evaluate_container_detected_docker(self) -> None:
+        probes = {
+            "container": {
+                "container_detection": _probe(
+                    "container", "container_detection", "DOCKER_CONTAINER"
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_container_detected(
+            snapshot, _get_heuristic("container_detected")
+        )
+        assert result is not None
+        assert "DOCKER_CONTAINER" in result.evidence
+
+    def test_evaluate_container_detected_not_container(self) -> None:
+        probes = {
+            "container": {
+                "container_detection": _probe("container", "container_detection", "NOT_CONTAINER"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_container_detected(
+            snapshot, _get_heuristic("container_detected")
+        )
+        assert result is None
+
+    # --- cloud_environment ---
+
+    def test_evaluate_cloud_environment_aws_metadata(self) -> None:
+        probes = {
+            "credentials": {
+                "cloud_credentials": _probe(
+                    "credentials",
+                    "cloud_credentials",
+                    "NO_CLOUD_CREDS\nAWS_METADATA_AVAILABLE\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_cloud_environment(
+            snapshot, _get_heuristic("cloud_environment")
+        )
+        assert result is not None
+        assert any("AWS metadata" in e for e in result.evidence)
+
+    def test_evaluate_cloud_environment_none(self) -> None:
+        probes = {
+            "credentials": {
+                "cloud_credentials": _probe(
+                    "credentials",
+                    "cloud_credentials",
+                    "NO_CLOUD_CREDS\nNO_CLOUD_METADATA\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_cloud_environment(
+            snapshot, _get_heuristic("cloud_environment")
+        )
+        assert result is None
+
+    # --- interesting_backups ---
+
+    def test_evaluate_interesting_backups_found(self) -> None:
+        probes = {
+            "interesting_files": {
+                "backup_files": _probe(
+                    "interesting_files",
+                    "backup_files",
+                    "-rw-r--r-- 1 root root 1234 Jan 1 00:00 /var/backups/passwd.bak\n"
+                    "/tmp/database.sql\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_interesting_backups(
+            snapshot, _get_heuristic("interesting_backups")
+        )
+        assert result is not None
+        assert "2 accessible" in result.detail
+
+    def test_evaluate_interesting_backups_none(self) -> None:
+        probes = {
+            "interesting_files": {
+                "backup_files": _probe("interesting_files", "backup_files", "NO_BACKUPS"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_interesting_backups(
+            snapshot, _get_heuristic("interesting_backups")
+        )
+        assert result is None
+
+    # --- recent_modifications ---
+
+    def test_evaluate_recent_modifications_found(self) -> None:
+        probes = {
+            "interesting_files": {
+                "recently_modified": _probe(
+                    "interesting_files",
+                    "recently_modified",
+                    "/etc/passwd\n/usr/local/bin/script.sh\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_recent_modifications(
+            snapshot, _get_heuristic("recent_modifications")
+        )
+        assert result is not None
+        assert "2 recently" in result.detail
+
+    def test_evaluate_recent_modifications_none(self) -> None:
+        probes = {
+            "interesting_files": {
+                "recently_modified": _probe(
+                    "interesting_files", "recently_modified", "NONE_RECENT"
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_recent_modifications(
+            snapshot, _get_heuristic("recent_modifications")
+        )
+        assert result is None
+
+
+class TestNewCategoryOrderAndProbes:
+    """Test that new categories appear in SELECTED_CATEGORY_ORDER and new probes in REMOTE_PROBES."""
+
+    def test_new_categories_in_order(self) -> None:
+        """Verify all new categories are in SELECTED_CATEGORY_ORDER."""
+        new_categories = {
+            "capabilities",
+            "writable",
+            "credentials",
+            "container",
+            "library_hijack",
+            "interesting_files",
+        }
+        assert new_categories.issubset(set(enumerate_plugin.SELECTED_CATEGORY_ORDER))
+
+    def test_new_probe_categories_exist(self) -> None:
+        """Verify probes exist for each new category."""
+        from lazyssh.plugins._enumeration_plan import REMOTE_PROBES
+
+        categories = {p.category for p in REMOTE_PROBES}
+        for cat in (
+            "capabilities",
+            "writable",
+            "credentials",
+            "container",
+            "library_hijack",
+            "interesting_files",
+        ):
+            assert cat in categories, f"Category {cat} missing from REMOTE_PROBES"
+
+    def test_existing_category_expansions(self) -> None:
+        """Verify expanded probes in existing categories."""
+        from lazyssh.plugins._enumeration_plan import REMOTE_PROBES
+
+        probe_keys = {(p.category, p.key) for p in REMOTE_PROBES}
+        assert ("filesystem", "nfs_exports") in probe_keys
+        assert ("filesystem", "mounted_nfs") in probe_keys
+        assert ("users", "doas_conf") in probe_keys
+        assert ("users", "polkit_rules") in probe_keys
+        assert ("users", "pkexec_version") in probe_keys
+
+    def test_heuristic_evaluator_coverage(self) -> None:
+        """Verify every heuristic has a corresponding evaluator."""
+        from lazyssh.plugins._enumeration_plan import PRIORITY_HEURISTICS
+
+        for h in PRIORITY_HEURISTICS:
+            assert h.key in enumerate_plugin.HEURISTIC_EVALUATORS, (
+                f"Heuristic '{h.key}' has no evaluator registered"
+            )
+
+    def test_critical_severity_style(self) -> None:
+        """Verify 'critical' severity is in SEVERITY_STYLES."""
+        assert "critical" in enumerate_plugin.SEVERITY_STYLES

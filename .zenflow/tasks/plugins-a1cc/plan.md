@@ -51,7 +51,8 @@ Create a detailed implementation plan based on `{@artifacts_path}/spec.md`.
 2. Each task should reference relevant contracts and include verification steps
 3. Replace the Implementation step below with the planned tasks
 
-### [ ] Step 1: Enumeration Probe Expansion and New Heuristics
+### [x] Step 1: Enumeration Probe Expansion and New Heuristics
+<!-- chat-id: e4f7d579-1b24-4bb8-94fd-fdb9280bbe4c -->
 
 Expand `_enumeration_plan.py` with ~40 new probes across 7 new categories and ~15 new heuristic definitions. Update `enumerate.py` with new evaluator functions, extended `PriorityFinding` dataclass, and updated category ordering. Add tests for all new evaluators.
 

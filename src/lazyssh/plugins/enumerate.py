@@ -21,7 +21,7 @@ import shlex
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -65,6 +65,12 @@ SELECTED_CATEGORY_ORDER: tuple[str, ...] = (
     "users",
     "network",
     "filesystem",
+    "capabilities",
+    "writable",
+    "credentials",
+    "container",
+    "library_hijack",
+    "interesting_files",
     "security",
     "scheduled",
     "processes",
@@ -75,6 +81,7 @@ SELECTED_CATEGORY_ORDER: tuple[str, ...] = (
 )
 
 SEVERITY_STYLES: dict[str, str] = {
+    "critical": "error",
     "high": "error",
     "medium": "warning",
     "info": "info",
@@ -128,6 +135,8 @@ class PriorityFinding:
     headline: str
     detail: str
     evidence: list[str]
+    exploitation_difficulty: str = ""  # "instant", "easy", "moderate", "" (unknown)
+    exploit_commands: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -137,6 +146,8 @@ class PriorityFinding:
             "headline": self.headline,
             "detail": self.detail,
             "evidence": self.evidence,
+            "exploitation_difficulty": self.exploitation_difficulty,
+            "exploit_commands": self.exploit_commands,
         }
 
 
@@ -659,6 +670,542 @@ def _evaluate_kernel_drift(
     )
 
 
+def _evaluate_dangerous_capabilities(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "capabilities", "cap_interesting")
+    if not probe or not probe.stdout:
+        return None
+    lines = [line.strip() for line in probe.stdout.splitlines() if line.strip()]
+    if not lines:
+        return None
+    detail = f"Found {len(lines)} binaries with dangerous capabilities"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=lines[:6],
+        exploitation_difficulty="moderate",
+    )
+
+
+def _evaluate_writable_passwd_file(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "writable", "writable_passwd")
+    if not probe or not probe.stdout:
+        return None
+    if "WRITABLE" not in probe.stdout.upper() or "NOT_WRITABLE" in probe.stdout.upper():
+        return None
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail="/etc/passwd is writable — append a root user for instant escalation",
+        evidence=["/etc/passwd is world-writable"],
+        exploitation_difficulty="instant",
+        exploit_commands=[
+            "echo 'hacker:$(openssl passwd -1 password):0:0::/root:/bin/bash' >> /etc/passwd",
+            "su hacker  # password: password",
+        ],
+    )
+
+
+def _evaluate_docker_escape(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    docker_group = _get_probe(snapshot, "container", "docker_group")
+    docker_socket = _get_probe(snapshot, "container", "docker_socket")
+    evidence: list[str] = []
+    if (
+        docker_group
+        and "IN_DOCKER_GROUP" in docker_group.stdout
+        and "NOT_IN_DOCKER_GROUP" not in docker_group.stdout
+    ):
+        evidence.append("User is in docker group")
+    if docker_socket and "DOCKER_SOCKET_READABLE" in docker_socket.stdout:
+        evidence.append("Docker socket /var/run/docker.sock is accessible")
+    if not evidence:
+        return None
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail="Docker access enables host filesystem mount and root escape",
+        evidence=evidence,
+        exploitation_difficulty="easy",
+        exploit_commands=[
+            "docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash",
+        ],
+    )
+
+
+def _evaluate_writable_service_files(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "writable", "writable_services")
+    if not probe or not probe.stdout:
+        return None
+    paths = [
+        line.strip()
+        for line in probe.stdout.splitlines()
+        if line.strip() and "NONE_WRITABLE" not in line
+    ]
+    if not paths:
+        return None
+    detail = f"Found {len(paths)} writable systemd service files"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=paths[:6],
+        exploitation_difficulty="moderate",
+    )
+
+
+def _evaluate_credential_exposure(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    evidence: list[str] = []
+
+    shadow = _get_probe(snapshot, "credentials", "shadow_readable")
+    if shadow and shadow.stdout and "SHADOW_NOT_READABLE" not in shadow.stdout:
+        evidence.append("/etc/shadow is readable")
+
+    ssh_keys = _get_probe(snapshot, "credentials", "ssh_keys")
+    if ssh_keys and ssh_keys.stdout and "NO_READABLE_KEYS" not in ssh_keys.stdout:
+        keys = [line.strip() for line in ssh_keys.stdout.splitlines() if line.strip()]
+        for key_path in keys[:3]:
+            evidence.append(f"Readable SSH key: {key_path}")
+
+    history = _get_probe(snapshot, "credentials", "history_files")
+    if history and history.stdout and "NO_HISTORY_SECRETS" not in history.stdout:
+        evidence.append("Credentials found in shell history files")
+
+    config_creds = _get_probe(snapshot, "credentials", "config_credentials")
+    if config_creds and config_creds.stdout and "NONE_FOUND" not in config_creds.stdout:
+        cred_files = [line.strip() for line in config_creds.stdout.splitlines() if line.strip()]
+        for cf in cred_files[:3]:
+            evidence.append(f"Credential file: {cf}")
+
+    if not evidence:
+        return None
+    detail = f"Found {len(evidence)} credential exposure vectors"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=evidence[:6],
+    )
+
+
+def _evaluate_gtfobins_sudo(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    """Evaluate sudo-allowed binaries for GTFOBins exploitability.
+
+    Note: Full GTFOBins cross-referencing is wired in Step 4.
+    This initial version flags known-dangerous sudo binaries.
+    """
+    sudo_check = _get_probe(snapshot, "users", "sudo_check")
+    if not sudo_check or not sudo_check.stdout:
+        return None
+
+    known_dangerous = {
+        "vim",
+        "vi",
+        "nano",
+        "less",
+        "more",
+        "man",
+        "find",
+        "awk",
+        "gawk",
+        "mawk",
+        "python",
+        "python3",
+        "perl",
+        "ruby",
+        "php",
+        "node",
+        "lua",
+        "env",
+        "bash",
+        "sh",
+        "dash",
+        "zsh",
+        "ksh",
+        "nmap",
+        "ftp",
+        "gdb",
+        "strace",
+        "ltrace",
+        "docker",
+        "screen",
+        "tmux",
+        "tar",
+        "zip",
+        "sed",
+        "ed",
+        "tee",
+        "cp",
+        "mv",
+        "wget",
+        "curl",
+        "socat",
+        "nc",
+        "ssh",
+        "scp",
+        "rsync",
+        "git",
+        "pip",
+        "pip3",
+        "mount",
+        "openssl",
+        "gcc",
+        "make",
+    }
+
+    matches: list[str] = []
+    for line in sudo_check.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("User ") or stripped.startswith("Matching"):
+            continue
+        for binary_name in known_dangerous:
+            if f"/{binary_name}" in stripped or stripped.endswith(f" {binary_name}"):
+                matches.append(stripped)
+                break
+
+    if not matches:
+        return None
+    detail = f"Found {len(matches)} sudo-allowed binaries with known GTFOBins techniques"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=matches[:6],
+        exploitation_difficulty="easy",
+    )
+
+
+def _evaluate_gtfobins_suid(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    """Evaluate SUID binaries for GTFOBins exploitability.
+
+    Note: Full GTFOBins cross-referencing is wired in Step 4.
+    This initial version flags known-dangerous SUID binaries.
+    """
+    suid_probe = _get_probe(snapshot, "filesystem", "suid_files")
+    if not suid_probe or not suid_probe.stdout:
+        return None
+
+    known_dangerous_suid = {
+        "vim",
+        "vi",
+        "nano",
+        "less",
+        "more",
+        "man",
+        "find",
+        "awk",
+        "gawk",
+        "python",
+        "python3",
+        "perl",
+        "ruby",
+        "php",
+        "node",
+        "lua",
+        "env",
+        "bash",
+        "sh",
+        "dash",
+        "zsh",
+        "ksh",
+        "nmap",
+        "gdb",
+        "strace",
+        "ltrace",
+        "docker",
+        "screen",
+        "tmux",
+        "tar",
+        "zip",
+        "sed",
+        "ed",
+        "tee",
+        "cp",
+        "mv",
+        "wget",
+        "curl",
+        "socat",
+        "nc",
+        "ssh",
+        "scp",
+        "rsync",
+        "git",
+        "pip",
+        "pip3",
+        "mount",
+        "openssl",
+        "gcc",
+        "make",
+        "pkexec",
+    }
+
+    matches: list[str] = []
+    for line in suid_probe.stdout.splitlines():
+        path = line.strip()
+        if not path:
+            continue
+        binary_name = path.rsplit("/", 1)[-1] if "/" in path else path
+        if binary_name in known_dangerous_suid:
+            matches.append(path)
+
+    if not matches:
+        return None
+    detail = f"Found {len(matches)} SUID binaries with known GTFOBins techniques"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=matches[:6],
+        exploitation_difficulty="easy",
+    )
+
+
+def _evaluate_writable_path(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "writable", "writable_path_dirs")
+    if not probe or not probe.stdout:
+        return None
+    writable = [
+        line.replace("WRITABLE:", "").strip()
+        for line in probe.stdout.splitlines()
+        if line.strip().startswith("WRITABLE:")
+    ]
+    if not writable:
+        return None
+    detail = f"Found {len(writable)} writable directories in PATH"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=writable[:6],
+        exploitation_difficulty="moderate",
+    )
+
+
+def _evaluate_writable_cron_files(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "writable", "writable_cron")
+    if not probe or not probe.stdout:
+        return None
+    writable = [
+        line.replace("WRITABLE:", "").strip()
+        for line in probe.stdout.splitlines()
+        if line.strip().startswith("WRITABLE:")
+    ]
+    if not writable:
+        return None
+    detail = f"Found {len(writable)} writable cron files or directories"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=writable[:6],
+        exploitation_difficulty="moderate",
+    )
+
+
+def _evaluate_nfs_no_root_squash(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "filesystem", "nfs_exports")
+    if not probe or not probe.stdout:
+        return None
+    if "NO_NFS_EXPORTS" in probe.stdout:
+        return None
+    vulnerable: list[str] = []
+    for line in probe.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if "no_root_squash" in stripped:
+            vulnerable.append(stripped)
+    if not vulnerable:
+        return None
+    detail = f"Found {len(vulnerable)} NFS exports with no_root_squash"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=vulnerable[:6],
+        exploitation_difficulty="moderate",
+    )
+
+
+def _evaluate_ld_preload_hijack(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "library_hijack", "ld_preload")
+    if not probe or not probe.stdout:
+        return None
+    evidence: list[str] = []
+
+    for line in probe.stdout.splitlines():
+        stripped = line.strip()
+        # Check if LD_PRELOAD is set (not just empty)
+        if stripped.startswith("LD_PRELOAD=") and len(stripped) > len("LD_PRELOAD="):
+            evidence.append(stripped)
+        # Check if /etc/ld.so.preload exists and has content (not just the error message)
+        if (
+            stripped
+            and "NO_LD_PRELOAD_FILE" not in stripped
+            and not stripped.startswith("LD_PRELOAD=")
+        ):
+            evidence.append(f"/etc/ld.so.preload: {stripped}")
+
+    ld_lib = _get_probe(snapshot, "library_hijack", "ld_library_path")
+    if ld_lib and ld_lib.stdout:
+        for line in ld_lib.stdout.splitlines():
+            if line.strip().startswith("WRITABLE:"):
+                evidence.append(
+                    f"Writable LD_LIBRARY_PATH dir: {line.replace('WRITABLE:', '').strip()}"
+                )
+
+    if not evidence:
+        return None
+    detail = f"Found {len(evidence)} library preload hijacking vectors"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=evidence[:6],
+        exploitation_difficulty="moderate",
+    )
+
+
+def _evaluate_container_detected(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "container", "container_detection")
+    if not probe or not probe.stdout:
+        return None
+    stdout = probe.stdout.strip()
+    if stdout == "NOT_CONTAINER":
+        return None
+    evidence = [stdout]
+    lxc = _get_probe(snapshot, "container", "lxc_check")
+    if lxc and lxc.stdout and "LXD_PRESENT" in lxc.stdout:
+        evidence.append("LXD/LXC tools available")
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=f"Container environment detected: {stdout}",
+        evidence=evidence,
+    )
+
+
+def _evaluate_cloud_environment(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "credentials", "cloud_credentials")
+    if not probe or not probe.stdout:
+        return None
+    evidence: list[str] = []
+    for line in probe.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if "NO_CLOUD_CREDS" in stripped or "NO_CLOUD_METADATA" in stripped:
+            continue
+        if "AWS_METADATA_AVAILABLE" in stripped:
+            evidence.append("AWS metadata endpoint reachable (169.254.169.254)")
+        elif "credentials" in stripped.lower() or "accessTokens" in stripped:
+            evidence.append(stripped)
+    if not evidence:
+        return None
+    detail = f"Found {len(evidence)} cloud credential indicators"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=evidence[:6],
+    )
+
+
+def _evaluate_interesting_backups(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "interesting_files", "backup_files")
+    if not probe or not probe.stdout:
+        return None
+    if "NO_BACKUPS" in probe.stdout:
+        return None
+    lines = [line.strip() for line in probe.stdout.splitlines() if line.strip()]
+    if not lines:
+        return None
+    detail = f"Found {len(lines)} accessible backup entries"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=lines[:6],
+    )
+
+
+def _evaluate_recent_modifications(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    probe = _get_probe(snapshot, "interesting_files", "recently_modified")
+    if not probe or not probe.stdout:
+        return None
+    if "NONE_RECENT" in probe.stdout:
+        return None
+    files = [line.strip() for line in probe.stdout.splitlines() if line.strip()]
+    if not files:
+        return None
+    detail = f"Found {len(files)} recently modified files in sensitive locations"
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=detail,
+        evidence=files[:6],
+    )
+
+
 HEURISTIC_EVALUATORS = {
     "sudo_membership": _evaluate_sudo_membership,
     "passwordless_sudo": _evaluate_passwordless_sudo,
@@ -668,6 +1215,21 @@ HEURISTIC_EVALUATORS = {
     "weak_ssh_configuration": _evaluate_weak_ssh,
     "suspicious_scheduled_tasks": _evaluate_suspicious_scheduled,
     "kernel_drift": _evaluate_kernel_drift,
+    "dangerous_capabilities": _evaluate_dangerous_capabilities,
+    "writable_passwd_file": _evaluate_writable_passwd_file,
+    "docker_escape": _evaluate_docker_escape,
+    "writable_service_files": _evaluate_writable_service_files,
+    "credential_exposure": _evaluate_credential_exposure,
+    "gtfobins_sudo": _evaluate_gtfobins_sudo,
+    "gtfobins_suid": _evaluate_gtfobins_suid,
+    "writable_path": _evaluate_writable_path,
+    "writable_cron_files": _evaluate_writable_cron_files,
+    "nfs_no_root_squash": _evaluate_nfs_no_root_squash,
+    "ld_preload_hijack": _evaluate_ld_preload_hijack,
+    "container_detected": _evaluate_container_detected,
+    "cloud_environment": _evaluate_cloud_environment,
+    "interesting_backups": _evaluate_interesting_backups,
+    "recent_modifications": _evaluate_recent_modifications,
 }
 
 
