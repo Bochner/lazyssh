@@ -574,7 +574,7 @@ echo "hi"
 
     def mock_chmod(self, mode):
         if "noexec.sh" in str(self):
-            return  # Do nothing
+            return None  # Do nothing
         return original_chmod(self, mode)
 
     monkeypatch.setattr(Path, "chmod", mock_chmod)

@@ -5,6 +5,7 @@ LazySSH - Main module providing the entry point and interactive menus.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 
 import click
@@ -63,7 +64,7 @@ def close_all_connections() -> None:
         try:
             if ssh_manager.close_connection(socket_path):
                 successful_closures += 1
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             display_warning(f"Failed to close connection for {socket_path}: {str(e)}")
 
     # Report closure results
@@ -177,14 +178,14 @@ def main(debug: bool, config: str | None) -> None:
         display_warning("\nUse the exit command to safely exit LazySSH.")
         try:
             input("\nPress Enter to continue...")
-            return None  # Return to caller
+            return  # Return to caller
         except KeyboardInterrupt:
             if APP_LOGGER:
                 APP_LOGGER.info("LazySSH terminated by user (KeyboardInterrupt)")
             display_info("\nExiting...")
             if check_active_connections():
                 safe_exit()
-    except Exception as e:
+    except Exception as e:  # top-level safety net; genuinely unknown errors possible
         if APP_LOGGER:
             APP_LOGGER.exception(f"Unhandled exception: {str(e)}")
         display_error(f"An unexpected error occurred: {str(e)}")

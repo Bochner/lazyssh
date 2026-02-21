@@ -9,6 +9,7 @@ import os
 # import sys
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
 import rich.logging
 from rich.console import Console
@@ -25,7 +26,7 @@ LOG_LEVELS = {
 }
 
 # Default log directory
-DEFAULT_LOG_DIR = Path("/tmp/lazyssh/logs")
+DEFAULT_LOG_DIR = Path("/tmp/lazyssh/logs")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 FILE_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 
@@ -33,8 +34,8 @@ FILE_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 DEBUG_MODE = False
 
 # Global settings
-LOG_DIR = Path("/tmp/lazyssh/logs")
-CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"
+LOG_DIR = Path("/tmp/lazyssh/logs")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
+CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 DEFAULT_LOG_LEVEL = "INFO"
 
 # Global console instance for Rich logging
@@ -47,8 +48,17 @@ SCP_LOGGER: logging.Logger | None = None
 CMD_LOGGER: logging.Logger | None = None
 CONFIG_LOGGER: logging.Logger | None = None
 
+
+class TransferStats(TypedDict):
+    """Per-connection file transfer statistics."""
+
+    total_files: int
+    total_bytes: int
+    last_updated: datetime
+
+
 # Track file transfer statistics per connection
-transfer_stats: dict[str, dict[str, int | datetime]] = {}
+transfer_stats: dict[str, TransferStats] = {}
 
 
 def set_debug_mode(enabled: bool = True) -> None:
@@ -74,7 +84,7 @@ def ensure_log_directory(log_dir: Path | str | None = None) -> bool:
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             log_dir.chmod(0o700)  # Secure permissions
-        except Exception as e:
+        except OSError as e:
             from .console_instance import display_error
 
             display_error(f"Error creating log directory: {e}")
@@ -133,7 +143,7 @@ def setup_logger(
             file_handler.setFormatter(logging.Formatter(FILE_LOG_FORMAT))
             file_handler.setLevel(level)  # File handler always uses the specified level
             logger.addHandler(file_handler)
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to set up file logging: {e}")
 
     return logger
@@ -320,9 +330,9 @@ def update_transfer_stats(connection_name: str, files_count: int, bytes_count: i
         stats["total_files"] = 1
     else:
         # Multiple file transfer (from mget) - additive
-        stats["total_files"] += files_count  # type: ignore
+        stats["total_files"] += files_count
 
-    stats["total_bytes"] += bytes_count  # type: ignore
+    stats["total_bytes"] += bytes_count
     stats["last_updated"] = datetime.now()
 
     # Log the updated stats

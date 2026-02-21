@@ -9,6 +9,13 @@ import pytest
 from lazyssh import logging_module
 
 
+def _close_handlers(logger: logging.Logger) -> None:
+    """Close all handlers on a logger, then clear the handler list."""
+    for handler in logger.handlers[:]:
+        handler.close()
+    logger.handlers.clear()
+
+
 class TestSetDebugMode:
     """Tests for set_debug_mode function."""
 
@@ -35,7 +42,7 @@ class TestSetDebugMode:
         import rich.logging
 
         test_logger = logging.getLogger("lazyssh.test_debug_mode")
-        test_logger.handlers.clear()
+        _close_handlers(test_logger)
         handler = rich.logging.RichHandler()
         handler.setLevel(logging.CRITICAL)
         test_logger.addHandler(handler)
@@ -48,7 +55,7 @@ class TestSetDebugMode:
         assert handler.level == logging.DEBUG
 
         # Clean up
-        test_logger.handlers.clear()
+        _close_handlers(test_logger)
 
 
 class TestEnsureLogDirectory:
@@ -111,7 +118,7 @@ class TestSetupLogger:
         assert len(logger.handlers) >= 2  # Rich + File handlers
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_no_file_handler_when_disabled(self, tmp_path: Path) -> None:
         """Test that file handler is not added when log_to_file=False."""
@@ -127,7 +134,7 @@ class TestSetupLogger:
         assert len(file_handlers) == 0
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_removes_existing_handlers(self, tmp_path: Path) -> None:
         """Test that existing handlers are removed before adding new ones."""
@@ -145,7 +152,7 @@ class TestSetupLogger:
         assert old_handler not in logger.handlers
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_file_handler_error_handling(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -169,7 +176,7 @@ class TestSetupLogger:
             assert logger is not None
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_debug_mode_affects_rich_handler_level(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -191,7 +198,7 @@ class TestSetupLogger:
         assert rich_handlers[0].level == logging.DEBUG
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
 
 class TestGetLogger:
@@ -205,7 +212,7 @@ class TestGetLogger:
         assert logger.name == "test.getlogger"
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_uses_env_log_level(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that log level from environment is used."""
@@ -217,7 +224,7 @@ class TestGetLogger:
         assert logger.level == logging.DEBUG
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_uses_provided_level(self, tmp_path: Path) -> None:
         """Test that provided level overrides env."""
@@ -228,7 +235,7 @@ class TestGetLogger:
         assert logger.level == logging.WARNING
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_invalid_env_level_defaults_to_info(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -242,7 +249,7 @@ class TestGetLogger:
         assert logger.level == logging.INFO
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
 
 class TestGetConnectionLogger:
@@ -259,7 +266,7 @@ class TestGetConnectionLogger:
         assert len(logger.handlers) >= 1
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_creates_log_directory(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that log directory is created for connection."""
@@ -278,7 +285,7 @@ class TestGetConnectionLogger:
         # Clear any existing logger
         logger_name = "lazyssh.connection.test-conn-debug"
         if logger_name in logging.root.manager.loggerDict:
-            logging.getLogger(logger_name).handlers.clear()
+            _close_handlers(logging.getLogger(logger_name))
 
         logger = logging_module.get_connection_logger("test-conn-debug")
 
@@ -290,7 +297,7 @@ class TestGetConnectionLogger:
         assert len(console_handlers) >= 1
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
 
     def test_reuses_existing_logger(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that existing logger is reused."""
@@ -299,7 +306,7 @@ class TestGetConnectionLogger:
         # Clear any existing logger
         logger_name = "lazyssh.connection.test-conn-reuse"
         if logger_name in logging.root.manager.loggerDict:
-            logging.getLogger(logger_name).handlers.clear()
+            _close_handlers(logging.getLogger(logger_name))
 
         logger1 = logging_module.get_connection_logger("test-conn-reuse")
         logger2 = logging_module.get_connection_logger("test-conn-reuse")
@@ -307,7 +314,7 @@ class TestGetConnectionLogger:
         assert logger1 is logger2
 
         # Clean up
-        logger1.handlers.clear()
+        _close_handlers(logger1)
 
     def test_creates_new_log_directory(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that new log directory is created."""
@@ -327,7 +334,7 @@ class TestGetConnectionLogger:
         # Clear any existing logger
         logger_name = f"lazyssh.connection.{unique_name}"
         if logger_name in logging.root.manager.loggerDict:
-            logging.getLogger(logger_name).handlers.clear()
+            _close_handlers(logging.getLogger(logger_name))
 
         logger = logging_module.get_connection_logger(unique_name)
 
@@ -335,7 +342,7 @@ class TestGetConnectionLogger:
         assert log_dir.stat().st_mode & 0o777 == 0o700
 
         # Clean up
-        logger.handlers.clear()
+        _close_handlers(logger)
         shutil.rmtree(log_dir.parent)
 
 

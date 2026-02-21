@@ -1,9 +1,9 @@
 """Command mode interface for LazySSH using prompt_toolkit"""
 
-import os
 import shlex
+import subprocess
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +27,12 @@ from .config import (
     validate_config_name,
 )
 from .console_instance import console, display_error, display_info, display_success, display_warning
-from .logging_module import APP_LOGGER, CMD_LOGGER, log_ssh_command, set_debug_mode  # noqa: F401
+from .logging_module import (  # noqa: F401 — plugin use
+    APP_LOGGER,
+    CMD_LOGGER,
+    log_ssh_command,
+    set_debug_mode,
+)
 from .models import SSHConnection
 from .plugin_manager import PluginManager
 from .scp_mode import SCPMode
@@ -44,6 +49,23 @@ class LazySSHCompleter(Completer):
 
     def __init__(self, command_mode: "CommandMode") -> None:
         self.command_mode = command_mode
+        self._completion_handlers: dict[
+            str, Callable[[list[str], str, str], Iterable[Completion]]
+        ] = {
+            "lazyssh": self._complete_lazyssh,
+            "tunc": self._complete_tunc,
+            "tund": self._complete_tund,
+            "terminal": self._complete_terminal,
+            "open": self._complete_single_arg_connection,
+            "close": self._complete_single_arg_connection,
+            "help": self._complete_help,
+            "scp": self._complete_single_arg_connection,
+            "connect": self._complete_single_arg_config,
+            "save-config": self._complete_single_arg_connection_name,
+            "delete-config": self._complete_single_arg_config,
+            "wizard": self._complete_wizard,
+            "plugin": self._complete_plugin,
+        }
 
     def get_completions(self, document: Document, complete_event: Any) -> Iterable[Completion]:
         text = document.text
@@ -63,269 +85,170 @@ class LazySSHCompleter(Completer):
             return
 
         command = words[0].lower()
+        handler = self._completion_handlers.get(command)
+        if handler:
+            yield from handler(words, text, word_before_cursor)
 
-        if command == "lazyssh":
-            # Get used arguments and their positions
-            used_args: dict[str, int] = {}
-            expecting_value = False
-            last_arg: str | None = None
+    def _complete_lazyssh(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete arguments for the lazyssh command."""
+        used_args: dict[str, int] = {}
+        expecting_value = False
+        last_arg: str | None = None
 
-            for i, word in enumerate(words[1:], 1):  # Start from 1 to skip the command
-                if expecting_value and last_arg is not None:
-                    # This word is a value for the previous argument
-                    used_args[last_arg] = i
-                    expecting_value = False
-                    last_arg = None
-                elif word.startswith("-"):
-                    # This is an argument
-                    if word in ["-proxy", "-no-term"]:
-                        # -proxy and -no-term don't need a value
-                        used_args[word] = i
-                    else:
-                        # Other arguments expect a value
-                        expecting_value = True
-                        last_arg = word
+        for i, word in enumerate(words[1:], 1):
+            if expecting_value and last_arg is not None:
+                used_args[last_arg] = i
+                expecting_value = False
+                last_arg = None
+            elif word.startswith("-"):
+                if word in ["-proxy", "-no-term"]:
+                    used_args[word] = i
                 else:
-                    i += 1
+                    expecting_value = True
+                    last_arg = word
+            else:
+                i += 1
 
-            # Available arguments for lazyssh
-            all_args = {
-                "-ip",
-                "-port",
-                "-user",
-                "-socket",
-                "-proxy",
-                "-ssh-key",
-                "-shell",
-                "-no-term",
-            }
-            remaining_args = all_args - set(used_args.keys())
+        all_args = {"-ip", "-port", "-user", "-socket", "-proxy", "-ssh-key", "-shell", "-no-term"}
+        remaining_args = all_args - set(used_args.keys())
 
-            # Separate required and optional parameters
-            required_args = ["-ip", "-port", "-user", "-socket"]
-            optional_args = ["-proxy", "-ssh-key", "-shell", "-no-term"]
+        required_args = ["-ip", "-port", "-user", "-socket"]
+        optional_args = ["-proxy", "-ssh-key", "-shell", "-no-term"]
 
-            # Check which required args are still needed
-            required_remaining = [arg for arg in required_args if arg in remaining_args]
-            optional_remaining = [arg for arg in optional_args if arg in remaining_args]
+        required_remaining = [arg for arg in required_args if arg in remaining_args]
+        optional_remaining = [arg for arg in optional_args if arg in remaining_args]
 
-            # If we're expecting a value for an argument, don't suggest new arguments
-            if expecting_value:
-                return
+        if expecting_value:
+            return
 
-            # If the last word is a partial argument, complete it
-            if words[-1].startswith("-") and not text.endswith(
-                " "
-            ):  # pragma: no cover - completion path
-                # Complete partial argument based on what the user has typed so far
-                partial_arg = words[-1]
-
-                # First prioritize required arguments
-                for arg in required_remaining:
+        if words[-1].startswith("-") and not text.endswith(
+            " "
+        ):  # pragma: no cover - completion path
+            partial_arg = words[-1]
+            for arg in required_remaining:
+                if arg.startswith(partial_arg):
+                    yield Completion(arg, start_position=-len(partial_arg))
+            if not required_remaining:
+                for arg in optional_remaining:
                     if arg.startswith(partial_arg):
                         yield Completion(arg, start_position=-len(partial_arg))
+        elif text.endswith(" ") and not expecting_value:
+            if required_remaining:
+                yield Completion(required_remaining[0], start_position=-len(word_before_cursor))
+            elif optional_remaining:
+                for arg in optional_remaining:
+                    yield Completion(arg, start_position=-len(word_before_cursor))
 
-                # Then suggest optional arguments if all required ones are used
-                if not required_remaining:
-                    for arg in optional_remaining:
-                        if arg.startswith(partial_arg):
-                            yield Completion(arg, start_position=-len(partial_arg))
+    def _complete_tunc(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete arguments for the tunc command."""
+        arg_position = len(words) - 1
+        if text.endswith(" "):
+            arg_position += 1
 
-            # Otherwise suggest next argument if we're not in the middle of entering a value
-            elif text.endswith(" ") and not expecting_value:
-                # If we still have required arguments, suggest them first
-                if required_remaining:
-                    # Suggest the first remaining required argument
-                    yield Completion(required_remaining[0], start_position=-len(word_before_cursor))
-                # If all required arguments are provided, suggest all remaining optional arguments
-                elif optional_remaining:
-                    # Suggest all remaining optional arguments
-                    for arg in optional_remaining:
-                        yield Completion(arg, start_position=-len(word_before_cursor))
+        if arg_position == 1:
+            for conn_name in self.command_mode._get_connection_completions():
+                if not word_before_cursor or conn_name.startswith(word_before_cursor):
+                    yield Completion(conn_name, start_position=-len(word_before_cursor))
+        elif arg_position == 2:
+            for type_option in ["l", "r"]:
+                if not word_before_cursor or type_option.startswith(word_before_cursor):
+                    yield Completion(type_option, start_position=-len(word_before_cursor))
 
-        elif command == "tunc":
-            # For tunc command, we expect a specific sequence of arguments:
-            # 1. SSH connection name
-            # 2. Tunnel type (l/r)
-            # 3. Local port
-            # 4. Remote host
-            # 5. Remote port
+    def _complete_tund(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete arguments for the tund command."""
+        arg_position = len(words) - 1
+        if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
+            for _socket_path, conn in self.command_mode.ssh_manager.connections.items():
+                for tunnel in conn.tunnels:
+                    if not word_before_cursor or tunnel.id.startswith(word_before_cursor):
+                        yield Completion(tunnel.id, start_position=-len(word_before_cursor))
 
-            # Determine which argument we're currently expecting
-            arg_position = (
-                len(words) - 1
-            )  # -1 because we're 0-indexed and first word is the command
+    def _complete_terminal(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete arguments for the terminal command."""
+        if (len(words) == 1 and text.endswith(" ")) or (len(words) == 2 and not text.endswith(" ")):
+            for method in ["auto", "native", "terminator"]:
+                if not word_before_cursor or method.startswith(word_before_cursor):
+                    yield Completion(method, start_position=-len(word_before_cursor))
 
-            # If we're at the end of a word, we're expecting the next argument
-            if text.endswith(" "):
-                arg_position += 1
-
-            if arg_position == 1:  # First argument: SSH connection name
-                # Show available connections
-                for conn_name in self.command_mode._get_connection_completions():
-                    if not word_before_cursor or conn_name.startswith(word_before_cursor):
-                        yield Completion(conn_name, start_position=-len(word_before_cursor))
-            elif arg_position == 2:  # Second argument: Tunnel type (l/r)
-                # Suggest tunnel type
-                for type_option in ["l", "r"]:
-                    if not word_before_cursor or type_option.startswith(word_before_cursor):
-                        yield Completion(type_option, start_position=-len(word_before_cursor))
-            # For other positions (local port, remote host, remote port), no completions provided
-
-        elif command == "tund":
-            # For tund command, we only expect one argument: the tunnel ID
-            arg_position = len(words) - 1
-
-            # If we're at the end of a word, we're expecting the next argument
-            if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
-                # Show available tunnel IDs
-                for _socket_path, conn in self.command_mode.ssh_manager.connections.items():
-                    for tunnel in conn.tunnels:
-                        if not word_before_cursor or tunnel.id.startswith(word_before_cursor):
-                            yield Completion(tunnel.id, start_position=-len(word_before_cursor))
-
-        elif command == "terminal":
-            # For terminal command, suggest only terminal methods
-            arg_position = len(words) - 1
-
-            # Only show completions if we're at the exact position to enter the argument
-            if (len(words) == 1 and text.endswith(" ")) or (
-                len(words) == 2 and not text.endswith(" ")
-            ):
-                # Show terminal method options only
-                for method in ["auto", "native", "terminator"]:
-                    if not word_before_cursor or method.startswith(word_before_cursor):
-                        yield Completion(method, start_position=-len(word_before_cursor))
-
-        elif command == "open":
-            # For open command, suggest only SSH connection names
-            arg_position = len(words) - 1
-
-            # Only show completions if we're at the exact position to enter the argument
-            if (len(words) == 1 and text.endswith(" ")) or (
-                len(words) == 2 and not text.endswith(" ")
-            ):
-                # Show available connections
-                for conn_name in self.command_mode._get_connection_completions():
-                    if not word_before_cursor or conn_name.startswith(word_before_cursor):
-                        yield Completion(conn_name, start_position=-len(word_before_cursor))
-
-        elif command == "close":
-            # For close command, we only expect one argument: the SSH connection name
-            arg_position = len(words) - 1
-
-            # Only show completions if we're at the exact position to enter the connection name
-            if (len(words) == 1 and text.endswith(" ")) or (
-                len(words) == 2 and not text.endswith(" ")
-            ):
-                # Show available connections
-                for conn_name in self.command_mode._get_connection_completions():
-                    if not word_before_cursor or conn_name.startswith(word_before_cursor):
-                        yield Completion(conn_name, start_position=-len(word_before_cursor))
-
-        elif command == "help":
-            # For help command, we only expect one optional argument: the command to get help for
-            arg_position = len(words) - 1
-
-            # If we're at the end of a word, we're expecting the next argument
-            # Or if we've just typed the command and a space, show completions
-            if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
-                # Show available commands for help
-                for cmd in self.command_mode.commands:
-                    if not word_before_cursor or cmd.startswith(word_before_cursor):
-                        yield Completion(cmd, start_position=-len(word_before_cursor))
-
-        # Handle completion for close command
-        elif command == "close" and len(words) == 2:  # pragma: no cover - completion path
-            connections = self.command_mode._get_connection_completions()
-            for conn_name in connections:
-                if conn_name.startswith(word_before_cursor):
+    def _complete_single_arg_connection(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete a single argument from active connection names."""
+        if (len(words) == 1 and text.endswith(" ")) or (len(words) == 2 and not text.endswith(" ")):
+            for conn_name in self.command_mode._get_connection_completions():
+                if not word_before_cursor or conn_name.startswith(word_before_cursor):
                     yield Completion(conn_name, start_position=-len(word_before_cursor))
 
-        # Handle completion for scp command
-        elif command == "scp":
-            # Only suggest connection names if we either:
-            # 1. Just typed "scp " and need the first connection name
-            # 2. Are in the middle of typing the first connection name
-            # Don't suggest anything if we already have a complete connection name
-            if (len(words) == 1 and text.endswith(" ")) or (
-                len(words) == 2 and not text.endswith(" ")
-            ):
-                connections = self.command_mode._get_connection_completions()
-                for conn_name in connections:
+    def _complete_single_arg_connection_name(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete a single argument from established connection socket names."""
+        if (len(words) == 1 and text.endswith(" ")) or (len(words) == 2 and not text.endswith(" ")):
+            for connection_name in self.command_mode._get_connection_name_completions():
+                if not word_before_cursor or connection_name.startswith(word_before_cursor):
+                    yield Completion(connection_name, start_position=-len(word_before_cursor))
+
+    def _complete_single_arg_config(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete a single argument from saved configuration names."""
+        if (len(words) == 1 and text.endswith(" ")) or (len(words) == 2 and not text.endswith(" ")):
+            for config_name in self.command_mode._get_config_name_completions():
+                if not word_before_cursor or config_name.startswith(word_before_cursor):
+                    yield Completion(config_name, start_position=-len(word_before_cursor))
+
+    def _complete_help(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete arguments for the help command."""
+        arg_position = len(words) - 1
+        if text.endswith(" ") or (len(words) == 2 and arg_position == 1):
+            for cmd in self.command_mode.commands:
+                if not word_before_cursor or cmd.startswith(word_before_cursor):
+                    yield Completion(cmd, start_position=-len(word_before_cursor))
+
+    def _complete_wizard(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete arguments for the wizard command."""
+        if (len(words) == 1 and text.endswith(" ")) or (len(words) == 2 and not text.endswith(" ")):
+            for workflow in ["lazyssh", "tunnel"]:
+                if not word_before_cursor or workflow.startswith(word_before_cursor):
+                    yield Completion(workflow, start_position=-len(word_before_cursor))
+
+    def _complete_plugin(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete arguments for the plugin command."""
+        arg_position = len(words) - 1
+        if text.endswith(" "):
+            arg_position += 1
+
+        if arg_position == 1:
+            for subcmd in ["list", "run", "info"]:
+                if not word_before_cursor or subcmd.startswith(word_before_cursor):
+                    yield Completion(subcmd, start_position=-len(word_before_cursor))
+        elif arg_position == 2:
+            if len(words) >= 2:
+                subcommand = words[1]
+                if subcommand in ["run", "info"]:
+                    plugins = self.command_mode.plugin_manager.discover_plugins()
+                    for plugin_name in plugins:
+                        if not word_before_cursor or plugin_name.startswith(word_before_cursor):
+                            yield Completion(plugin_name, start_position=-len(word_before_cursor))
+        elif arg_position == 3:
+            if len(words) >= 2 and words[1] == "run":
+                for conn_name in self.command_mode._get_connection_completions():
                     if not word_before_cursor or conn_name.startswith(word_before_cursor):
                         yield Completion(conn_name, start_position=-len(word_before_cursor))
-
-        # Handle completion for connect command (saved configs)
-        elif command == "connect":
-            if (len(words) == 1 and text.endswith(" ")) or (
-                len(words) == 2 and not text.endswith(" ")
-            ):
-                config_names = self.command_mode._get_config_name_completions()
-                for config_name in config_names:
-                    if not word_before_cursor or config_name.startswith(word_before_cursor):
-                        yield Completion(config_name, start_position=-len(word_before_cursor))
-
-        # Handle completion for save-config command (suggest established connection names)
-        elif command == "save-config":
-            if (len(words) == 1 and text.endswith(" ")) or (
-                len(words) == 2 and not text.endswith(" ")
-            ):
-                connection_names = self.command_mode._get_connection_name_completions()
-                for connection_name in connection_names:
-                    if not word_before_cursor or connection_name.startswith(word_before_cursor):
-                        yield Completion(connection_name, start_position=-len(word_before_cursor))
-
-        # Handle completion for delete-config command (suggest saved config names)
-        elif command == "delete-config":
-            if (len(words) == 1 and text.endswith(" ")) or (
-                len(words) == 2 and not text.endswith(" ")
-            ):
-                config_names = self.command_mode._get_config_name_completions()
-                for config_name in config_names:
-                    if not word_before_cursor or config_name.startswith(word_before_cursor):
-                        yield Completion(config_name, start_position=-len(word_before_cursor))
-
-        # Handle completion for wizard command (suggest workflow names)
-        elif command == "wizard":
-            if (len(words) == 1 and text.endswith(" ")) or (
-                len(words) == 2 and not text.endswith(" ")
-            ):
-                workflows = ["lazyssh", "tunnel"]
-                for workflow in workflows:
-                    if not word_before_cursor or workflow.startswith(word_before_cursor):
-                        yield Completion(workflow, start_position=-len(word_before_cursor))
-
-        # Handle completion for plugin command
-        elif command == "plugin":
-            arg_position = len(words) - 1
-            if text.endswith(" "):
-                arg_position += 1
-
-            if arg_position == 1:
-                # First argument: subcommand (list, run, info) or plugin name for default run
-                subcommands = ["list", "run", "info"]
-                for subcmd in subcommands:
-                    if not word_before_cursor or subcmd.startswith(word_before_cursor):
-                        yield Completion(subcmd, start_position=-len(word_before_cursor))
-            elif arg_position == 2:
-                # Second argument depends on subcommand
-                if len(words) >= 2:
-                    subcommand = words[1]
-                    if subcommand in ["run", "info"]:
-                        # Suggest plugin names
-                        plugins = self.command_mode.plugin_manager.discover_plugins()
-                        for plugin_name in plugins:
-                            if not word_before_cursor or plugin_name.startswith(word_before_cursor):
-                                yield Completion(
-                                    plugin_name, start_position=-len(word_before_cursor)
-                                )
-            elif arg_position == 3:
-                # Third argument for 'plugin run': socket name
-                if len(words) >= 2 and words[1] == "run":
-                    for conn_name in self.command_mode._get_connection_completions():
-                        if not word_before_cursor or conn_name.startswith(word_before_cursor):
-                            yield Completion(conn_name, start_position=-len(word_before_cursor))
 
 
 class CommandMode:
@@ -363,7 +286,7 @@ class CommandMode:
         }
 
         # Initialize history in /tmp/lazyssh
-        self.history_dir = Path("/tmp/lazyssh")
+        self.history_dir = Path("/tmp/lazyssh")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         if not self.history_dir.exists():  # pragma: no cover - first run only
             self.history_dir.mkdir(parents=True, exist_ok=True)
             self.history_dir.chmod(0o700)
@@ -490,7 +413,7 @@ class CommandMode:
                         CMD_LOGGER.info("User interrupted command mode (Ctrl+C or Ctrl+D)")
                     break
 
-        except Exception as e:
+        except Exception as e:  # top-level safety net; genuinely unknown errors possible
             display_error(f"Error in command mode: {str(e)}")
             if CMD_LOGGER:
                 CMD_LOGGER.exception(f"Unhandled error in command mode: {str(e)}")
@@ -560,7 +483,7 @@ class CommandMode:
                 return False
 
             # Check if the socket name already exists
-            socket_path = f"/tmp/{params['socket']}"
+            socket_path = f"/tmp/{params['socket']}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
             if socket_path in self.ssh_manager.connections:  # pragma: no cover - interactive prompt
                 display_warning(f"Socket name '{params['socket']}' is already in use.")
                 # Use Rich's Confirm.ask for a color-coded prompt (same as prompt mode)
@@ -578,7 +501,7 @@ class CommandMode:
                         )
                         return False
                     params["socket"] = new_socket
-                    socket_path = f"/tmp/{params['socket']}"
+                    socket_path = f"/tmp/{params['socket']}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
             # Create the connection object
             conn = SSHConnection(
@@ -644,7 +567,7 @@ class CommandMode:
             return False
 
         ssh_id, tunnel_type, local_port, remote_host, remote_port = args
-        socket_path = f"/tmp/{ssh_id}"
+        socket_path = f"/tmp/{ssh_id}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         try:
             local_port_int = int(local_port)
@@ -790,7 +713,7 @@ class CommandMode:
 
             # Update config_data with normalized socket_name
             config_data["socket_name"] = socket_name
-            socket_path = f"/tmp/{socket_name}"
+            socket_path = f"/tmp/{socket_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
             # Check if socket name is already in use
             if socket_path in self.ssh_manager.connections:  # pragma: no cover - interactive prompt
@@ -809,7 +732,7 @@ class CommandMode:
                     )
                     return False
                 config_data["socket_name"] = new_socket
-                socket_path = f"/tmp/{new_socket}"
+                socket_path = f"/tmp/{new_socket}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
             conn = SSHConnection(
                 host=config_data["host"],
@@ -926,9 +849,9 @@ class CommandMode:
             if CMD_LOGGER:
                 CMD_LOGGER.info(f"Configuration '{config_name}' saved successfully")
             return True
-        else:  # pragma: no cover - error handling
-            display_error(f"Failed to save configuration '{config_name}'")
-            return False
+        # pragma: no cover - error handling
+        display_error(f"Failed to save configuration '{config_name}'")
+        return False
 
     def cmd_delete_config(self, args: list[str]) -> bool:
         """Handle delete-config command for deleting a saved configuration"""
@@ -963,9 +886,9 @@ class CommandMode:
                     f"Configuration '{config_name}' deleted successfully"
                 )  # pragma: no cover
             return True  # pragma: no cover
-        else:  # pragma: no cover
-            display_error(f"Failed to delete configuration '{config_name}'")  # pragma: no cover
-            return False  # pragma: no cover
+        # pragma: no cover
+        display_error(f"Failed to delete configuration '{config_name}'")  # pragma: no cover
+        return False  # pragma: no cover
 
     def cmd_backup_config(self, args: list[str]) -> bool:
         """Handle backup-config command for backing up the connections configuration file"""
@@ -976,383 +899,400 @@ class CommandMode:
             if CMD_LOGGER:
                 CMD_LOGGER.info("Configuration backup created successfully")
             return True
-        else:
-            display_error(message)
-            if CMD_LOGGER:
-                CMD_LOGGER.warning(f"Configuration backup failed: {message}")
-            return False
+        display_error(message)
+        if CMD_LOGGER:
+            CMD_LOGGER.warning(f"Configuration backup failed: {message}")
+        return False
 
     def cmd_help(self, args: list[str]) -> bool:
         """Handle help command"""
         if not args:
-            display_info("[header]\nLazySSH Command Mode - Available Commands:[/header]\n")
-
-            display_info("[highlight]SSH Connection:[/highlight]")
-            display_info(
-                "  [string]lazyssh[/string] -ip [number]<ip>[/number] -port [number]<port>[/number] "
-                "-user [number]<username>[/number] -socket [number]<n>[/number] "
-                "[-proxy [number]<port>[/number]] [-ssh-key [number]<path>[/number]] "
-                "[-shell [number]<shell>[/number]] [-no-term]"
-            )
-            display_info("  [string]close[/string] [number]<ssh_id>[/number]")
-
-            display_info("[dim]Examples:[/dim]")
-            display_info(
-                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/success]"
-            )
-            display_info(
-                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh[/success]"
-            )
-            display_info("  [success]close ubuntu[/success]\n")
-
-            display_info("[header]Tunnel Management:[/header]")
-            display_info(
-                "  [highlight]tunc[/highlight] [number]<ssh_id>[/number] [number]<l|r>[/number] "
-                "[number]<local_port>[/number] [number]<remote_host>[/number] [number]<remote_port>[/number]"
-            )
-
-            display_info("[dim]Examples:[/dim]")
-            display_info(
-                "  [success]tunc ubuntu l 8080 localhost 80[/success]  [dim]# Forward tunnel[/dim]"
-            )
-            display_info(
-                "  [success]tunc ubuntu r 3000 127.0.0.1 3000[/success]  [dim]# Reverse tunnel[/dim]"
-            )
-
-            display_info("  [highlight]tund[/highlight] [number]<tunnel_id>[/number]")
-            display_info("  [success]tund 1[/success]\n")
-
-            display_info("[header]Terminal:[/header]")
-            display_info(
-                "  [highlight]open[/highlight] [number]<ssh_id>[/number]          - Open a terminal session"
-            )
-            display_info(
-                "  [highlight]terminal[/highlight] [number]<method>[/number]      - Change terminal method (auto, native, terminator)"
-            )
-
-            display_info("[dim]Examples:[/dim]")
-            display_info(
-                "  [success]open ubuntu[/success]      [dim]# Open terminal for ubuntu connection[/dim]"
-            )
-            display_info(
-                "  [success]terminal native[/success]  [dim]# Use native terminal method[/dim]\n"
-            )
-
-            display_info("[header]File Transfer:[/header]")
-            display_info("  [highlight]scp[/highlight] [[number]<ssh_id>[/number]]")
-            display_info("  [success]scp ubuntu[/success]\n")
-
-            display_info("[header]Configuration Management:[/header]")
-            display_info(
-                "  [highlight]config[/highlight] / [highlight]configs[/highlight]              - Display saved configurations"
-            )
-            display_info(
-                "  [highlight]connect[/highlight] [number]<config-name>[/number]          - Connect using saved configuration"
-            )
-            display_info(
-                "  [highlight]save-config[/highlight] [number]<config-name>[/number]     - Save current connection as configuration"
-            )
-            display_info(
-                "  [highlight]delete-config[/highlight] [number]<config-name>[/number]   - Delete saved configuration"
-            )
-            display_info(
-                "  [highlight]backup-config[/highlight]                    - Backup the connections configuration file"
-            )
-
-            display_info("[dim]Examples:[/dim]")
-            display_info("  [success]config[/success]")
-            display_info("  [success]connect my-server[/success]")
-            display_info("  [success]save-config my-server[/success]")
-            display_info("  [success]backup-config[/success]\n")
-
-            display_info("[header]Plugin Management:[/header]")
-            display_info(
-                "  [highlight]plugin[/highlight]                    - List available plugins"
-            )
-            display_info(
-                "  [highlight]plugin list[/highlight]               - List all available plugins"
-            )
-            display_info(
-                "  [highlight]plugin run[/highlight] [number]<name>[/number] [number]<socket>[/number]    - Execute plugin on connection"
-            )
-            display_info(
-                "  [highlight]plugin info[/highlight] [number]<name>[/number]           - Show plugin details"
-            )
-
-            display_info("[dim]Examples:[/dim]")
-            display_info("  [success]plugin list[/success]")
-            display_info("  [success]plugin run enumerate myserver[/success]")
-            display_info("  [success]plugin info enumerate[/success]\n")
-
-            display_info("[header]System Commands:[/header]")
-            display_info("  [highlight]list[/highlight]    - Show all connections and tunnels")
-            display_info(
-                "  [highlight]wizard[/highlight]  - Guided workflows for complex operations"
-            )
-            display_info("  [highlight]debug[/highlight]   - Toggle debug logging to console")
-            display_info("  [highlight]help[/highlight]    - Show this help")
-            display_info("  [highlight]exit[/highlight]    - Exit the program")
+            self._help_overview()
             return True
 
         cmd = args[0]
-        if cmd == "lazyssh":
-            display_info("[header]\nCreate new SSH connection:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]lazyssh[/highlight] -ip [number]<ip>[/number] -port [number]<port>[/number] -user [number]<username>[/number] -socket [number]<n>[/number] "
-                "[-proxy [port]] [-ssh-key [number]<identity_file>[/number]] [-shell [number]<shell>[/number]] [-no-term]"
-            )
-            display_info("[header]Required parameters:[/header]")
-            display_info(
-                "  [highlight]-ip[/highlight]     : IP address or hostname of the SSH server"
-            )
-            display_info("  [highlight]-port[/highlight]   : SSH port number")
-            display_info("  [highlight]-user[/highlight]   : SSH username")
-            display_info(
-                "  [highlight]-socket[/highlight] : Name for the connection (used as identifier)"
-            )
-            display_info("[header]Optional parameters:[/header]")
-            display_info(
-                "  [highlight]-proxy[/highlight]  : Create a dynamic SOCKS proxy (default port: 9050)"
-            )
-            display_info("  [highlight]-ssh-key[/highlight]: Path to an SSH identity file")
-            display_info(
-                "  [highlight]-shell[/highlight]  : Specify the shell to use (e.g., /bin/sh)"
-            )
-            display_info("  [highlight]-no-term[/highlight]: Do not automatically open a terminal")
-            display_info("\n[header]Examples:[/header]")
-            display_info(
-                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/success]"
-            )
-            display_info(
-                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy[/success]"
-            )
-            display_info(
-                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080[/success]"
-            )
-            display_info(
-                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh[/success]"
-            )
-            display_info(
-                "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh -no-term[/success]"
-            )
-        elif cmd == "tunc":
-            display_info("[header]\nCreate a new tunnel:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]tunc[/highlight] [number]<ssh_id>[/number] [number]<l|r>[/number] [number]<local_port>[/number] [number]<remote_host>[/number] [number]<remote_port>[/number]"
-            )
-            display_info("[header]Parameters:[/header]")
-            display_info(
-                "  [highlight]ssh_id[/highlight]      : The identifier of the SSH connection"
-            )
-            display_info(
-                "  [highlight]l|r[/highlight]         : 'l' for local (forward) tunnel, 'r' for remote (reverse) tunnel"
-            )
-            display_info(
-                "  [highlight]local_port[/highlight]  : The local port to use for the tunnel"
-            )
-            display_info("  [highlight]remote_host[/highlight] : The remote host to connect to")
-            display_info("  [highlight]remote_port[/highlight] : The remote port to connect to")
-            display_info("\n[header]Examples:[/header]")
-            display_info(
-                "  [success]tunc ubuntu l 8080 localhost 80[/success]    [dim]# Forward local port 8080 to "
-                "localhost:80 on the remote server[/dim]"
-            )
-            display_info(
-                "  [success]tunc ubuntu r 3000 127.0.0.1 3000[/success]  [dim]# Reverse tunnel from remote port 3000 "
-                "to local 127.0.0.1:3000[/dim]"
-            )
-        elif cmd == "tund":  # pragma: no cover - help display
-            display_info("[header]\nDelete a tunnel:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]tund[/highlight] [number]<tunnel_id>[/number]"
-            )
-            display_info("[header]Parameters:[/header]")
-            display_info(
-                "  [highlight]tunnel_id[/highlight] : The ID of the tunnel to delete (shown in the list command)"
-            )
-            display_info("\n[header]Example:[/header]")
-            display_info("  [success]tund 1[/success]")
-        elif cmd == "terminal":  # pragma: no cover - help display
-            display_info("[header]\nChange terminal method:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]terminal[/highlight] [number]<method>[/number]"
-            )
-            display_info("[header]Parameters:[/header]")
-            display_info(
-                "  [highlight]method[/highlight] : Terminal method to set (auto, native, terminator)"
-            )
-            display_info("\n[header]Terminal methods:[/header]")
-            display_info(
-                "  [highlight]auto[/highlight]       : Try terminator first, fallback to native (default)"
-            )
-            display_info(
-                "  [highlight]native[/highlight]     : Use native terminal (subprocess, allows returning to LazySSH)"
-            )
-            display_info(
-                "  [highlight]terminator[/highlight] : Use terminator terminal emulator only"
-            )
-            display_info("\n[header]Examples:[/header]")
-            display_info(
-                "  [success]terminal native[/success]  [dim]# Set terminal method to native[/dim]"
-            )
-            display_info(
-                "  [success]terminal auto[/success]    [dim]# Set terminal method to auto[/dim]"
-            )
-            display_info("\n[dim]Note: To open a terminal session, use the 'open' command[/dim]")
-        elif cmd == "open":  # pragma: no cover - help display
-            display_info("[header]\nOpen a terminal session:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]open[/highlight] [number]<ssh_id>[/number]"
-            )
-            display_info("[header]Parameters:[/header]")
-            display_info(
-                "  [highlight]ssh_id[/highlight] : The identifier of the SSH connection to open a terminal for"
-            )
-            display_info("\n[header]Examples:[/header]")
-            display_info(
-                "  [success]open ubuntu[/success]  [dim]# Open terminal for connection 'ubuntu'[/dim]"
-            )
-            display_info(
-                "  [success]open web[/success]     [dim]# Open terminal for connection 'web'[/dim]"
-            )
-            display_info("\n[dim]Note: Use 'close <ssh_id>' to close the connection[/dim]")
-        elif cmd == "clear":  # pragma: no cover - help display
-            display_info("[header]\nClear the terminal screen:[/header]")
-            display_info("[number]Usage:[/number] [highlight]clear[/highlight]")
-        elif cmd == "scp":
-            display_info("[header]\nEnter SCP mode for file transfers:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]scp[/highlight] [[number]<connection_name>[/number]]"
-            )
-            display_info("[header]Parameters:[/header]")
-            display_info(
-                "  [highlight]connection_name[/highlight] : The identifier of the SSH connection to use (optional)"
-            )
-            display_info("\nSCP mode leverages your existing SSH connection's master socket")
-            display_info(
-                "to perform secure file transfers without requiring additional authentication."
-            )
-            display_info("\n[header]SCP mode commands:[/header]")
-            display_info(
-                "  [highlight]put[/highlight] [number]<local_file>[/number] [[number]<remote_file>[/number]]  - Upload file to remote server"
-            )
-            display_info(
-                "  [highlight]get[/highlight] [number]<remote_file>[/number] [[number]<local_file>[/number]]  - Download file from remote server"
-            )
-            display_info(
-                "  [highlight]ls[/highlight] [[number]<remote_path>[/number]]                - List files in remote directory"
-            )
-            display_info(
-                "  [highlight]cd[/highlight] [number]<remote_path>[/number]                  - Change remote working directory"
-            )
-            display_info(
-                "  [highlight]pwd[/highlight]                               - Show current remote directory"
-            )
-            display_info(
-                "  [highlight]mget[/highlight] [number]<pattern>[/number]                    - Download multiple files matching pattern"
-            )
-            display_info(
-                "  [highlight]local[/highlight] [[number]<path>[/number]]                    - Set or show local download directory"
-            )
-            display_info(
-                "  [highlight]exit[/highlight]                              - Exit SCP mode"
-            )
-            display_info("\n[header]Examples:[/header]")
-            display_info(
-                "  [success]scp ubuntu[/success]                        [dim]# Enter SCP mode with the 'ubuntu' connection[/dim]"
-            )
-            display_info(
-                "  [success]scp[/success]                               [dim]# Enter SCP mode and select a connection interactively[/dim]"
-            )
-        elif cmd == "debug":  # pragma: no cover - help display
-            display_info("[header]\nToggle debug logging to console:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]debug[/highlight] [[number]on|off|enable|disable|true|false|1|0[/number]]"
-            )
-            display_info("\n[header]Description:[/header]")
-            display_info("  Toggles debug logging output to the console.")
-            display_info("  Logs are always saved to /tmp/lazyssh/logs regardless of this setting.")
-            display_info("  When enabled, all log messages will be displayed in the console.")
-            display_info("\n[header]Examples:[/header]")
-            display_info(
-                "  [success]debug[/success]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
-            )
-            display_info(
-                "  [success]debug on[/success]   [dim]# Explicitly enable debug mode[/dim]"
-            )
-            display_info(
-                "  [success]debug off[/success]  [dim]# Explicitly disable debug mode[/dim]"
-            )
-        elif cmd == "wizard":  # pragma: no cover - help display
-            display_info("[header]\nGuided workflows for complex operations:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]wizard[/highlight] [number]<workflow>[/number]"
-            )
-            display_info("[header]Available workflows:[/header]")
-            display_info("  [highlight]lazyssh[/highlight] - Guided SSH connection creation")
-            display_info("  [highlight]tunnel[/highlight]  - Guided tunnel creation")
-            display_info("\n[header]Description:[/header]")
-            display_info("  The wizard provides step-by-step guidance for complex operations")
-            display_info("  that benefit from interactive configuration.")
-            display_info("\n[header]Examples:[/header]")
-            display_info(
-                "  [success]wizard lazyssh[/success]  [dim]# Start guided SSH connection creation[/dim]"
-            )
-            display_info(
-                "  [success]wizard tunnel[/success]   [dim]# Start guided tunnel creation[/dim]"
-            )
-        elif cmd == "plugin":  # pragma: no cover - help display
-            display_info("[header]\nPlugin management and execution:[/header]")
-            display_info(
-                "[number]Usage:[/number] [highlight]plugin[/highlight] [[number]<subcommand>[/number]] [[number]<args>[/number]]"
-            )
-            display_info("[header]Subcommands:[/header]")
-            display_info(
-                "  [highlight]list[/highlight]              - List all available plugins (default)"
-            )
-            display_info(
-                "  [highlight]run[/highlight] [number]<name>[/number] [number]<socket>[/number]  - Execute plugin on a connection"
-            )
-            display_info(
-                "  [highlight]info[/highlight] [number]<name>[/number]          - Display detailed plugin information"
-            )
-            display_info("\n[header]Description:[/header]")
-            display_info("  Plugins extend LazySSH functionality by allowing you to run custom")
-            display_info("  Python or shell scripts through established SSH connections.")
-            display_info("  Plugins receive connection information via environment variables.")
-            display_info("\n[header]Environment Variables Available to Plugins:[/header]")
-            display_info("  [highlight]LAZYSSH_SOCKET[/highlight]            - Control socket name")
-            display_info("  [highlight]LAZYSSH_HOST[/highlight]              - Remote host address")
-            display_info("  [highlight]LAZYSSH_PORT[/highlight]              - SSH port")
-            display_info("  [highlight]LAZYSSH_USER[/highlight]              - SSH username")
-            display_info(
-                "  [highlight]LAZYSSH_SOCKET_PATH[/highlight]       - Full path to control socket"
-            )
-            display_info(
-                "  [highlight]LAZYSSH_SSH_KEY[/highlight]           - SSH key path (if used)"
-            )
-            display_info("  [highlight]LAZYSSH_PLUGIN_API_VERSION[/highlight] - Plugin API version")
-            display_info("\n[header]Built-in Plugins:[/header]")
-            display_info(
-                "  [highlight]enumerate[/highlight]  - Comprehensive system enumeration and reconnaissance"
-            )
-            display_info("\n[header]Examples:[/header]")
-            display_info(
-                "  [success]plugin[/success]                     [dim]# List all plugins[/dim]"
-            )
-            display_info(
-                "  [success]plugin list[/success]                [dim]# List all plugins[/dim]"
-            )
-            display_info(
-                "  [success]plugin run enumerate myserver[/success]  [dim]# Run enumeration on myserver[/dim]"
-            )
-            display_info(
-                "  [success]plugin info enumerate[/success]      [dim]# Show enumerate plugin details[/dim]"
-            )
+        help_handlers: dict[str, Callable[[], None]] = {
+            "lazyssh": self._help_lazyssh,
+            "tunc": self._help_tunc,
+            "tund": self._help_tund,
+            "terminal": self._help_terminal,
+            "open": self._help_open,
+            "clear": self._help_clear,
+            "scp": self._help_scp,
+            "debug": self._help_debug,
+            "wizard": self._help_wizard,
+            "plugin": self._help_plugin,
+        }
+
+        handler = help_handlers.get(cmd)
+        if handler:
+            handler()
         else:
             display_error(f"Unknown command: {cmd}")
             self.cmd_help([])
         return True
+
+    def _help_overview(self) -> None:
+        """Display the full help overview."""
+        display_info("[header]\nLazySSH Command Mode - Available Commands:[/header]\n")
+
+        display_info("[highlight]SSH Connection:[/highlight]")
+        display_info(
+            "  [string]lazyssh[/string] -ip [number]<ip>[/number] -port [number]<port>[/number] "
+            "-user [number]<username>[/number] -socket [number]<n>[/number] "
+            "[-proxy [number]<port>[/number]] [-ssh-key [number]<path>[/number]] "
+            "[-shell [number]<shell>[/number]] [-no-term]"
+        )
+        display_info("  [string]close[/string] [number]<ssh_id>[/number]")
+
+        display_info("[dim]Examples:[/dim]")
+        display_info(
+            "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/success]"
+        )
+        display_info(
+            "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080 -shell /bin/sh[/success]"
+        )
+        display_info("  [success]close ubuntu[/success]\n")
+
+        display_info("[header]Tunnel Management:[/header]")
+        display_info(
+            "  [highlight]tunc[/highlight] [number]<ssh_id>[/number] [number]<l|r>[/number] "
+            "[number]<local_port>[/number] [number]<remote_host>[/number] [number]<remote_port>[/number]"
+        )
+
+        display_info("[dim]Examples:[/dim]")
+        display_info(
+            "  [success]tunc ubuntu l 8080 localhost 80[/success]  [dim]# Forward tunnel[/dim]"
+        )
+        display_info(
+            "  [success]tunc ubuntu r 3000 127.0.0.1 3000[/success]  [dim]# Reverse tunnel[/dim]"
+        )
+
+        display_info("  [highlight]tund[/highlight] [number]<tunnel_id>[/number]")
+        display_info("  [success]tund 1[/success]\n")
+
+        display_info("[header]Terminal:[/header]")
+        display_info(
+            "  [highlight]open[/highlight] [number]<ssh_id>[/number]          - Open a terminal session"
+        )
+        display_info(
+            "  [highlight]terminal[/highlight] [number]<method>[/number]      - Change terminal method (auto, native, terminator)"
+        )
+
+        display_info("[dim]Examples:[/dim]")
+        display_info(
+            "  [success]open ubuntu[/success]      [dim]# Open terminal for ubuntu connection[/dim]"
+        )
+        display_info(
+            "  [success]terminal native[/success]  [dim]# Use native terminal method[/dim]\n"
+        )
+
+        display_info("[header]File Transfer:[/header]")
+        display_info("  [highlight]scp[/highlight] [[number]<ssh_id>[/number]]")
+        display_info("  [success]scp ubuntu[/success]\n")
+
+        display_info("[header]Configuration Management:[/header]")
+        display_info(
+            "  [highlight]config[/highlight] / [highlight]configs[/highlight]              - Display saved configurations"
+        )
+        display_info(
+            "  [highlight]connect[/highlight] [number]<config-name>[/number]          - Connect using saved configuration"
+        )
+        display_info(
+            "  [highlight]save-config[/highlight] [number]<config-name>[/number]     - Save current connection as configuration"
+        )
+        display_info(
+            "  [highlight]delete-config[/highlight] [number]<config-name>[/number]   - Delete saved configuration"
+        )
+        display_info(
+            "  [highlight]backup-config[/highlight]                    - Backup the connections configuration file"
+        )
+
+        display_info("[dim]Examples:[/dim]")
+        display_info("  [success]config[/success]")
+        display_info("  [success]connect my-server[/success]")
+        display_info("  [success]save-config my-server[/success]")
+        display_info("  [success]backup-config[/success]\n")
+
+        display_info("[header]Plugin Management:[/header]")
+        display_info("  [highlight]plugin[/highlight]                    - List available plugins")
+        display_info(
+            "  [highlight]plugin list[/highlight]               - List all available plugins"
+        )
+        display_info(
+            "  [highlight]plugin run[/highlight] [number]<name>[/number] [number]<socket>[/number]    - Execute plugin on connection"
+        )
+        display_info(
+            "  [highlight]plugin info[/highlight] [number]<name>[/number]           - Show plugin details"
+        )
+
+        display_info("[dim]Examples:[/dim]")
+        display_info("  [success]plugin list[/success]")
+        display_info("  [success]plugin run enumerate myserver[/success]")
+        display_info("  [success]plugin info enumerate[/success]\n")
+
+        display_info("[header]System Commands:[/header]")
+        display_info("  [highlight]list[/highlight]    - Show all connections and tunnels")
+        display_info("  [highlight]wizard[/highlight]  - Guided workflows for complex operations")
+        display_info("  [highlight]debug[/highlight]   - Toggle debug logging to console")
+        display_info("  [highlight]help[/highlight]    - Show this help")
+        display_info("  [highlight]exit[/highlight]    - Exit the program")
+
+    def _help_lazyssh(self) -> None:
+        """Display help for the lazyssh command."""
+        display_info("[header]\nCreate new SSH connection:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]lazyssh[/highlight] -ip [number]<ip>[/number] -port [number]<port>[/number] -user [number]<username>[/number] -socket [number]<n>[/number] "
+            "[-proxy [port]] [-ssh-key [number]<identity_file>[/number]] [-shell [number]<shell>[/number]] [-no-term]"
+        )
+        display_info("[header]Required parameters:[/header]")
+        display_info("  [highlight]-ip[/highlight]     : IP address or hostname of the SSH server")
+        display_info("  [highlight]-port[/highlight]   : SSH port number")
+        display_info("  [highlight]-user[/highlight]   : SSH username")
+        display_info(
+            "  [highlight]-socket[/highlight] : Name for the connection (used as identifier)"
+        )
+        display_info("[header]Optional parameters:[/header]")
+        display_info(
+            "  [highlight]-proxy[/highlight]  : Create a dynamic SOCKS proxy (default port: 9050)"
+        )
+        display_info("  [highlight]-ssh-key[/highlight]: Path to an SSH identity file")
+        display_info("  [highlight]-shell[/highlight]  : Specify the shell to use (e.g., /bin/sh)")
+        display_info("  [highlight]-no-term[/highlight]: Do not automatically open a terminal")
+        display_info("\n[header]Examples:[/header]")
+        display_info(
+            "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu[/success]"
+        )
+        display_info(
+            "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy[/success]"
+        )
+        display_info(
+            "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -proxy 8080[/success]"
+        )
+        display_info(
+            "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh[/success]"
+        )
+        display_info(
+            "  [success]lazyssh -ip 192.168.10.50 -port 22 -user ubuntu -socket ubuntu -shell /bin/sh -no-term[/success]"
+        )
+
+    def _help_tunc(self) -> None:
+        """Display help for the tunc command."""
+        display_info("[header]\nCreate a new tunnel:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]tunc[/highlight] [number]<ssh_id>[/number] [number]<l|r>[/number] [number]<local_port>[/number] [number]<remote_host>[/number] [number]<remote_port>[/number]"
+        )
+        display_info("[header]Parameters:[/header]")
+        display_info("  [highlight]ssh_id[/highlight]      : The identifier of the SSH connection")
+        display_info(
+            "  [highlight]l|r[/highlight]         : 'l' for local (forward) tunnel, 'r' for remote (reverse) tunnel"
+        )
+        display_info("  [highlight]local_port[/highlight]  : The local port to use for the tunnel")
+        display_info("  [highlight]remote_host[/highlight] : The remote host to connect to")
+        display_info("  [highlight]remote_port[/highlight] : The remote port to connect to")
+        display_info("\n[header]Examples:[/header]")
+        display_info(
+            "  [success]tunc ubuntu l 8080 localhost 80[/success]    [dim]# Forward local port 8080 to "
+            "localhost:80 on the remote server[/dim]"
+        )
+        display_info(
+            "  [success]tunc ubuntu r 3000 127.0.0.1 3000[/success]  [dim]# Reverse tunnel from remote port 3000 "
+            "to local 127.0.0.1:3000[/dim]"
+        )
+
+    def _help_tund(self) -> None:  # pragma: no cover - help display
+        """Display help for the tund command."""
+        display_info("[header]\nDelete a tunnel:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]tund[/highlight] [number]<tunnel_id>[/number]"
+        )
+        display_info("[header]Parameters:[/header]")
+        display_info(
+            "  [highlight]tunnel_id[/highlight] : The ID of the tunnel to delete (shown in the list command)"
+        )
+        display_info("\n[header]Example:[/header]")
+        display_info("  [success]tund 1[/success]")
+
+    def _help_terminal(self) -> None:  # pragma: no cover - help display
+        """Display help for the terminal command."""
+        display_info("[header]\nChange terminal method:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]terminal[/highlight] [number]<method>[/number]"
+        )
+        display_info("[header]Parameters:[/header]")
+        display_info(
+            "  [highlight]method[/highlight] : Terminal method to set (auto, native, terminator)"
+        )
+        display_info("\n[header]Terminal methods:[/header]")
+        display_info(
+            "  [highlight]auto[/highlight]       : Try terminator first, fallback to native (default)"
+        )
+        display_info(
+            "  [highlight]native[/highlight]     : Use native terminal (subprocess, allows returning to LazySSH)"
+        )
+        display_info("  [highlight]terminator[/highlight] : Use terminator terminal emulator only")
+        display_info("\n[header]Examples:[/header]")
+        display_info(
+            "  [success]terminal native[/success]  [dim]# Set terminal method to native[/dim]"
+        )
+        display_info(
+            "  [success]terminal auto[/success]    [dim]# Set terminal method to auto[/dim]"
+        )
+        display_info("\n[dim]Note: To open a terminal session, use the 'open' command[/dim]")
+
+    def _help_open(self) -> None:  # pragma: no cover - help display
+        """Display help for the open command."""
+        display_info("[header]\nOpen a terminal session:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]open[/highlight] [number]<ssh_id>[/number]"
+        )
+        display_info("[header]Parameters:[/header]")
+        display_info(
+            "  [highlight]ssh_id[/highlight] : The identifier of the SSH connection to open a terminal for"
+        )
+        display_info("\n[header]Examples:[/header]")
+        display_info(
+            "  [success]open ubuntu[/success]  [dim]# Open terminal for connection 'ubuntu'[/dim]"
+        )
+        display_info(
+            "  [success]open web[/success]     [dim]# Open terminal for connection 'web'[/dim]"
+        )
+        display_info("\n[dim]Note: Use 'close <ssh_id>' to close the connection[/dim]")
+
+    def _help_clear(self) -> None:  # pragma: no cover - help display
+        """Display help for the clear command."""
+        display_info("[header]\nClear the terminal screen:[/header]")
+        display_info("[number]Usage:[/number] [highlight]clear[/highlight]")
+
+    def _help_scp(self) -> None:
+        """Display help for the scp command."""
+        display_info("[header]\nEnter SCP mode for file transfers:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]scp[/highlight] [[number]<connection_name>[/number]]"
+        )
+        display_info("[header]Parameters:[/header]")
+        display_info(
+            "  [highlight]connection_name[/highlight] : The identifier of the SSH connection to use (optional)"
+        )
+        display_info("\nSCP mode leverages your existing SSH connection's master socket")
+        display_info(
+            "to perform secure file transfers without requiring additional authentication."
+        )
+        display_info("\n[header]SCP mode commands:[/header]")
+        display_info(
+            "  [highlight]put[/highlight] [number]<local_file>[/number] [[number]<remote_file>[/number]]  - Upload file to remote server"
+        )
+        display_info(
+            "  [highlight]get[/highlight] [number]<remote_file>[/number] [[number]<local_file>[/number]]  - Download file from remote server"
+        )
+        display_info(
+            "  [highlight]ls[/highlight] [[number]<remote_path>[/number]]                - List files in remote directory"
+        )
+        display_info(
+            "  [highlight]cd[/highlight] [number]<remote_path>[/number]                  - Change remote working directory"
+        )
+        display_info(
+            "  [highlight]pwd[/highlight]                               - Show current remote directory"
+        )
+        display_info(
+            "  [highlight]mget[/highlight] [number]<pattern>[/number]                    - Download multiple files matching pattern"
+        )
+        display_info(
+            "  [highlight]local[/highlight] [[number]<path>[/number]]                    - Set or show local download directory"
+        )
+        display_info("  [highlight]exit[/highlight]                              - Exit SCP mode")
+        display_info("\n[header]Examples:[/header]")
+        display_info(
+            "  [success]scp ubuntu[/success]                        [dim]# Enter SCP mode with the 'ubuntu' connection[/dim]"
+        )
+        display_info(
+            "  [success]scp[/success]                               [dim]# Enter SCP mode and select a connection interactively[/dim]"
+        )
+
+    def _help_debug(self) -> None:  # pragma: no cover - help display
+        """Display help for the debug command."""
+        display_info("[header]\nToggle debug logging to console:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]debug[/highlight] [[number]on|off|enable|disable|true|false|1|0[/number]]"
+        )
+        display_info("\n[header]Description:[/header]")
+        display_info("  Toggles debug logging output to the console.")
+        display_info("  Logs are always saved to /tmp/lazyssh/logs regardless of this setting.")
+        display_info("  When enabled, all log messages will be displayed in the console.")
+        display_info("\n[header]Examples:[/header]")
+        display_info(
+            "  [success]debug[/success]      [dim]# Toggle debug mode (on if off, off if on)[/dim]"
+        )
+        display_info("  [success]debug on[/success]   [dim]# Explicitly enable debug mode[/dim]")
+        display_info("  [success]debug off[/success]  [dim]# Explicitly disable debug mode[/dim]")
+
+    def _help_wizard(self) -> None:  # pragma: no cover - help display
+        """Display help for the wizard command."""
+        display_info("[header]\nGuided workflows for complex operations:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]wizard[/highlight] [number]<workflow>[/number]"
+        )
+        display_info("[header]Available workflows:[/header]")
+        display_info("  [highlight]lazyssh[/highlight] - Guided SSH connection creation")
+        display_info("  [highlight]tunnel[/highlight]  - Guided tunnel creation")
+        display_info("\n[header]Description:[/header]")
+        display_info("  The wizard provides step-by-step guidance for complex operations")
+        display_info("  that benefit from interactive configuration.")
+        display_info("\n[header]Examples:[/header]")
+        display_info(
+            "  [success]wizard lazyssh[/success]  [dim]# Start guided SSH connection creation[/dim]"
+        )
+        display_info(
+            "  [success]wizard tunnel[/success]   [dim]# Start guided tunnel creation[/dim]"
+        )
+
+    def _help_plugin(self) -> None:  # pragma: no cover - help display
+        """Display help for the plugin command."""
+        display_info("[header]\nPlugin management and execution:[/header]")
+        display_info(
+            "[number]Usage:[/number] [highlight]plugin[/highlight] [[number]<subcommand>[/number]] [[number]<args>[/number]]"
+        )
+        display_info("[header]Subcommands:[/header]")
+        display_info(
+            "  [highlight]list[/highlight]              - List all available plugins (default)"
+        )
+        display_info(
+            "  [highlight]run[/highlight] [number]<name>[/number] [number]<socket>[/number]  - Execute plugin on a connection"
+        )
+        display_info(
+            "  [highlight]info[/highlight] [number]<name>[/number]          - Display detailed plugin information"
+        )
+        display_info("\n[header]Description:[/header]")
+        display_info("  Plugins extend LazySSH functionality by allowing you to run custom")
+        display_info("  Python or shell scripts through established SSH connections.")
+        display_info("  Plugins receive connection information via environment variables.")
+        display_info("\n[header]Environment Variables Available to Plugins:[/header]")
+        display_info("  [highlight]LAZYSSH_SOCKET[/highlight]            - Control socket name")
+        display_info("  [highlight]LAZYSSH_HOST[/highlight]              - Remote host address")
+        display_info("  [highlight]LAZYSSH_PORT[/highlight]              - SSH port")
+        display_info("  [highlight]LAZYSSH_USER[/highlight]              - SSH username")
+        display_info(
+            "  [highlight]LAZYSSH_SOCKET_PATH[/highlight]       - Full path to control socket"
+        )
+        display_info("  [highlight]LAZYSSH_SSH_KEY[/highlight]           - SSH key path (if used)")
+        display_info("  [highlight]LAZYSSH_PLUGIN_API_VERSION[/highlight] - Plugin API version")
+        display_info("\n[header]Built-in Plugins:[/header]")
+        display_info(
+            "  [highlight]enumerate[/highlight]  - Comprehensive system enumeration and reconnaissance"
+        )
+        display_info("\n[header]Examples:[/header]")
+        display_info(
+            "  [success]plugin[/success]                     [dim]# List all plugins[/dim]"
+        )
+        display_info(
+            "  [success]plugin list[/success]                [dim]# List all plugins[/dim]"
+        )
+        display_info(
+            "  [success]plugin run enumerate myserver[/success]  [dim]# Run enumeration on myserver[/dim]"
+        )
+        display_info(
+            "  [success]plugin info enumerate[/success]      [dim]# Show enumerate plugin details[/dim]"
+        )
 
     def cmd_exit(self, args: list[str]) -> bool:  # pragma: no cover - interactive exit
         """Exit lazyssh and close all connections"""
@@ -1379,7 +1319,7 @@ class CommandMode:
                 try:
                     if self.ssh_manager.close_connection(socket_path):
                         successful_closures += 1
-                except Exception as e:
+                except (OSError, subprocess.SubprocessError) as e:
                     display_warning(f"Failed to close connection for {socket_path}: {str(e)}")
 
             # Report closure results
@@ -1397,8 +1337,7 @@ class CommandMode:
 
     def cmd_clear(self, args: list[str]) -> bool:
         """Clear the terminal screen"""
-        # Implementation for clearing the screen
-        os.system("clear")
+        subprocess.run(["/usr/bin/clear"], check=False)  # noqa: S603  # fixed path, no user input
         return True
 
     def cmd_terminal(self, args: list[str]) -> bool:
@@ -1418,13 +1357,13 @@ class CommandMode:
                 if CMD_LOGGER:
                     CMD_LOGGER.info(f"Terminal method changed to: {arg}")
                 return True
-            else:  # pragma: no cover - terminal method always succeeds
-                if CMD_LOGGER:  # pragma: no cover
-                    CMD_LOGGER.error(f"Failed to set terminal method: {arg}")  # pragma: no cover
-                return False  # pragma: no cover
+            # pragma: no cover - terminal method always succeeds
+            if CMD_LOGGER:  # pragma: no cover
+                CMD_LOGGER.error(f"Failed to set terminal method: {arg}")  # pragma: no cover
+            return False  # pragma: no cover
 
         # Check if user provided an SSH connection name (common mistake)
-        socket_path = f"/tmp/{raw_arg}"
+        socket_path = f"/tmp/{raw_arg}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         if socket_path in self.ssh_manager.connections:
             display_error(f"To open a terminal, use: open {raw_arg}")
             display_info("The 'terminal' command is only for changing terminal methods.")
@@ -1448,7 +1387,7 @@ class CommandMode:
 
         # Treat it as an SSH connection name
         conn_name = args[0]
-        socket_path = f"/tmp/{conn_name}"
+        socket_path = f"/tmp/{conn_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         # First check if the connection exists
         if socket_path not in self.ssh_manager.connections:
@@ -1488,7 +1427,7 @@ class CommandMode:
             return False
 
         conn_name = args[0]
-        socket_path = f"/tmp/{conn_name}"
+        socket_path = f"/tmp/{conn_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         if socket_path not in self.ssh_manager.connections:
             display_error(f"SSH connection '{conn_name}' not found")
@@ -1512,7 +1451,7 @@ class CommandMode:
             selected_connection = args[0]
 
             # Validate the connection exists
-            socket_path = f"/tmp/{selected_connection}"
+            socket_path = f"/tmp/{selected_connection}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
             if socket_path not in self.ssh_manager.connections:
                 display_error(f"Connection '{selected_connection}' not found")
                 return False
@@ -1579,12 +1518,11 @@ class CommandMode:
 
         if workflow == "lazyssh":
             return self._wizard_lazyssh()  # pragma: no cover - interactive wizard
-        elif workflow == "tunnel":
+        if workflow == "tunnel":
             return self._wizard_tunnel()  # pragma: no cover - interactive wizard
-        else:
-            display_error(f"Unknown workflow: {workflow}")
-            display_info("Available workflows: lazyssh, tunnel")
-            return False
+        display_error(f"Unknown workflow: {workflow}")
+        display_info("Available workflows: lazyssh, tunnel")
+        return False
 
     def _wizard_lazyssh(self) -> bool:
         """Guided workflow for SSH connection creation"""
@@ -1627,7 +1565,7 @@ class CommandMode:
                 return False
 
             # Check if socket name already exists
-            socket_path = f"/tmp/{socket_name}"
+            socket_path = f"/tmp/{socket_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
             if socket_path in self.ssh_manager.connections:
                 display_warning(f"Connection name '{socket_name}' is already in use.")
                 if not Confirm.ask(
@@ -1644,7 +1582,7 @@ class CommandMode:
                         )
                         return False
                     socket_name = new_socket
-                    socket_path = f"/tmp/{socket_name}"
+                    socket_path = f"/tmp/{socket_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
             # Ask about optional settings
             display_info("\n[warning]Optional Settings:[/warning]")
@@ -1756,14 +1694,13 @@ class CommandMode:
                         )
 
                 return True
-            else:
-                display_error("Failed to create connection")
-                return False
+            display_error("Failed to create connection")
+            return False
 
         except (KeyboardInterrupt, EOFError):
             display_info("\nWizard cancelled")
             return False
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError, ValueError) as e:
             display_error(f"Error in wizard: {str(e)}")
             if CMD_LOGGER:
                 CMD_LOGGER.error(f"Error in wizard lazyssh: {str(e)}")
@@ -1863,14 +1800,13 @@ class CommandMode:
                 display_success(f"{tunnel_type_str.capitalize()} tunnel created successfully!")
                 display_info(f"Tunnel mapping: {tunnel_desc}")
                 return True
-            else:
-                display_error("Failed to create tunnel")
-                return False
+            display_error("Failed to create tunnel")
+            return False
 
         except (KeyboardInterrupt, EOFError):
             display_info("\nWizard cancelled")
             return False
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError, ValueError) as e:
             display_error(f"Error in wizard: {str(e)}")
             if CMD_LOGGER:
                 CMD_LOGGER.error(f"Error in wizard tunnel: {str(e)}")
@@ -1893,23 +1829,23 @@ class CommandMode:
 
         if subcommand == "list":
             return self._plugin_list()
-        elif subcommand == "run":
+        if subcommand == "run":
             if len(args) < 3:
                 display_error("Usage: plugin run <plugin_name> <socket_name>")
                 return False
             plugin_name = args[1]
             socket_name = args[2]
             return self._plugin_run(plugin_name, socket_name)
-        elif subcommand == "info":
+        if subcommand == "info":
             if len(args) < 2:
                 display_error("Usage: plugin info <plugin_name>")
                 return False
             plugin_name = args[1]
             return self._plugin_info(plugin_name)
-        else:  # pragma: no cover - subcommand validated at completer level
-            display_error(f"Unknown plugin subcommand: {subcommand}")
-            display_info("Available subcommands: list, run, info")
-            return False
+        # pragma: no cover - subcommand validated at completer level
+        display_error(f"Unknown plugin subcommand: {subcommand}")
+        display_info("Available subcommands: list, run, info")
+        return False
 
     def _plugin_list(self) -> bool:
         """List all available plugins"""

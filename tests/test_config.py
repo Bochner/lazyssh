@@ -17,33 +17,33 @@ class TestGetTerminalMethod:
         monkeypatch.delenv("LAZYSSH_TERMINAL_METHOD", raising=False)
         assert config.get_terminal_method() == "auto"
 
-    def test_returns_auto(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that 'auto' is returned when set."""
-        monkeypatch.setenv("LAZYSSH_TERMINAL_METHOD", "auto")
-        assert config.get_terminal_method() == "auto"
-
-    def test_returns_terminator(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that 'terminator' is returned when set."""
-        monkeypatch.setenv("LAZYSSH_TERMINAL_METHOD", "terminator")
-        assert config.get_terminal_method() == "terminator"
-
-    def test_returns_native(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that 'native' is returned when set."""
-        monkeypatch.setenv("LAZYSSH_TERMINAL_METHOD", "native")
-        assert config.get_terminal_method() == "native"
-
-    def test_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that terminal method is case-insensitive."""
-        monkeypatch.setenv("LAZYSSH_TERMINAL_METHOD", "NATIVE")
-        assert config.get_terminal_method() == "native"
-
-        monkeypatch.setenv("LAZYSSH_TERMINAL_METHOD", "Terminator")
-        assert config.get_terminal_method() == "terminator"
-
-    def test_invalid_returns_auto(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that invalid values default to 'auto'."""
-        monkeypatch.setenv("LAZYSSH_TERMINAL_METHOD", "invalid")
-        assert config.get_terminal_method() == "auto"
+    @pytest.mark.parametrize(
+        ("env_value", "expected"),
+        [
+            ("auto", "auto"),
+            ("terminator", "terminator"),
+            ("native", "native"),
+            ("NATIVE", "native"),
+            ("Terminator", "terminator"),
+            ("AUTO", "auto"),
+            ("invalid", "auto"),
+        ],
+        ids=[
+            "auto",
+            "terminator",
+            "native",
+            "case-NATIVE",
+            "case-Terminator",
+            "case-AUTO",
+            "invalid-defaults-auto",
+        ],
+    )
+    def test_returns_expected_method(
+        self, monkeypatch: pytest.MonkeyPatch, env_value: str, expected: str
+    ) -> None:
+        """Test that the correct terminal method is returned for various inputs."""
+        monkeypatch.setenv("LAZYSSH_TERMINAL_METHOD", env_value)
+        assert config.get_terminal_method() == expected
 
 
 class TestLoadConfig:
@@ -126,22 +126,23 @@ class TestEnsureConfigDirectory:
 class TestValidateConfigName:
     """Tests for validate_config_name function."""
 
-    def test_valid_names(self) -> None:
+    @pytest.mark.parametrize(
+        "name",
+        ["myconfig", "my-config", "my_config", "MyConfig123", "123"],
+        ids=["alpha", "hyphen", "underscore", "mixed-case-digits", "digits-only"],
+    )
+    def test_valid_names(self, name: str) -> None:
         """Test valid configuration names."""
-        assert config.validate_config_name("myconfig") is True
-        assert config.validate_config_name("my-config") is True
-        assert config.validate_config_name("my_config") is True
-        assert config.validate_config_name("MyConfig123") is True
-        assert config.validate_config_name("123") is True
+        assert config.validate_config_name(name) is True
 
-    def test_invalid_names(self) -> None:
+    @pytest.mark.parametrize(
+        "name",
+        ["", "my config", "my.config", "my/config", "config!", "@config"],
+        ids=["empty", "space", "dot", "slash", "exclamation", "at-sign"],
+    )
+    def test_invalid_names(self, name: str) -> None:
         """Test invalid configuration names."""
-        assert config.validate_config_name("") is False
-        assert config.validate_config_name("my config") is False
-        assert config.validate_config_name("my.config") is False
-        assert config.validate_config_name("my/config") is False
-        assert config.validate_config_name("config!") is False
-        assert config.validate_config_name("@config") is False
+        assert config.validate_config_name(name) is False
 
 
 class TestInitializeConfigFile:

@@ -33,7 +33,7 @@ from .console_instance import console, display_error, display_info, display_succ
 from .logging_module import (
     SCP_LOGGER,
     format_size,
-    get_connection_logger,  # noqa: F401
+    get_connection_logger,  # noqa: F401 — re-exported for plugin/test access
     log_file_transfer,
     log_scp_command,
     set_debug_mode,
@@ -148,232 +148,200 @@ class SCPModeCompleter(Completer):
 
         command = words[0].lower()
 
-        # Add command-specific completions based on first word
-        if command in ["get", "ls", "mget", "tree"] and (len(words) == 1 or len(words) == 2):
-            # Always offer completions after typing the command and a space
-            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
-                # If we have an active connection, try to complete remote files
-                if self.scp_mode.conn and self.scp_mode.socket_path:
-                    try:
-                        # Check throttling
-                        explicit_tab = (
-                            complete_event.completion_requested
-                            if hasattr(complete_event, "completion_requested")
-                            else False
-                        )
-                        if self.scp_mode._should_throttle_completion(
-                            explicit_tab
-                        ):  # pragma: no cover - remote completion
-                            # Return cached results if available
-                            partial_path = words[1] if len(words) > 1 else ""
-                            if partial_path:
-                                base_dir = str(Path(partial_path).parent)
-                            else:
-                                base_dir = self.scp_mode.current_remote_dir
+        if command in ["get", "ls", "mget", "tree"]:
+            yield from self._complete_remote_files(words, text, word_before_cursor, complete_event)
+        elif command == "put":
+            yield from self._complete_put(words, text, word_before_cursor)
+        elif command == "cd":
+            yield from self._complete_cd(words, text, word_before_cursor, complete_event)
+        elif command == "local":
+            yield from self._complete_local(words, text, word_before_cursor)
+        elif command == "lls":
+            yield from self._complete_lls(words, text, word_before_cursor)
+        elif command == "lcd":
+            yield from self._complete_lcd(words, text, word_before_cursor)
 
-                            if not base_dir:
-                                base_dir = self.scp_mode.current_remote_dir
+    def _complete_remote_files(
+        self, words: list[str], text: str, word_before_cursor: str, complete_event: Any
+    ) -> Iterable[Completion]:
+        """Complete remote file paths for get, ls, mget, tree commands."""
+        if not (len(words) == 1 or len(words) == 2):
+            return
+        if not ((len(words) == 1 and text.endswith(" ")) or len(words) == 2):
+            return
+        if not (self.scp_mode.conn and self.scp_mode.socket_path):
+            return
+        try:
+            # Check throttling
+            explicit_tab = (
+                complete_event.completion_requested
+                if hasattr(complete_event, "completion_requested")
+                else False
+            )
+            if self.scp_mode._should_throttle_completion(
+                explicit_tab
+            ):  # pragma: no cover - remote completion
+                partial_path = words[1] if len(words) > 1 else ""
+                if partial_path:
+                    base_dir = str(Path(partial_path).parent)
+                else:
+                    base_dir = self.scp_mode.current_remote_dir
 
-                            cached = self.scp_mode._get_cached_result(base_dir, "ls")
-                            if cached:
-                                for f in cached:
-                                    if not word_before_cursor or f.startswith(word_before_cursor):
-                                        yield Completion(f, start_position=-len(word_before_cursor))
-                            return
+                if not base_dir:
+                    base_dir = self.scp_mode.current_remote_dir
 
-                        # Get partial path from what user typed so far
-                        partial_path = words[1] if len(words) > 1 else ""
-                        if partial_path:  # pragma: no cover - remote completion
-                            base_dir = str(Path(partial_path).parent)
-                        else:
-                            base_dir = self.scp_mode.current_remote_dir
+                cached = self.scp_mode._get_cached_result(base_dir, "ls")
+                if cached:
+                    for f in cached:
+                        if not word_before_cursor or f.startswith(word_before_cursor):
+                            yield Completion(f, start_position=-len(word_before_cursor))
+                return
 
-                        if not base_dir:  # pragma: no cover
-                            base_dir = self.scp_mode.current_remote_dir
+            partial_path = words[1] if len(words) > 1 else ""
+            if partial_path:  # pragma: no cover - remote completion
+                base_dir = str(Path(partial_path).parent)
+            else:
+                base_dir = self.scp_mode.current_remote_dir
 
-                        # Check cache first
-                        file_list = self.scp_mode._get_cached_result(base_dir, "ls")
+            if not base_dir:  # pragma: no cover
+                base_dir = self.scp_mode.current_remote_dir
 
-                        if file_list is None:
-                            # Update completion time before query
-                            self.scp_mode._update_completion_time()
+            file_list = self.scp_mode._get_cached_result(base_dir, "ls")
 
-                            # Get files in the directory
-                            result = self.scp_mode._execute_ssh_command(
-                                f"ls -a {shlex.quote(base_dir)}"
-                            )
-                            if result and result.returncode == 0:
-                                file_list = result.stdout.strip().split("\n")
-                                file_list = [f for f in file_list if f and f not in [".", ".."]]
+            if file_list is None:
+                self.scp_mode._update_completion_time()
+                result = self.scp_mode._execute_ssh_command(f"ls -a {shlex.quote(base_dir)}")
+                if result and result.returncode == 0:
+                    file_list = result.stdout.strip().split("\n")
+                    file_list = [f for f in file_list if f and f not in [".", ".."]]
+                    self.scp_mode._update_cache(base_dir, "ls", file_list)
 
-                                # Update cache
-                                self.scp_mode._update_cache(base_dir, "ls", file_list)
+            if file_list:
+                for f in file_list:
+                    if not word_before_cursor or f.startswith(word_before_cursor):
+                        yield Completion(f, start_position=-len(word_before_cursor))
+        except (OSError, subprocess.SubprocessError, ValueError):  # pragma: no cover
+            pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
-                        if file_list:
-                            for f in file_list:
-                                if not word_before_cursor or f.startswith(word_before_cursor):
-                                    yield Completion(f, start_position=-len(word_before_cursor))
-                    except Exception:  # pragma: no cover
-                        # Silently fail for completions
-                        pass
+    def _complete_put(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete local file paths for the put command."""
+        if not (len(words) == 1 or len(words) == 2):
+            return
+        if not ((len(words) == 1 and text.endswith(" ")) or len(words) == 2):
+            return
+        try:
+            partial_path = words[1] if len(words) > 1 else ""
+            if partial_path:  # pragma: no cover - local completion path
+                base_dir = str(Path(partial_path).parent)
+            else:
+                base_dir = self.scp_mode.local_upload_dir or ""
 
-        elif command == "put" and (len(words) == 1 or len(words) == 2):
-            # Always offer completions after typing the command and a space
-            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
-                # Complete local files from the upload directory
-                try:
-                    # Get partial path from what user typed so far
-                    partial_path = words[1] if len(words) > 1 else ""
-                    if partial_path:  # pragma: no cover - local completion path
-                        base_dir = str(Path(partial_path).parent)
-                    else:
-                        base_dir = self.scp_mode.local_upload_dir or ""
+            if not base_dir:  # pragma: no cover
+                base_dir = self.scp_mode.local_upload_dir or ""
 
-                    if not base_dir:  # pragma: no cover
-                        base_dir = self.scp_mode.local_upload_dir or ""
+            filename_part = Path(partial_path).name if partial_path else ""
 
-                    # Get filename part for matching
-                    filename_part = Path(partial_path).name if partial_path else ""
+            for f in os.listdir(base_dir or "."):
+                if not filename_part or f.startswith(filename_part):
+                    full_path = str(Path(base_dir) / f) if base_dir else f
+                    yield Completion(full_path, start_position=-len(partial_path))
+        except (OSError, ValueError):  # pragma: no cover
+            pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
-                    # List files in the local upload directory
-                    for f in os.listdir(base_dir or "."):
-                        if not filename_part or f.startswith(filename_part):
-                            full_path = str(Path(base_dir) / f) if base_dir else f
-                            yield Completion(full_path, start_position=-len(partial_path))
-                except Exception:  # pragma: no cover
-                    # Silently fail for completions
-                    pass
+    def _complete_cd(
+        self, words: list[str], text: str, word_before_cursor: str, complete_event: Any
+    ) -> Iterable[Completion]:
+        """Complete remote directory paths for the cd command."""
+        if not (len(words) == 1 or len(words) == 2):
+            return
+        if not ((len(words) == 1 and text.endswith(" ")) or len(words) == 2):
+            return
+        if not (self.scp_mode.conn and self.scp_mode.socket_path):
+            return
+        try:
+            explicit_tab = (
+                complete_event.completion_requested
+                if hasattr(complete_event, "completion_requested")
+                else False
+            )
+            if self.scp_mode._should_throttle_completion(
+                explicit_tab
+            ):  # pragma: no cover - remote completion
+                partial_path = words[1] if len(words) > 1 else ""
+                if partial_path:
+                    base_dir = str(Path(partial_path).parent)
+                else:
+                    base_dir = self.scp_mode.current_remote_dir
 
-        elif command == "cd" and (len(words) == 1 or len(words) == 2):
-            # Always offer completions after typing the command and a space
-            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
-                # Complete remote directories
-                if self.scp_mode.conn and self.scp_mode.socket_path:
-                    try:
-                        # Check throttling
-                        explicit_tab = (
-                            complete_event.completion_requested
-                            if hasattr(complete_event, "completion_requested")
-                            else False
-                        )
-                        if self.scp_mode._should_throttle_completion(
-                            explicit_tab
-                        ):  # pragma: no cover - remote completion
-                            # Return cached results if available
-                            partial_path = words[1] if len(words) > 1 else ""
-                            if partial_path:
-                                base_dir = str(Path(partial_path).parent)
-                            else:
-                                base_dir = self.scp_mode.current_remote_dir
+                if not base_dir:
+                    base_dir = self.scp_mode.current_remote_dir
 
-                            if not base_dir:
-                                base_dir = self.scp_mode.current_remote_dir
+                cached = self.scp_mode._get_cached_result(base_dir, "find")
+                if cached:
+                    current_dir_name = Path(base_dir).name
+                    filtered_cached = [d for d in cached if d != current_dir_name]
+                    for d in filtered_cached:
+                        if not word_before_cursor or d.startswith(word_before_cursor):
+                            yield Completion(d, start_position=-len(word_before_cursor))
+                return
 
-                            cached = self.scp_mode._get_cached_result(base_dir, "find")
-                            if cached:
-                                # Filter out the current directory name from cached results too
-                                current_dir_name = Path(base_dir).name
-                                filtered_cached = [d for d in cached if d != current_dir_name]
-                                for d in filtered_cached:
-                                    if not word_before_cursor or d.startswith(word_before_cursor):
-                                        yield Completion(d, start_position=-len(word_before_cursor))
-                            return
+            partial_path = words[1] if len(words) > 1 else ""
+            if partial_path:  # pragma: no cover - remote completion path
+                base_dir = str(Path(partial_path).parent)
+            else:
+                base_dir = self.scp_mode.current_remote_dir
 
-                        # Get partial path from what user typed so far
-                        partial_path = words[1] if len(words) > 1 else ""
-                        if partial_path:  # pragma: no cover - remote completion path
-                            base_dir = str(Path(partial_path).parent)
-                        else:
-                            base_dir = self.scp_mode.current_remote_dir
+            if not base_dir:  # pragma: no cover
+                base_dir = self.scp_mode.current_remote_dir
 
-                        if not base_dir:  # pragma: no cover
-                            base_dir = self.scp_mode.current_remote_dir
+            dir_list = self.scp_mode._get_cached_result(base_dir, "find")
 
-                        # Check cache first
-                        dir_list = self.scp_mode._get_cached_result(base_dir, "find")
+            if dir_list is None:
+                self.scp_mode._update_completion_time()
+                result = self.scp_mode._execute_ssh_command(
+                    f"find {base_dir} -maxdepth 1 -type d -printf '%f\\n'"
+                )
+                if result and result.returncode == 0:
+                    dir_list = result.stdout.strip().split("\n")
+                    dir_list = [d for d in dir_list if d and d not in [".", ".."]]
+                    current_dir_name = Path(base_dir).name
+                    dir_list = [d for d in dir_list if d != current_dir_name]
+                    self.scp_mode._update_cache(base_dir, "find", dir_list)
 
-                        if dir_list is None:
-                            # Update completion time before query
-                            self.scp_mode._update_completion_time()
+            if dir_list:
+                for d in dir_list:
+                    if not word_before_cursor or d.startswith(word_before_cursor):
+                        yield Completion(d, start_position=-len(word_before_cursor))
+        except (OSError, subprocess.SubprocessError, ValueError):  # pragma: no cover
+            pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
-                            # Get directories in the base directory
-                            result = self.scp_mode._execute_ssh_command(
-                                f"find {base_dir} -maxdepth 1 -type d -printf '%f\\n'"
-                            )
-                            if result and result.returncode == 0:
-                                dir_list = result.stdout.strip().split("\n")
-                                dir_list = [d for d in dir_list if d and d not in [".", ".."]]
+    def _complete_local(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete arguments for the local command."""
+        if not (len(words) == 1 or len(words) == 2 or len(words) == 3):
+            return
 
-                                # Filter out the current directory name to avoid suggesting it
-                                current_dir_name = Path(base_dir).name
-                                dir_list = [d for d in dir_list if d != current_dir_name]
-
-                                # Update cache
-                                self.scp_mode._update_cache(base_dir, "find", dir_list)
-
-                        if dir_list:
-                            for d in dir_list:
-                                if not word_before_cursor or d.startswith(word_before_cursor):
-                                    yield Completion(d, start_position=-len(word_before_cursor))
-                    except Exception:  # pragma: no cover
-                        # Silently fail for completions
-                        pass
-
-        elif command == "local" and (len(words) == 1 or len(words) == 2 or len(words) == 3):
-            # Handle different stages of local command completion
-            if len(words) == 1 and text.endswith(" "):
-                # After "local " - suggest ONLY download/upload options
-                yield Completion("download", start_position=-len(word_before_cursor))
-                yield Completion("upload", start_position=-len(word_before_cursor))
-                # Don't show directory completions here
-            elif len(words) == 2:
-                if words[1] in ["download", "upload"] and text.endswith(
-                    " "
-                ):  # pragma: no cover - local completion
-                    # After "local download " or "local upload " - complete directories
-                    try:
-                        # List directories in the current directory
-                        for d in os.listdir("."):
-                            path_obj = Path(".") / d
-                            if path_obj.is_dir():
-                                result_path = str(path_obj)
-                                yield Completion(result_path, start_position=0)
-                    except Exception:  # pragma: no cover
-                        # Silently fail for completions
-                        pass
-                else:  # pragma: no cover - local completion path
-                    # Complete local directories for backward compatibility
-                    try:
-                        # Get partial path from what user typed so far
-                        partial_path = words[1]
-
-                        if partial_path:
-                            path_obj = Path(partial_path)
-                            base_dir = str(path_obj.parent) if path_obj.name else str(path_obj)
-                            dirname_part = path_obj.name
-                        else:
-                            base_dir = "."
-                            dirname_part = ""
-
-                        # List directories in the local directory
-                        for d in os.listdir(base_dir or "."):
-                            path_obj = Path(base_dir) / d
-                            if (
-                                not dirname_part or d.startswith(dirname_part)
-                            ) and path_obj.is_dir():
-                                result_path = str(path_obj) if base_dir else d
-                                yield Completion(result_path, start_position=-len(partial_path))
-                    except Exception:  # pragma: no cover
-                        # Silently fail for completions
-                        pass
-            elif (
-                len(words) == 3 and words[1] in ["download", "upload"] and not text.endswith(" ")
+        if len(words) == 1 and text.endswith(" "):
+            yield Completion("download", start_position=-len(word_before_cursor))
+            yield Completion("upload", start_position=-len(word_before_cursor))
+        elif len(words) == 2:
+            if words[1] in ["download", "upload"] and text.endswith(
+                " "
             ):  # pragma: no cover - local completion
-                # Complete directory path for "local download <path>" or "local upload <path>"
                 try:
-                    # Get partial path from what user typed so far
-                    partial_path = words[2]
-
+                    for d in os.listdir("."):
+                        path_obj = Path(".") / d
+                        if path_obj.is_dir():
+                            result_path = str(path_obj)
+                            yield Completion(result_path, start_position=0)
+                except (OSError, ValueError):  # pragma: no cover
+                    pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
+            else:  # pragma: no cover - local completion path
+                try:
+                    partial_path = words[1]
                     if partial_path:
                         path_obj = Path(partial_path)
                         base_dir = str(path_obj.parent) if path_obj.name else str(path_obj)
@@ -382,78 +350,91 @@ class SCPModeCompleter(Completer):
                         base_dir = "."
                         dirname_part = ""
 
-                    # List directories in the local directory
                     for d in os.listdir(base_dir or "."):
-                        dir_path_obj = Path(base_dir) / d
-                        if (
-                            not dirname_part or d.startswith(dirname_part)
-                        ) and dir_path_obj.is_dir():
-                            result_path = str(dir_path_obj) if base_dir else d
+                        path_obj = Path(base_dir) / d
+                        if (not dirname_part or d.startswith(dirname_part)) and path_obj.is_dir():
+                            result_path = str(path_obj) if base_dir else d
                             yield Completion(result_path, start_position=-len(partial_path))
-                except Exception:  # pragma: no cover
-                    # Silently fail for completions
-                    pass
-        elif command == "lls" and (
-            len(words) == 1 or len(words) == 2
+                except (OSError, ValueError):  # pragma: no cover
+                    pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
+        elif (
+            len(words) == 3 and words[1] in ["download", "upload"] and not text.endswith(" ")
         ):  # pragma: no cover - local completion
-            # Always offer completions after typing the command and a space
-            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
-                # Complete local directories
-                partial_path = words[1] if len(words) > 1 else ""
-
+            try:
+                partial_path = words[2]
                 if partial_path:
                     path_obj = Path(partial_path)
                     base_dir = str(path_obj.parent) if path_obj.name else str(path_obj)
-                    filename_part = path_obj.name
+                    dirname_part = path_obj.name
                 else:
                     base_dir = "."
-                    filename_part = ""
+                    dirname_part = ""
 
-                if not base_dir:
-                    base_dir = "."
+                for d in os.listdir(base_dir or "."):
+                    dir_path_obj = Path(base_dir) / d
+                    if (not dirname_part or d.startswith(dirname_part)) and dir_path_obj.is_dir():
+                        result_path = str(dir_path_obj) if base_dir else d
+                        yield Completion(result_path, start_position=-len(partial_path))
+            except (OSError, ValueError):  # pragma: no cover
+                pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
-                try:
-                    # List files in the directory
-                    files = os.listdir(base_dir)
+    def _complete_lls(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:  # pragma: no cover - local completion
+        """Complete local file/directory paths for the lls command."""
+        if not (len(words) == 1 or len(words) == 2):
+            return
+        if not ((len(words) == 1 and text.endswith(" ")) or len(words) == 2):
+            return
 
-                    for f in files:
-                        if not filename_part or f.startswith(filename_part):
-                            # Check if it's a directory and append / if it is
-                            file_path_obj = Path(base_dir) / f
-                            if file_path_obj.is_dir():
-                                f = f + "/"
-                            yield Completion(f, start_position=-len(filename_part))
-                except (FileNotFoundError, PermissionError):
-                    # Silently fail for completions
-                    pass
+        partial_path = words[1] if len(words) > 1 else ""
+        if partial_path:
+            path_obj = Path(partial_path)
+            base_dir = str(path_obj.parent) if path_obj.name else str(path_obj)
+            filename_part = path_obj.name
+        else:
+            base_dir = "."
+            filename_part = ""
 
-        elif command == "lcd" and (len(words) == 1 or len(words) == 2):
-            # Always offer completions after typing the command and a space
-            if (len(words) == 1 and text.endswith(" ")) or len(words) == 2:
-                # Complete local directories
-                try:
-                    # Get partial path from what user typed so far
-                    partial_path = words[1] if len(words) > 1 else ""
+        if not base_dir:
+            base_dir = "."
 
-                    if partial_path:
-                        path_obj = Path(partial_path)
-                        base_dir = str(path_obj.parent)
-                        dirname_part = path_obj.name
-                    else:
-                        base_dir = "."
-                        dirname_part = ""
+        try:
+            files = os.listdir(base_dir)
+            for f in files:
+                if not filename_part or f.startswith(filename_part):
+                    file_path_obj = Path(base_dir) / f
+                    if file_path_obj.is_dir():
+                        f = f + "/"
+                    yield Completion(f, start_position=-len(filename_part))
+        except (FileNotFoundError, PermissionError):
+            pass
 
-                    # List directories in the local directory
-                    for d in os.listdir(base_dir or "."):
-                        lcd_path_obj = Path(base_dir) / d
-                        if (
-                            not dirname_part or d.startswith(dirname_part)
-                        ) and lcd_path_obj.is_dir():
-                            result_path = str(lcd_path_obj) if base_dir else d
-                            yield Completion(result_path, start_position=-len(partial_path))
-                except Exception:  # pragma: no cover
-                    # Silently fail for completions
-                    pass
+    def _complete_lcd(
+        self, words: list[str], text: str, word_before_cursor: str
+    ) -> Iterable[Completion]:
+        """Complete local directory paths for the lcd command."""
+        if not (len(words) == 1 or len(words) == 2):
+            return
+        if not ((len(words) == 1 and text.endswith(" ")) or len(words) == 2):
+            return
+        try:
+            partial_path = words[1] if len(words) > 1 else ""
+            if partial_path:
+                path_obj = Path(partial_path)
+                base_dir = str(path_obj.parent)
+                dirname_part = path_obj.name
+            else:
+                base_dir = "."
+                dirname_part = ""
+
+            for d in os.listdir(base_dir or "."):
+                lcd_path_obj = Path(base_dir) / d
+                if (not dirname_part or d.startswith(dirname_part)) and lcd_path_obj.is_dir():
+                    result_path = str(lcd_path_obj) if base_dir else d
+                    yield Completion(result_path, start_position=-len(partial_path))
+        except (OSError, ValueError):  # pragma: no cover
+            pass  # Tab-completion errors are silently ignored to avoid disrupting the UI
 
 
 class SCPMode:
@@ -479,13 +460,13 @@ class SCPMode:
         self.upload_bytes = 0
 
         # Log directory setup
-        self.log_dir = Path("/tmp/lazyssh/logs")
+        self.log_dir = Path("/tmp/lazyssh/logs")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         if not self.log_dir.exists():  # pragma: no cover - directory creation
             self.log_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.chmod(0o700)  # Secure permissions
 
         # Set up history file in /tmp/lazyssh
-        self.history_dir = Path("/tmp/lazyssh")
+        self.history_dir = Path("/tmp/lazyssh")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         if not self.history_dir.exists():  # pragma: no cover - directory creation
             self.history_dir.mkdir(parents=True, exist_ok=True)
             self.history_dir.chmod(0o700)
@@ -539,7 +520,7 @@ class SCPMode:
 
         # Try to connect to selected connection if provided
         if selected_connection:
-            self.socket_path = f"/tmp/{selected_connection}"
+            self.socket_path = f"/tmp/{selected_connection}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
             self.connect()
 
         # Log initialization
@@ -563,7 +544,7 @@ class SCPMode:
 
         # Set default directories
         conn_download_dir = self.conn.downloads_dir
-        conn_upload_dir = f"/tmp/lazyssh/{self.connection_name}.d/uploads"
+        conn_upload_dir = f"/tmp/lazyssh/{self.connection_name}.d/uploads"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         self.local_download_dir = str(conn_download_dir)
         self.local_upload_dir = str(conn_upload_dir)
@@ -586,7 +567,7 @@ class SCPMode:
                 f"{self.conn.username}@{self.conn.host}",
                 "pwd",
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603  # args are constructed from validated SSH parameters
             if result.returncode == 0:  # pragma: no cover - SSH connection success
                 self.current_remote_dir = result.stdout.strip()
                 # Store the initial directory as the remote home directory for tilde expansion
@@ -594,7 +575,10 @@ class SCPMode:
             else:  # pragma: no cover - SSH pwd error handling
                 self.current_remote_dir = "~"
                 self.remote_home_dir = None
-        except Exception:  # pragma: no cover - SSH pwd exception handling
+        except (
+            OSError,
+            subprocess.SubprocessError,
+        ):  # pragma: no cover - SSH pwd exception handling
             self.current_remote_dir = "~"
             self.remote_home_dir = None
 
@@ -614,7 +598,7 @@ class SCPMode:
             SCP_LOGGER.info(f"SCP mode connected to {self.conn.host} via {self.socket_path}")
 
         # Create connection-specific logs directory
-        conn_log_dir = Path(f"/tmp/lazyssh/{self.connection_name}.d/logs")
+        conn_log_dir = Path(f"/tmp/lazyssh/{self.connection_name}.d/logs")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         if not conn_log_dir.exists():  # pragma: no cover - directory creation
             conn_log_dir.mkdir(parents=True, exist_ok=True)
             conn_log_dir.chmod(0o700)
@@ -657,7 +641,7 @@ class SCPMode:
             for part in path.split("/"):
                 if part == "" or part == ".":
                     continue
-                elif part == "..":
+                if part == "..":
                     if parts:  # pragma: no cover - path normalization
                         parts.pop()
                 else:
@@ -678,7 +662,7 @@ class SCPMode:
                 for part in full_path.split("/"):
                     if part == "" or part == ".":
                         continue
-                    elif part == "..":
+                    if part == "..":
                         if parts:
                             parts.pop()
                     else:
@@ -785,9 +769,9 @@ class SCPMode:
             # Log the command execution with connection name
             log_scp_command(self.connection_name, remote_command)
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603  # args are constructed from validated SSH parameters
             return result
-        except Exception as e:  # pragma: no cover - SSH error handling
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - SSH error handling
             display_error(f"SSH command error: {str(e)}")
             return None
 
@@ -806,7 +790,7 @@ class SCPMode:
             if not self._select_connection():
                 return
             # Set socket path after successful connection selection
-            self.socket_path = f"/tmp/{self.connection_name}"
+            self.socket_path = f"/tmp/{self.connection_name}"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
         # Connect to the selected SSH session if not already connected
         if not self.conn and not self.connect():
@@ -838,7 +822,7 @@ class SCPMode:
                 continue
             except EOFError:
                 break
-            except Exception as e:
+            except Exception as e:  # top-level command loop; genuinely unknown errors possible
                 display_error(f"Error: {str(e)}")
 
     def _select_connection(self) -> bool:
@@ -872,9 +856,8 @@ class SCPMode:
             if 1 <= choice <= len(connections):
                 self.connection_name = connections[choice - 1]
                 return True
-            else:
-                display_error("Invalid selection")
-                return False
+            display_error("Invalid selection")
+            return False
         except (KeyboardInterrupt, EOFError):  # pragma: no cover - user interrupt
             return False
 
@@ -932,10 +915,9 @@ class SCPMode:
                 if result and result.returncode == 0:
                     return int(result.stdout.strip())
                 return 0
-            else:
-                # Get size of local file
-                return Path(path).stat().st_size
-        except Exception:
+            # Get size of local file
+            return Path(path).stat().st_size
+        except (OSError, subprocess.SubprocessError, ValueError):
             return 0
 
     def cmd_put(self, args: list[str]) -> None:
@@ -991,7 +973,7 @@ class SCPMode:
                 )
 
                 # Start the upload process
-                process = subprocess.Popen(
+                process = subprocess.Popen(  # noqa: S603  # args are constructed from validated SSH parameters
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
 
@@ -1053,7 +1035,7 @@ class SCPMode:
                 )
             else:  # pragma: no cover - upload error
                 display_error(f"Upload failed: {stderr}")
-        except Exception as e:  # pragma: no cover - upload exception
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - upload exception
             display_error(f"Upload error: {str(e)}")
 
     def cmd_get(self, args: list[str]) -> None:
@@ -1094,7 +1076,11 @@ class SCPMode:
             else:  # pragma: no cover - remote file error
                 display_error(f"File not found or cannot access: {remote_path}")
                 return
-        except Exception as e:  # pragma: no cover - exception handling
+        except (
+            OSError,
+            subprocess.SubprocessError,
+            ValueError,
+        ) as e:  # pragma: no cover - exception handling
             display_error(f"Error checking file: {str(e)}")
             return
 
@@ -1154,7 +1140,7 @@ class SCPMode:
                 )
 
                 # Start the download process
-                process = subprocess.Popen(
+                process = subprocess.Popen(  # noqa: S603  # args are constructed from validated SSH parameters
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
 
@@ -1257,7 +1243,7 @@ class SCPMode:
                 )
             else:  # pragma: no cover - download error
                 display_error(f"Download failed: {stderr}")
-        except Exception as e:  # pragma: no cover - download exception
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - download exception
             display_error(f"Download error: {str(e)}")
 
     def cmd_ls(self, args: list[str]) -> bool:
@@ -1347,8 +1333,8 @@ class SCPMode:
                     else:  # pragma: no cover
                         # Fall back to original if parsing fails  # pragma: no cover
                         date = date_str  # pragma: no cover
-                except Exception:  # pragma: no cover
-                    # If any error, just use the original  # pragma: no cover
+                except (ValueError, OverflowError):  # pragma: no cover
+                    # If any date-parsing error, just use the original  # pragma: no cover
                     date = f"{date1} {date2} {date3}"  # pragma: no cover
 
                 # Color the filename based on type  # pragma: no cover
@@ -1375,7 +1361,7 @@ class SCPMode:
             console.print(table)
 
             return True
-        except Exception as e:  # pragma: no cover
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
             display_error(f"Error listing directory: {str(e)}")
             return False
 
@@ -1410,7 +1396,7 @@ class SCPMode:
 
             display_success(f"Changed to directory: {self.current_remote_dir}")
             return True
-        except Exception as e:  # pragma: no cover - exception handling
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - exception handling
             display_error(f"Failed to change directory: {str(e)}")
             return False
 
@@ -1432,94 +1418,11 @@ class SCPMode:
         pattern = args[0]
 
         try:
-            # Find files matching pattern
-            result = self._execute_ssh_command(
-                f"find {self.current_remote_dir} -maxdepth 1 -type f -name '{pattern}' -printf '%f\\n'"
-            )
-
-            if not result or result.returncode != 0:  # pragma: no cover - find error
-                display_error(
-                    f"Error finding files: {result.stderr if result else 'Unknown error'}"
-                )
+            matched_files = self._mget_discover_files(pattern)
+            if matched_files is None:
                 return False
 
-            matched_files = [f for f in result.stdout.strip().split("\n") if f]
-
-            if not matched_files:
-                display_error(f"No files match pattern: {pattern}")
-                return False
-
-            # Calculate total size of all files efficiently
-            total_size = 0
-            file_sizes = {}
-
-            # Display matched files in a Rich table instead of simple list
-            display_info(f"Found {len(matched_files)} matching files:")
-
-            # Create a Rich table for listing the files with standardized styling
-            table = create_standard_table()
-
-            # Add columns with consistent styling
-            table.add_column("Filename", style="table.row")
-            table.add_column("Size", justify="right", style="accent")
-
-            # Batch file size queries for better performance
-            if matched_files:
-                # Create a single command to get sizes for all files
-                file_paths = [
-                    shlex.quote(f"{self.current_remote_dir}/{filename}")
-                    for filename in matched_files
-                ]
-                size_command = f"stat -c '%n %s' {' '.join(file_paths)}"
-
-                size_result = self._execute_ssh_command(size_command)
-                if size_result and size_result.returncode == 0:
-                    # Parse the output: each line is "filename size"
-                    for line in size_result.stdout.strip().split("\n"):
-                        if line.strip():
-                            parts = line.strip().split(" ", 1)
-                            if len(parts) == 2:
-                                filename_with_path = parts[0]
-                                size_str = parts[1]
-                                # Extract just the filename from the full path
-                                filename = filename_with_path.split("/")[-1]
-                                try:
-                                    size = int(size_str)
-                                    file_sizes[filename] = size
-                                    total_size += size
-                                    # Format size in human-readable format
-                                    human_size = self._format_file_size(size)
-                                    table.add_row(filename, human_size)
-                                except ValueError:  # pragma: no cover - parse error
-                                    table.add_row(filename, "unknown size")
-                            else:  # pragma: no cover - malformed output
-                                # Fallback for malformed output
-                                filename = filename_with_path.split("/")[-1]
-                                table.add_row(filename, "unknown size")
-                else:  # pragma: no cover - batch query fallback
-                    # Fallback to individual queries if batch fails
-                    for filename in matched_files:
-                        quoted_path = shlex.quote(f"{self.current_remote_dir}/{filename}")
-                        size_result = self._execute_ssh_command(f"stat -c %s {quoted_path}")
-                        if size_result and size_result.returncode == 0:
-                            try:
-                                size = int(size_result.stdout.strip())
-                                file_sizes[filename] = size
-                                total_size += size
-                                # Format size in human-readable format
-                                human_size = self._format_file_size(size)
-                                table.add_row(filename, human_size)
-                            except ValueError:
-                                table.add_row(filename, "unknown size")
-                        else:
-                            table.add_row(filename, "unknown size")
-
-            # Display the table
-            console.print(table)
-
-            # Format total size in human-readable format
-            human_total = self._format_file_size(total_size)
-            display_info(f"Total download size: [success]{human_total}[/]")
+            file_sizes, total_size = self._mget_calculate_size(matched_files)
 
             # Confirm download using Rich's Confirm.ask for a color-coded prompt
             if not Confirm.ask(
@@ -1528,159 +1431,234 @@ class SCPMode:
                 display_info("Download cancelled")
                 return False
 
-            # Ensure download directory exists with proper permissions
-            download_dir_path = (
-                Path(self.local_download_dir) if self.local_download_dir else Path(".")
-            )
-            if not download_dir_path.exists():  # pragma: no cover - directory creation
-                download_dir_path.mkdir(parents=True, exist_ok=True)
-                download_dir_path.chmod(0o755)
-
-            # Download files with progress tracking
-            success_count = 0
-            total_downloaded_bytes = 0
-
-            # Start timing the download
-            start_time = time.time()
-
-            with create_multi_file_progress_bar(self.console) as progress:
-                # Create a task for overall progress based on total bytes, not file count
-                overall_task = progress.add_task("Overall progress", total=total_size)
-
-                for _idx, filename in enumerate(matched_files):
-                    remote_file = str(Path(self.current_remote_dir) / filename)
-                    local_file = (
-                        str(Path(str(self.local_download_dir)) / filename)
-                        if self.local_download_dir
-                        else filename
-                    )
-                    file_size = file_sizes.get(filename, 0)
-
-                    try:
-                        # Create a task for this file
-                        file_task = progress.add_task(
-                            f"[info]Downloading {truncate_filename(filename)}", total=file_size
-                        )
-
-                        # Get the SCP command
-                        remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
-                        cmd = self._get_scp_command(remote_path, local_file)
-
-                        # Start the download process
-                        process = subprocess.Popen(
-                            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                        )
-
-                        # Give the download a moment to start before intensive monitoring
-                        # This prevents blocking during the initial file creation phase
-                        time.sleep(0.1)
-
-                        # Monitor progress with optimized polling and caching
-                        downloaded_file = Path(local_file)
-                        last_size = 0
-                        last_update_time = time.time()
-                        file_exists = False
-                        # Start with longer intervals for large files, reduce as file grows
-                        base_interval = (
-                            0.1 if file_size > 100 * 1024 * 1024 else 0.05
-                        )  # 100MB threshold
-                        update_interval = base_interval
-
-                        while process.poll() is None:  # pragma: no cover - download loop
-                            current_time = time.time()
-                            # Only check file size if enough time has passed
-                            if current_time - last_update_time >= update_interval:
-                                # Only check existence if we haven't seen the file yet
-                                if not file_exists:
-                                    file_exists = downloaded_file.exists()
-
-                                if file_exists:
-                                    try:
-                                        current_size = downloaded_file.stat().st_size
-                                        # Update file progress
-                                        progress.update(file_task, completed=current_size)
-
-                                        # Update overall progress with the delta from last check
-                                        if current_size > last_size:
-                                            progress.update(
-                                                overall_task, advance=current_size - last_size
-                                            )
-                                            last_size = current_size
-
-                                            # Reduce polling interval as file grows for smoother updates
-                                            if current_size > 0 and file_size > 0:
-                                                progress_ratio = current_size / file_size
-                                                if progress_ratio > 0.5:  # More than 50% done
-                                                    update_interval = base_interval * 0.5
-                                                elif progress_ratio > 0.1:  # More than 10% done
-                                                    update_interval = base_interval * 0.7
-                                    except (OSError, FileNotFoundError):
-                                        # File might be temporarily inaccessible, continue
-                                        pass
-
-                                last_update_time = current_time
-                            else:
-                                # Sleep for shorter intervals to reduce CPU usage
-                                time.sleep(0.01)
-
-                        # Complete the progress bar for this file
-                        final_size = file_size
-                        if downloaded_file.exists():  # pragma: no cover - file check
-                            final_size = downloaded_file.stat().st_size
-
-                        # Update file task to completion
-                        progress.update(file_task, completed=final_size)
-
-                        # Update overall progress with any remaining bytes
-                        if final_size > last_size:
-                            progress.update(overall_task, advance=final_size - last_size)
-
-                        process_result = process.wait()
-                        stderr = process.stderr.read() if process.stderr else ""
-
-                        if process_result != 0:  # pragma: no cover - download error
-                            display_error(f"Failed to download {filename}: {stderr}")
-                        else:
-                            success_count += 1
-                            # Log each successful file transfer individually
-                            log_file_transfer(
-                                connection_name=(
-                                    str(self.connection_name) if self.connection_name else ""
-                                ),
-                                source=remote_file,
-                                destination=local_file,
-                                size=final_size,
-                                operation="download",
-                            )
-                            total_downloaded_bytes += final_size
-
-                    except Exception as e:  # pragma: no cover - download exception
-                        display_error(f"Failed to download {filename}: {str(e)}")
-
-            # Calculate elapsed time
-            elapsed_time = time.time() - start_time
-            elapsed_str = f"{elapsed_time:.1f} seconds"
-            if elapsed_time > 60:  # pragma: no cover - elapsed time formatting
-                minutes = int(elapsed_time // 60)
-                seconds = int(elapsed_time % 60)
-                elapsed_str = f"{minutes}m {seconds}s"
-
-            if success_count > 0:
-                # Update the total transfer stats only after all downloads are complete
-                if self.connection_name:
-                    update_transfer_stats(
-                        str(self.connection_name), success_count, total_downloaded_bytes
-                    )
-
-                # Include file size and elapsed time in success message
-                display_success(  # pragma: no cover - success message
-                    f"Successfully downloaded [info]{success_count}[/] of [info]{len(matched_files)}[/] files ([success]{self._format_file_size(total_downloaded_bytes)}[/] in [header]{elapsed_str}[/])"
-                )
-
-            return success_count > 0
-        except Exception as e:  # pragma: no cover - mget exception
+            return self._mget_download(matched_files, file_sizes, total_size)
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover - mget exception
             display_error(f"Error during mget: {str(e)}")
             return False
+
+    def _mget_discover_files(self, pattern: str) -> list[str] | None:
+        """Find files matching the given pattern on the remote server.
+
+        Returns the list of matched filenames, or None on error/no matches.
+        """
+        result = self._execute_ssh_command(
+            f"find {self.current_remote_dir} -maxdepth 1 -type f -name '{pattern}' -printf '%f\\n'"
+        )
+
+        if not result or result.returncode != 0:  # pragma: no cover - find error
+            display_error(f"Error finding files: {result.stderr if result else 'Unknown error'}")
+            return None
+
+        matched_files = [f for f in result.stdout.strip().split("\n") if f]
+
+        if not matched_files:
+            display_error(f"No files match pattern: {pattern}")
+            return None
+
+        return matched_files
+
+    def _mget_calculate_size(self, matched_files: list[str]) -> tuple[dict[str, int], int]:
+        """Query remote file sizes, display a summary table, and return sizes.
+
+        Returns a tuple of (file_sizes dict, total_size).
+        """
+        total_size = 0
+        file_sizes: dict[str, int] = {}
+
+        display_info(f"Found {len(matched_files)} matching files:")
+
+        table = create_standard_table()
+        table.add_column("Filename", style="table.row")
+        table.add_column("Size", justify="right", style="accent")
+
+        # Batch file size queries for better performance
+        file_paths = [
+            shlex.quote(f"{self.current_remote_dir}/{filename}") for filename in matched_files
+        ]
+        size_command = f"stat -c '%n %s' {' '.join(file_paths)}"
+
+        size_result = self._execute_ssh_command(size_command)
+        if size_result and size_result.returncode == 0:
+            for line in size_result.stdout.strip().split("\n"):
+                if line.strip():
+                    parts = line.strip().split(" ", 1)
+                    if len(parts) == 2:
+                        filename_with_path = parts[0]
+                        size_str = parts[1]
+                        filename = filename_with_path.split("/")[-1]
+                        try:
+                            size = int(size_str)
+                            file_sizes[filename] = size
+                            total_size += size
+                            human_size = self._format_file_size(size)
+                            table.add_row(filename, human_size)
+                        except ValueError:  # pragma: no cover - parse error
+                            table.add_row(filename, "unknown size")
+                    else:  # pragma: no cover - malformed output
+                        filename = filename_with_path.split("/")[-1]
+                        table.add_row(filename, "unknown size")
+        else:  # pragma: no cover - batch query fallback
+            for filename in matched_files:
+                quoted_path = shlex.quote(f"{self.current_remote_dir}/{filename}")
+                size_result = self._execute_ssh_command(f"stat -c %s {quoted_path}")
+                if size_result and size_result.returncode == 0:
+                    try:
+                        size = int(size_result.stdout.strip())
+                        file_sizes[filename] = size
+                        total_size += size
+                        human_size = self._format_file_size(size)
+                        table.add_row(filename, human_size)
+                    except ValueError:
+                        table.add_row(filename, "unknown size")
+                else:
+                    table.add_row(filename, "unknown size")
+
+        console.print(table)
+
+        human_total = self._format_file_size(total_size)
+        display_info(f"Total download size: [success]{human_total}[/]")
+
+        return file_sizes, total_size
+
+    def _mget_download(
+        self,
+        matched_files: list[str],
+        file_sizes: dict[str, int],
+        total_size: int,
+    ) -> bool:
+        """Download the matched files with progress tracking.
+
+        Returns True if at least one file was downloaded successfully.
+        """
+        if not self.conn:  # pragma: no cover - no connection
+            return False
+
+        # Ensure download directory exists with proper permissions
+        download_dir_path = Path(self.local_download_dir) if self.local_download_dir else Path(".")
+        if not download_dir_path.exists():  # pragma: no cover - directory creation
+            download_dir_path.mkdir(parents=True, exist_ok=True)
+            download_dir_path.chmod(0o755)
+
+        success_count = 0
+        total_downloaded_bytes = 0
+        start_time = time.time()
+
+        with create_multi_file_progress_bar(self.console) as progress:
+            overall_task = progress.add_task("Overall progress", total=total_size)
+
+            for _idx, filename in enumerate(matched_files):
+                remote_file = str(Path(self.current_remote_dir) / filename)
+                local_file = (
+                    str(Path(str(self.local_download_dir)) / filename)
+                    if self.local_download_dir
+                    else filename
+                )
+                file_size = file_sizes.get(filename, 0)
+
+                try:
+                    file_task = progress.add_task(
+                        f"[info]Downloading {truncate_filename(filename)}", total=file_size
+                    )
+
+                    remote_path = f"{self.conn.username}@{self.conn.host}:{remote_file}"
+                    cmd = self._get_scp_command(remote_path, local_file)
+
+                    process = subprocess.Popen(  # noqa: S603  # args are constructed from validated SSH parameters
+                        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                    )
+
+                    time.sleep(0.1)
+
+                    downloaded_file = Path(local_file)
+                    last_size = 0
+                    last_update_time = time.time()
+                    file_exists = False
+                    base_interval = (
+                        0.1 if file_size > 100 * 1024 * 1024 else 0.05
+                    )  # 100MB threshold
+                    update_interval = base_interval
+
+                    while process.poll() is None:  # pragma: no cover - download loop
+                        current_time = time.time()
+                        if current_time - last_update_time >= update_interval:
+                            if not file_exists:
+                                file_exists = downloaded_file.exists()
+
+                            if file_exists:
+                                try:
+                                    current_size = downloaded_file.stat().st_size
+                                    progress.update(file_task, completed=current_size)
+
+                                    if current_size > last_size:
+                                        progress.update(
+                                            overall_task, advance=current_size - last_size
+                                        )
+                                        last_size = current_size
+
+                                        if current_size > 0 and file_size > 0:
+                                            progress_ratio = current_size / file_size
+                                            if progress_ratio > 0.5:
+                                                update_interval = base_interval * 0.5
+                                            elif progress_ratio > 0.1:
+                                                update_interval = base_interval * 0.7
+                                except (OSError, FileNotFoundError):
+                                    pass
+
+                            last_update_time = current_time
+                        else:
+                            time.sleep(0.01)
+
+                    final_size = file_size
+                    if downloaded_file.exists():  # pragma: no cover - file check
+                        final_size = downloaded_file.stat().st_size
+
+                    progress.update(file_task, completed=final_size)
+
+                    if final_size > last_size:
+                        progress.update(overall_task, advance=final_size - last_size)
+
+                    process_result = process.wait()
+                    stderr = process.stderr.read() if process.stderr else ""
+
+                    if process_result != 0:  # pragma: no cover - download error
+                        display_error(f"Failed to download {filename}: {stderr}")
+                    else:
+                        success_count += 1
+                        log_file_transfer(
+                            connection_name=(
+                                str(self.connection_name) if self.connection_name else ""
+                            ),
+                            source=remote_file,
+                            destination=local_file,
+                            size=final_size,
+                            operation="download",
+                        )
+                        total_downloaded_bytes += final_size
+
+                except (
+                    OSError,
+                    subprocess.SubprocessError,
+                ) as e:  # pragma: no cover - download exception
+                    display_error(f"Failed to download {filename}: {str(e)}")
+
+        elapsed_time = time.time() - start_time
+        elapsed_str = f"{elapsed_time:.1f} seconds"
+        if elapsed_time > 60:  # pragma: no cover - elapsed time formatting
+            minutes = int(elapsed_time // 60)
+            seconds = int(elapsed_time % 60)
+            elapsed_str = f"{minutes}m {seconds}s"
+
+        if success_count > 0:
+            if self.connection_name:
+                update_transfer_stats(
+                    str(self.connection_name), success_count, total_downloaded_bytes
+                )
+
+            display_success(  # pragma: no cover - success message
+                f"Successfully downloaded [info]{success_count}[/] of [info]{len(matched_files)}[/] files ([success]{self._format_file_size(total_downloaded_bytes)}[/] in [header]{elapsed_str}[/])"
+            )
+
+        return success_count > 0
 
     def cmd_local(self, args: list[str]) -> bool:
         """Set or display local download and upload directories"""
@@ -1725,7 +1703,7 @@ class SCPMode:
                     display_success(f"Local upload directory set to: {new_path}")
 
                 return True
-            except Exception as e:  # pragma: no cover - exception
+            except OSError as e:  # pragma: no cover - exception
                 display_error(f"Failed to set local directory: {str(e)}")
                 return False
         else:
@@ -1756,7 +1734,7 @@ class SCPMode:
                     "Note: Use 'local download <path>' or 'local upload <path>' to set specific directories"
                 )
                 return True
-            except Exception as e:  # pragma: no cover - exception
+            except OSError as e:  # pragma: no cover - exception
                 display_error(f"Failed to set local directory: {str(e)}")
                 return False
 
@@ -2015,7 +1993,7 @@ class SCPMode:
 
             return True
 
-        except Exception as e:  # pragma: no cover
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
             display_error(f"Error listing directory: {str(e)}")
             return False
 
@@ -2114,7 +2092,7 @@ class SCPMode:
 
             return True
 
-        except Exception as e:  # pragma: no cover
+        except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
             display_error(f"Error displaying directory tree: {str(e)}")
             return False
 
@@ -2147,7 +2125,7 @@ class SCPMode:
             self.local_download_dir = new_path
             display_success(f"Local download directory set to: {new_path}")
             return True
-        except Exception as e:
+        except OSError as e:
             display_error(f"Failed to change local directory: {str(e)}")
             return False
 
@@ -2195,7 +2173,10 @@ class SCPMode:
                 f"{self.conn.username}@{self.conn.host}",
                 "echo connected",
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)  # noqa: S603  # args are constructed from validated SSH parameters
             return result.returncode == 0
-        except Exception:  # pragma: no cover - connection check exception
+        except (
+            OSError,
+            subprocess.SubprocessError,
+        ):  # pragma: no cover - connection check exception
             return False

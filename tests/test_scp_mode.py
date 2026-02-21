@@ -560,7 +560,8 @@ class TestSCPModeSSHCommand:
         monkeypatch.setattr("subprocess.run", mock_run)
         result = scp_mode_instance._execute_ssh_command("echo test")
         # The function returns a CompletedProcess, so check the stdout
-        assert result is not None and result.stdout == "command output"
+        assert result is not None
+        assert result.stdout == "command output"
 
     def test_execute_ssh_command_failure(
         self, scp_mode_instance: SCPMode, monkeypatch: pytest.MonkeyPatch
@@ -577,7 +578,8 @@ class TestSCPModeSSHCommand:
         monkeypatch.setattr("subprocess.run", mock_run)
         result = scp_mode_instance._execute_ssh_command("invalid command")
         # Function returns the result object even on failure
-        assert result is not None and result.returncode == 1
+        assert result is not None
+        assert result.returncode == 1
 
     def test_execute_ssh_command_no_connection(self, ssh_manager: SSHManager) -> None:
         """Test SSH command execution without connection."""
@@ -1281,7 +1283,7 @@ class TestSCPModeFileTransfers:
         def mock_ssh_cmd(cmd):
             if "find" in cmd:
                 return find_result
-            elif "stat" in cmd:
+            if "stat" in cmd:
                 return stat_result
             return None
 
@@ -1340,7 +1342,7 @@ class TestSCPModeFileTransfers:
         def mock_ssh_cmd(cmd):
             if "find" in cmd:
                 return find_result
-            elif "stat" in cmd:
+            if "stat" in cmd:
                 return stat_result
             return None
 

@@ -5,7 +5,7 @@ This package provides tools for managing SSH connections, creating tunnels,
 and opening terminal sessions through an interactive command-line interface.
 """
 
-__version__ = "1.6.2"
+__version__ = "1.6.4"
 __author__ = "Bochner"
 __email__ = ""
 __license__ = "MIT"
@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 
 # Include logging module in the package exports
-from .logging_module import (  # noqa: F401
+from .logging_module import (  # noqa: F401 — re-exported as public package API
     APP_LOGGER,
     CMD_LOGGER,
     SCP_LOGGER,

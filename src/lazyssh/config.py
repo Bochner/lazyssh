@@ -27,7 +27,7 @@ def get_terminal_method() -> TerminalMethod:
         # Invalid value, default to auto
         return "auto"
 
-    return method  # type: ignore
+    return method  # type: ignore[return-value]  # validated by guard above
 
 
 def load_config() -> dict[str, Any]:
@@ -35,7 +35,7 @@ def load_config() -> dict[str, Any]:
     config = {
         "ssh_path": os.environ.get("LAZYSSH_SSH_PATH", "/usr/bin/ssh"),
         "terminal_emulator": os.environ.get("LAZYSSH_TERMINAL", "terminator"),
-        "control_path_base": os.environ.get("LAZYSSH_CONTROL_PATH", "/tmp/"),
+        "control_path_base": os.environ.get("LAZYSSH_CONTROL_PATH", "/tmp/"),  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         "terminal_method": get_terminal_method(),
     }
     return config
@@ -56,7 +56,7 @@ def get_config_file_path(custom_path: str | None = None) -> Path:
     """
     if custom_path:
         return Path(custom_path)
-    return Path("/tmp/lazyssh/connections.conf")
+    return Path("/tmp/lazyssh/connections.conf")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
 
 def ensure_config_directory() -> bool:
@@ -67,13 +67,13 @@ def ensure_config_directory() -> bool:
         True if directory exists or was created successfully, False otherwise
     """
     try:
-        config_dir = Path("/tmp/lazyssh")
+        config_dir = Path("/tmp/lazyssh")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         config_dir.mkdir(parents=True, exist_ok=True)
         config_dir.chmod(0o700)
         if APP_LOGGER:
             APP_LOGGER.debug(f"Configuration directory ensured: {config_dir}")
         return True
-    except Exception as e:
+    except OSError as e:
         if APP_LOGGER:
             APP_LOGGER.error(f"Failed to create configuration directory: {e}")
         return False
@@ -136,7 +136,7 @@ def initialize_config_file(config_path: str | None = None) -> bool:
             APP_LOGGER.info(f"Initialized configuration file: {file_path}")
         return True
 
-    except Exception as e:
+    except OSError as e:
         if APP_LOGGER:
             APP_LOGGER.error(f"Failed to initialize configuration file: {e}")
         return False
@@ -186,7 +186,7 @@ def load_configs(config_path: str | None = None) -> dict[str, dict[str, Any]]:
         if APP_LOGGER:
             APP_LOGGER.error(f"Failed to parse TOML configuration: {e}")
         return {}
-    except Exception as e:
+    except OSError as e:
         if APP_LOGGER:
             APP_LOGGER.error(f"Failed to load configurations: {e}")
         return {}
@@ -284,11 +284,11 @@ def save_config(name: str, connection_params: dict[str, Any]) -> bool:
             if APP_LOGGER:
                 APP_LOGGER.info(f"Configuration '{name}' saved to {file_path}")
             return True
-        except Exception:
+        except OSError:
             # Clean up temp file on error
             try:
                 os.unlink(temp_path)
-            except Exception as cleanup_error:
+            except OSError as cleanup_error:
                 if APP_LOGGER:
                     APP_LOGGER.error(
                         f"Failed to clean up temporary file {temp_path}: {cleanup_error}"
@@ -300,7 +300,7 @@ def save_config(name: str, connection_params: dict[str, Any]) -> bool:
                     )
             raise
 
-    except Exception as e:
+    except OSError as e:
         if APP_LOGGER:
             APP_LOGGER.error(f"Failed to save configuration '{name}': {e}")
         return False
@@ -364,11 +364,11 @@ def delete_config(name: str) -> bool:
             if APP_LOGGER:
                 APP_LOGGER.info(f"Configuration '{name}' deleted from {file_path}")
             return True
-        except Exception:
+        except OSError:
             # Clean up temp file on error
             try:
                 os.unlink(temp_path)
-            except Exception as cleanup_error:
+            except OSError as cleanup_error:
                 if APP_LOGGER:
                     APP_LOGGER.error(
                         f"Failed to clean up temporary file {temp_path}: {cleanup_error}"
@@ -380,7 +380,7 @@ def delete_config(name: str) -> bool:
                     )
             raise
 
-    except Exception as e:
+    except OSError as e:
         if APP_LOGGER:
             APP_LOGGER.error(f"Failed to delete configuration '{name}': {e}")
         return False
@@ -460,11 +460,11 @@ def backup_config(config_path: str | None = None) -> tuple[bool, str]:
                 APP_LOGGER.info(f"Configuration backed up to {backup_path}")
             return True, f"Configuration backed up to {backup_path}"
 
-        except Exception:
+        except OSError:
             # Clean up temp file on error
             try:
                 os.unlink(temp_path)
-            except Exception as cleanup_error:
+            except OSError as cleanup_error:
                 if APP_LOGGER:
                     APP_LOGGER.error(
                         f"Failed to clean up temporary file {temp_path}: {cleanup_error}"
@@ -475,7 +475,7 @@ def backup_config(config_path: str | None = None) -> tuple[bool, str]:
         if APP_LOGGER:
             APP_LOGGER.error(f"Permission denied creating backup: {e}")
         return False, "Cannot create backup: permission denied"
-    except Exception as e:
+    except OSError as e:
         if APP_LOGGER:
             APP_LOGGER.error(f"Failed to create backup: {e}")
         return False, f"Cannot create backup: {e}"

@@ -72,7 +72,7 @@ def clean_lazyssh_dir() -> Path:
     # Ensure directory exists
     LAZYSSH_TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-    yield LAZYSSH_TMP_DIR
+    return LAZYSSH_TMP_DIR
 
 
 @pytest.fixture

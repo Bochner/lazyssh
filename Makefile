@@ -1,4 +1,4 @@
-.PHONY: help install run fmt fix lint test check build clean version publish pre-commit pre-commit-install
+.PHONY: help install run fmt fix lint test check verify build clean version publish pre-commit pre-commit-install
 
 SHELL := /bin/bash
 
@@ -23,6 +23,7 @@ help:
 	@echo "  make lint       Run linter (ruff check)"
 	@echo "  make test       Run tests with coverage"
 	@echo "  make check      Run all quality checks"
+	@echo "  make verify     Full verification (check + test + build)"
 	@echo ""
 	@echo -e "$(GREEN)Git Hooks:$(NC)"
 	@echo "  make pre-commit-install   Install pre-commit hooks"
@@ -59,6 +60,9 @@ check:
 	@echo -e "$(BLUE)Running quality checks...$(NC)"
 	@hatch run check
 	@echo -e "$(GREEN)All checks passed$(NC)"
+
+verify: check test build
+	@echo -e "$(GREEN)Full verification passed$(NC)"
 
 build:
 	@rm -rf dist/

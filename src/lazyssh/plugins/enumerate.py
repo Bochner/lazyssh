@@ -33,17 +33,17 @@ try:  # pragma: no cover - optional Rich import for fallback modes
     from rich.panel import Panel
     from rich.table import Table
     from rich.text import Text
-except Exception:  # pragma: no cover - Rich disabled or unavailable
-    box = None  # type: ignore[assignment,misc]
-    Panel = None  # type: ignore[assignment,misc]
-    Table = None  # type: ignore[assignment,misc]
-    Text = None  # type: ignore[assignment,misc]
+except ImportError:  # pragma: no cover - Rich disabled or unavailable
+    box = None  # type: ignore[assignment]  # fallback when Rich is unavailable
+    Panel = None  # type: ignore[assignment,misc]  # fallback when Rich is unavailable
+    Table = None  # type: ignore[assignment,misc]  # fallback when Rich is unavailable
+    Text = None  # type: ignore[assignment,misc]  # fallback when Rich is unavailable
 
 try:  # pragma: no cover - logging module may be unavailable when packaged separately
     from lazyssh.logging_module import APP_LOGGER, CONNECTION_LOG_DIR_TEMPLATE
-except Exception:  # pragma: no cover - provide safe fallbacks
-    APP_LOGGER = None  # type: ignore[assignment]
-    CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"
+except ImportError:  # pragma: no cover - provide safe fallbacks
+    APP_LOGGER = None  # fallback when logging module is unavailable
+    CONNECTION_LOG_DIR_TEMPLATE = "/tmp/lazyssh/{connection_name}.d/logs"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
 
 from lazyssh.plugins._enumeration_plan import (
     PRIORITY_HEURISTICS,
@@ -305,7 +305,7 @@ def _decode_payload(payload: str, encoding: str) -> str:
         try:
             raw = base64.b64decode(payload.encode("ascii"), validate=False)
             return raw.decode("utf-8", errors="replace")
-        except Exception:
+        except (ValueError, UnicodeDecodeError):
             # If base64 decoding fails, return the original payload as fallback
             return payload
     if encoding == "hex":
@@ -354,12 +354,12 @@ def _build_snapshot(
 
         try:
             stdout_text = _decode_payload(stdout_encoded, encoding)
-        except Exception as exc:
+        except (ValueError, UnicodeDecodeError) as exc:
             stdout_text = ""
             warnings.append(f"Failed to decode stdout for {category}.{key}: {exc}")
         try:
             stderr_text = _decode_payload(stderr_encoded, encoding)
-        except Exception as exc:
+        except (ValueError, UnicodeDecodeError) as exc:
             stderr_text = ""
             warnings.append(f"Failed to decode stderr for {category}.{key}: {exc}")
 
@@ -836,13 +836,13 @@ def _resolve_log_dir() -> Path:
     )
     if connection_name and "/" in connection_name:
         connection_name = Path(connection_name).name
-    template = CONNECTION_LOG_DIR_TEMPLATE or "/tmp/lazyssh/{connection_name}.d/logs"
+    template = CONNECTION_LOG_DIR_TEMPLATE or "/tmp/lazyssh/{connection_name}.d/logs"  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
     path = Path(template.format(connection_name=connection_name))
     try:
         path.mkdir(parents=True, exist_ok=True)
         return path
-    except Exception:
-        fallback = Path("/tmp/lazyssh/logs")
+    except (OSError, ValueError):  # ValueError for invalid path chars (e.g. null bytes)
+        fallback = Path("/tmp/lazyssh/logs")  # noqa: S108  # /tmp/lazyssh is the documented runtime directory
         fallback.mkdir(parents=True, exist_ok=True)
         return fallback
 

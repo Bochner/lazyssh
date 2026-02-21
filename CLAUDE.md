@@ -194,6 +194,8 @@ def test_with_connection(self, ssh_manager: SSHManager, monkeypatch: pytest.Monk
 - `LAZYSSH_HIGH_CONTRAST` - High contrast theme
 - `LAZYSSH_COLORBLIND_MODE` - Colorblind-friendly palette
 
+See `docs/reference.md` for the full environment variable table including SSH path overrides, logging, and plugin API variables.
+
 ## Changelog Maintenance
 
 **Always update `CHANGELOG.md` when making user-facing changes.** Follow [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
