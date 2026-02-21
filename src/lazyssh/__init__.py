@@ -5,7 +5,7 @@ This package provides tools for managing SSH connections, creating tunnels,
 and opening terminal sessions through an interactive command-line interface.
 """
 
-__version__ = "1.6.5"
+__version__ = "1.6.6"
 __author__ = "Bochner"
 __email__ = ""
 __license__ = "MIT"
