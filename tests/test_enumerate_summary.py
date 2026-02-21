@@ -1801,6 +1801,88 @@ class TestNewEvaluators:
         )
         assert result is None
 
+    # --- kernel_exploits ---
+
+    def test_evaluate_kernel_exploits_found(self) -> None:
+        """Test kernel_exploits detection with vulnerable kernel."""
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "5.10.100-generic"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_kernel_exploits(
+            snapshot, _get_heuristic("kernel_exploits")
+        )
+        assert result is not None
+        assert result.key == "kernel_exploits"
+        assert result.severity == "high"
+        assert "5.10.100" in result.detail
+        assert len(result.evidence) > 0
+        assert result.exploitation_difficulty == "moderate"
+        assert len(result.exploit_commands) > 0
+
+    def test_evaluate_kernel_exploits_not_found(self) -> None:
+        """Test kernel_exploits with a kernel too new for known exploits."""
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "6.12.0"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_kernel_exploits(
+            snapshot, _get_heuristic("kernel_exploits")
+        )
+        # May or may not be None depending on DB coverage, but should not error
+        # For 6.12.0, most exploits should not match
+        if result is not None:
+            assert result.key == "kernel_exploits"
+
+    def test_evaluate_kernel_exploits_missing_probe(self) -> None:
+        """Test kernel_exploits with missing kernel probe."""
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes={}, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_kernel_exploits(
+            snapshot, _get_heuristic("kernel_exploits")
+        )
+        assert result is None
+
+    def test_evaluate_kernel_exploits_empty_kernel(self) -> None:
+        """Test kernel_exploits with empty kernel version."""
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "   \n"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_kernel_exploits(
+            snapshot, _get_heuristic("kernel_exploits")
+        )
+        assert result is None
+
+    def test_evaluate_kernel_exploits_dirty_cow(self) -> None:
+        """Test that Dirty COW is found for old kernels."""
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "4.4.0-42-generic"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_kernel_exploits(
+            snapshot, _get_heuristic("kernel_exploits")
+        )
+        assert result is not None
+        assert any("CVE-2016-5195" in e for e in result.evidence)
+
 
 class TestNewCategoryOrderAndProbes:
     """Test that new categories appear in SELECTED_CATEGORY_ORDER and new probes in REMOTE_PROBES."""

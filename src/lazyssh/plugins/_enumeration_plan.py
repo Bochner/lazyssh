@@ -694,4 +694,11 @@ PRIORITY_HEURISTICS: tuple[PriorityHeuristic, ...] = (
         headline="Recently modified files in sensitive locations",
         description="Files modified in the last 24 hours in /etc, /usr/local/bin, or /usr/local/sbin may indicate active changes.",
     ),
+    PriorityHeuristic(
+        key="kernel_exploits",
+        category="system",
+        severity="high",
+        headline="Kernel version matches known privilege-escalation CVEs",
+        description="Running kernel version falls within the affected range of one or more public kernel exploits (Dirty Pipe, Dirty COW, PwnKit, etc.).",
+    ),
 )

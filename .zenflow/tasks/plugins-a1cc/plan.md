@@ -92,7 +92,8 @@ Create the embedded GTFOBins database covering ~100 common exploitable binaries 
 
 **Spec references:** Section 1.3
 
-### [ ] Step 3: Kernel Exploit Suggester
+### [x] Step 3: Kernel Exploit Suggester
+<!-- chat-id: 8a0e5170-5c58-45cc-bc9b-6c61be5ef5d0 -->
 
 Create the kernel exploit database with version-range matching and a lookup function. Wire it into the enumeration evaluator system.
 

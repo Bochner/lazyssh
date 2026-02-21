@@ -51,6 +51,7 @@ from lazyssh.plugins._enumeration_plan import (
     PriorityHeuristic,
     RemoteProbe,
 )
+from lazyssh.plugins._kernel_exploits import suggest_exploits
 
 Severity = str  # alias for readability; values constrained to "high", "medium", "info"
 
@@ -1206,6 +1207,34 @@ def _evaluate_recent_modifications(
     )
 
 
+def _evaluate_kernel_exploits(
+    snapshot: EnumerationSnapshot, meta: PriorityHeuristic
+) -> PriorityFinding | None:
+    """Check running kernel version against known CVE database."""
+    kernel_probe = _get_probe(snapshot, "system", "kernel")
+    if not kernel_probe or not kernel_probe.stdout.strip():
+        return None
+
+    kernel_version = kernel_probe.stdout.strip().split()[0]
+    matches = suggest_exploits(kernel_version)
+    if not matches:
+        return None
+
+    evidence = [f"{e.cve} — {e.name}: {e.description}" for e in matches[:6]]
+    exploit_cmds = [f"# {e.cve} ({e.name}): {e.reference_url}" for e in matches[:6]]
+
+    return PriorityFinding(
+        key=meta.key,
+        category=meta.category,
+        severity=meta.severity,
+        headline=meta.headline,
+        detail=f"Kernel {kernel_version} matches {len(matches)} known exploit(s)",
+        evidence=evidence,
+        exploitation_difficulty="moderate",
+        exploit_commands=exploit_cmds,
+    )
+
+
 HEURISTIC_EVALUATORS = {
     "sudo_membership": _evaluate_sudo_membership,
     "passwordless_sudo": _evaluate_passwordless_sudo,
@@ -1230,6 +1259,7 @@ HEURISTIC_EVALUATORS = {
     "cloud_environment": _evaluate_cloud_environment,
     "interesting_backups": _evaluate_interesting_backups,
     "recent_modifications": _evaluate_recent_modifications,
+    "kernel_exploits": _evaluate_kernel_exploits,
 }
 
 
