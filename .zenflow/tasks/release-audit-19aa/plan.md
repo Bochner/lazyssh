@@ -188,3 +188,14 @@ Full quality gate and summary.
   - **noqa comments**: 53 (all with explanatory notes)
   - **type: ignore comments**: 6 (all with error codes and explanations)
   - **Deferred items**: None — all planned audit work is complete
+
+### [x] Step: bump version
+<!-- chat-id: 8de379c7-3606-46d1-91ad-32531ab41d01 -->
+
+increment hatch version to 1.6.3
+
+- [x] Bumped version from 1.6.2 to 1.6.3 via `hatch version 1.6.3`
+- [x] Moved CHANGELOG `[Unreleased]` entries to `[1.6.3] - 2026-02-20` section
+- [x] Verified `make check` — zero ruff violations, zero mypy errors, version prints 1.6.3
+- [x] Verified `make test` — 966 tests passed, 97.06% branch coverage
+- [x] Verified `make build` — `lazyssh-1.6.3` sdist and wheel built, `twine check` passed

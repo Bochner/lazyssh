@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-02-20
+
 ### Changed
 - **Security**: Removed `shell=True` from subprocess calls in tunnel creation and teardown, converting string commands to argument lists to eliminate command injection risk
 - **Exception Handling**: Narrowed broad `except Exception` catches across all modules to specific exception types (`OSError`, `subprocess.SubprocessError`, `ValueError`, etc.) with explanatory comments
