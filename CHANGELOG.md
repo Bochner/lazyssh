@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Enumeration Probe Expansion**: Added ~40 new probes across 6 new categories for comprehensive privilege escalation scanning
+  - **Capabilities**: Binary capability discovery (`getcap`) with dangerous capability filtering
+  - **Container Escape**: Docker group membership, socket access, container indicators, Kubernetes service account detection
+  - **Credentials**: Readable shadow file, SSH private keys, cloud credential files (AWS/GCP/Azure), database configs, shell history secrets, `.env` files
+  - **Writable Paths**: Writable PATH directories, `/etc/passwd`, `/etc/shadow`, cron files, systemd services, log files, `/tmp` sticky bit, SGID directories
+  - **Library Hijack**: `LD_PRELOAD`/`LD_LIBRARY_PATH` opportunities, Python/Ruby path injection, writable shared library directories
+  - **Interesting Files**: Backup archives, mail spools, `/opt` directory contents, core dumps, `.bash_history` files
+  - Expanded existing categories with NFS exports, `doas.conf`, polkit rules, and `pkexec` version probes
+- **GTFOBins Cross-Reference**: Embedded database of ~100 exploitable binaries with SUID, sudo, and capabilities exploitation techniques
+  - Automatic cross-referencing of discovered SUID binaries and sudo-allowed commands against GTFOBins
+  - Actionable exploit commands included directly in findings output
+  - Lookup functions for SUID, sudo, and capabilities exploitation vectors
+- **Kernel Exploit Suggester**: Built-in database of ~15 kernel CVEs (DirtyPipe, DirtyCOW, PwnKit, Overlayfs, Netfilter, Baron Samedit, Polkit, Sequoia, GameOver(lay), Looney Tunables, nf_tables, Dirty Cred, etc.)
+  - Robust kernel version parsing (handles formats like `5.10.100-generic`, `4.15.0-213-generic`)
+  - Automatic matching against running kernel version with CVE details and references
+- **Autopwn Engine**: Automated exploitation of discovered vulnerabilities with user confirmation
+  - Supports writable `/etc/passwd` exploitation, GTFOBins SUID/sudo exploitation, Docker container escape, writable cron injection, and writable systemd service modification
+  - `--autopwn` flag to enable automatic exploitation after enumeration
+  - `--dry-run` flag to preview exploitation commands without executing
+  - Interactive confirmation before each exploit attempt
+- **Quick Wins Summary**: New output section highlighting immediately exploitable findings
+  - Findings grouped by exploitation difficulty: Instant, Easy, Moderate
+  - Displayed at the top of enumeration output for rapid triage
+  - Available in both Rich and plain-text rendering modes
+- **Critical Severity Level**: Added `critical` severity for the most dangerous findings (e.g., writable passwd, known kernel exploits)
+- **Upload-and-Execute Plugin**: New built-in plugin for uploading and executing binaries on remote hosts
+  - Upload any local binary via SCP and execute it remotely with configurable arguments
+  - Automatic remote staging directory creation and cleanup
+  - `--msfvenom` flag for automatic payload generation with architecture-appropriate defaults
+  - `PAYLOAD_PRESETS` with pre-configured payloads for Linux (x86, x64, ARM, MIPS) and architecture auto-detection
+  - Interactive mode with Rich prompts: choose upload, msfvenom generation, or upload-only workflows
+  - `--dry-run` mode to preview all commands without execution
+  - Background execution, timeout, and output capture options
+  - Handler command generation for Metasploit multi/handler setup
+- **Architecture Auto-Detection**: Remote architecture detection module using SSH control socket
+  - Detects OS and CPU architecture via `uname -m` and `uname -s`
+  - Maps to msfvenom-compatible architecture/platform strings
+- **New Environment Variable**: `LAZYSSH_CONNECTION_DIR` injected into plugin execution environment, providing the per-connection workspace directory path
+
+### Changed
+- **Enumeration JSON Output**: `exploitation_difficulty` and `exploit_commands` fields now included in priority findings JSON payload
+- **Enumeration Finding Detail**: Exploit commands displayed inline with finding evidence when available
+
 ## [1.6.0] - 2026-01-24
 
 ### Added

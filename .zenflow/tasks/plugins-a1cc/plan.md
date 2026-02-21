@@ -211,7 +211,8 @@ Create the remote architecture detection module and the complete upload-and-exec
 
 **Spec references:** Sections 2.1-2.7, 3.1
 
-### [ ] Step 8: Final Integration, CHANGELOG, and Verification
+### [x] Step 8: Final Integration, CHANGELOG, and Verification
+<!-- chat-id: 53c54a33-2611-4316-ac27-1677e6e7bbb6 -->
 
 End-to-end integration verification, CHANGELOG update, and full `make verify` pass.
 
@@ -219,10 +220,17 @@ End-to-end integration verification, CHANGELOG update, and full `make verify` pa
 - `CHANGELOG.md` — Add entries under `[Unreleased]` for: expanded enumeration probes, GTFOBins integration, kernel exploit suggester, autopwn engine, Quick Wins output, upload-exec plugin, msfvenom integration, new `LAZYSSH_CONNECTION_DIR` env var
 
 **Substeps:**
-- [ ] Run `make verify` (check + test + build) and fix any failures
-- [ ] Update CHANGELOG.md with all user-facing changes
-- [ ] Verify plugin discovery: both `enumerate` and `upload-exec` appear in packaged plugins
-- [ ] Verify `--json` output includes new `exploitation_difficulty` and `exploit_commands` fields
-- [ ] Final `make verify` pass — record results in plan.md
+- [x] Run `make verify` (check + test + build) and fix any failures
+- [x] Update CHANGELOG.md with all user-facing changes
+- [x] Verify plugin discovery: both `enumerate` and `upload-exec` appear in packaged plugins
+- [x] Verify `--json` output includes new `exploitation_difficulty` and `exploit_commands` fields
+- [x] Final `make verify` pass — record results in plan.md
 
 **Spec references:** Section 3.3, Phase 6
+
+**Final Verification Results:**
+- `make check`: ruff format ✅, ruff check ✅, mypy ✅ (19 source files, no issues)
+- `make test`: 1178 tests passed in 5.76s, 99% coverage (4498 stmts, 63 missed)
+- `make build`: sdist + wheel built, both passed `check-wheel-contents` verification
+- Plugin discovery: `enumerate.py` and `upload_exec.py` both present in `lazyssh-1.6.2-py3-none-any.whl`
+- JSON output: `PriorityFinding.to_dict()` includes `exploitation_difficulty` and `exploit_commands` fields (lines 151-152 of enumerate.py)
