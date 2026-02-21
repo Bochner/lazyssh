@@ -199,3 +199,18 @@ increment hatch version to 1.6.3
 - [x] Verified `make check` — zero ruff violations, zero mypy errors, version prints 1.6.3
 - [x] Verified `make test` — 966 tests passed, 97.06% branch coverage
 - [x] Verified `make build` — `lazyssh-1.6.3` sdist and wheel built, `twine check` passed
+
+### [x] Step: update pytest
+<!-- chat-id: b4d37452-33b3-4da2-a8e3-43bd0db5b3e6 -->
+
+Modernize pytest configuration with best-practice plugins and strict settings.
+
+- [x] Research current pytest setup: pytest 9.0.2 (latest), 966 tests in 3.4s, 55 ResourceWarnings, no DeprecationWarnings, no custom markers
+- [x] Evaluated pytest-xdist: skipped — test suite runs in ~3.4s, parallel overhead would exceed benefit
+- [x] Added `pytest-randomly` plugin for randomized test execution order (catches hidden test interdependencies; seed logged per run, reproducible via `--randomly-seed=<N>`)
+- [x] Added `pytest-sugar` plugin for improved developer experience (progress bars, colored output, instant failure display)
+- [x] Enabled `strict_markers = true` — typos in `@pytest.mark.*` decorators now error immediately instead of silently passing
+- [x] Enabled `strict_config = true` — typos in `[tool.pytest.ini_options]` keys now error at session start
+- [x] Added `filterwarnings = ["error", "default::ResourceWarning"]` — all warnings treated as errors except ResourceWarnings (subprocess pipe cleanup handled by GC)
+- [x] Updated CHANGELOG with new testing entries
+- [x] Run `make check && make test && make build` — zero ruff violations, zero mypy errors, 966 tests passed, 97% branch coverage, build clean

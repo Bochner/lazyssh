@@ -84,6 +84,8 @@ dependencies = [
     "pytest-cov",
     "pytest-html",
     "pytest-timeout",
+    "pytest-randomly",
+    "pytest-sugar",
     "build",
     "twine",
 ]
@@ -181,6 +183,13 @@ python_files = "test_*.py"
 python_functions = "test_*"
 python_classes = "Test*"
 addopts = "-x --tb=short"
+strict_markers = true
+strict_config = true
+filterwarnings = [
+    "error",
+    # subprocess.Popen pipes in plugin execution tests are cleaned up by GC
+    "default::ResourceWarning",
+]
 timeout = 30
 timeout_method = "thread"
 log_cli = false

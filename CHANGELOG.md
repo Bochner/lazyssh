@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Linting**: Enabled Ruff security (`S`), pytest-style (`PT`), and return-statement (`RET`) rules with per-file ignores for tests
 - **Type Checking**: Strengthened mypy configuration with `disallow_untyped_defs`, `strict_equality`, `no_implicit_optional`, and per-module overrides replacing global `ignore_missing_imports`
 - **Testing**: Converted repetitive test groups to `@pytest.mark.parametrize` with descriptive IDs, increasing test count from 955 to 966
+- **Testing**: Added `pytest-randomly` for randomized test execution order (catches hidden test interdependencies) and `pytest-sugar` for improved test output with progress bars
+- **Testing**: Enabled `strict_markers` and `strict_config` to catch typos in marker names and config options; added `filterwarnings = ["error"]` to treat warnings as errors (ResourceWarnings downgraded to default)
 - **Coverage**: Enabled branch coverage tracking; set `fail_under = 97` threshold in pyproject.toml
 - **Documentation**: Updated `openspec/project.md` to reflect strict type enforcement and branch coverage threshold; added `LAZYSSH_SHELL` to plugin template env var reference
 
