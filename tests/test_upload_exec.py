@@ -806,6 +806,148 @@ class TestBuildParser:
 # ---------------------------------------------------------------------------
 
 
+class TestSshExecWithPort:
+    """Tests for _ssh_exec with LAZYSSH_PORT set (line 161)."""
+
+    def test_with_port(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+        monkeypatch.setenv("LAZYSSH_PORT", "2222")
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "ok"
+        mock_result.stderr = ""
+
+        with mock.patch("subprocess.run", return_value=mock_result) as mock_run:
+            exit_code, stdout, _ = _ssh_exec("echo ok")
+            assert exit_code == 0
+            assert stdout == "ok"
+            # Verify -p flag is in the command
+            call_args = mock_run.call_args[0][0]
+            assert "-p" in call_args
+            assert "2222" in call_args
+
+
+class TestUploadAndExecuteEdgeCases:
+    """Tests for upload_and_execute edge cases."""
+
+    def test_chmod_failure(
+        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test chmod fails after upload (lines 238-239)."""
+        test_file = str(tmp_path) + "/test_bin"  # type: ignore[operator]
+        with open(test_file, "w") as f:
+            f.write("#!/bin/sh\necho hello\n")
+
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        staging_result = mock.MagicMock()
+        staging_result.returncode = 0
+        staging_result.stdout = ""
+        staging_result.stderr = ""
+
+        chmod_result = mock.MagicMock()
+        chmod_result.returncode = 1
+        chmod_result.stdout = ""
+        chmod_result.stderr = "chmod: operation not permitted"
+
+        call_count = 0
+
+        def side_effect(*args: object, **kwargs: object) -> mock.MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return staging_result  # mkdir
+            return chmod_result  # chmod
+
+        with (
+            mock.patch("subprocess.run", side_effect=side_effect),
+            mock.patch("lazyssh.plugins.upload_exec._scp_upload", return_value=True),
+        ):
+            result = upload_and_execute(test_file)
+            assert result == 1
+
+    def test_remote_args_appended(
+        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test remote_args are appended to exec command (line 244)."""
+        test_file = str(tmp_path) + "/test_bin"  # type: ignore[operator]
+        with open(test_file, "w") as f:
+            f.write("#!/bin/sh\necho hello\n")
+
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "hello"
+        mock_result.stderr = ""
+
+        with (
+            mock.patch("subprocess.run", return_value=mock_result),
+            mock.patch("lazyssh.plugins.upload_exec._scp_upload", return_value=True),
+        ):
+            result = upload_and_execute(test_file, remote_args="--flag value")
+            assert result == 0
+
+    def test_stderr_and_nonzero_exit(
+        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test stderr output and non-zero exit code (lines 260, 263)."""
+        test_file = str(tmp_path) + "/test_bin"  # type: ignore[operator]
+        with open(test_file, "w") as f:
+            f.write("#!/bin/sh\necho hello\n")
+
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        staging_result = mock.MagicMock()
+        staging_result.returncode = 0
+        staging_result.stdout = ""
+        staging_result.stderr = ""
+
+        chmod_result = mock.MagicMock()
+        chmod_result.returncode = 0
+        chmod_result.stdout = ""
+        chmod_result.stderr = ""
+
+        exec_result = mock.MagicMock()
+        exec_result.returncode = 2
+        exec_result.stdout = ""
+        exec_result.stderr = "segmentation fault"
+
+        cleanup_result = mock.MagicMock()
+        cleanup_result.returncode = 0
+        cleanup_result.stdout = ""
+        cleanup_result.stderr = ""
+
+        call_count = 0
+
+        def side_effect(*args: object, **kwargs: object) -> mock.MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return staging_result
+            if call_count == 2:
+                return chmod_result
+            if call_count == 3:
+                return exec_result
+            return cleanup_result
+
+        with (
+            mock.patch("subprocess.run", side_effect=side_effect),
+            mock.patch("lazyssh.plugins.upload_exec._scp_upload", return_value=True),
+        ):
+            result = upload_and_execute(test_file)
+            assert result == 2
+
+
 class TestShowUsage:
     """Tests for _show_usage function."""
 

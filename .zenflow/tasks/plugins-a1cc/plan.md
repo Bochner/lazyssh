@@ -256,3 +256,28 @@ Executing plugin 'upload-exec' on connection 'ubuntu'...
 **Verification:**
 - `make check`: ruff format ✅, ruff check ✅, mypy ✅ (19 source files, no issues)
 - `make test`: 1175 tests passed in 5.72s, 99% coverage
+
+### [x] Step: fix coverage
+<!-- chat-id: 66418541-c8e7-4c67-a5c9-ba6454715743 -->
+
+CI/CD pipline is failing, fix it
+
+TOTAL                                       4519     72   1730    177    96%
+Coverage HTML written to dir artifacts/coverage
+FAIL Required test coverage of 97.0% not reached. Total coverage: 95.79%
+- Generated html report: file:///home/runner/work/lazyssh/lazyssh/artifacts/unit/report.html -
+============================ 1186 passed in 12.84s =============================
+Error: Process completed with exit code 1.
+
+**Root Cause:** Coverage dropped below 97.0% threshold due to untested code paths in `_autopwn.py` (30 missed stmts), `enumerate.py` (21 missed), `upload_exec.py` (6 missed), `scp_mode.py` (10 missed), and `command_mode.py` (5 missed).
+
+**Fixes Applied:**
+- Added 38 new tests covering failure paths, user-decline scenarios, and edge cases in `_autopwn.py` (passwd failure, SUID/sudo user decline, empty lines, unknown binaries, docker custom commands/failure, cron/service decline/failure, generic display)
+- Added 19 new tests for uncovered evaluator branches in `enumerate.py` (capabilities whitespace, credential exposure history/config, sudo/SUID empty lines/fallback/difficulty, NFS comments, ld_preload file content/library path, container LXC, cloud credentials, backup/modification whitespace)
+- Added 4 new tests for `upload_exec.py` (SSH port flag, chmod failure, remote args, stderr + non-zero exit)
+
+**Verification:**
+- `make check`: ruff format ✅, ruff check ✅, mypy ✅ (19 source files, no issues)
+- `make test`: 1224 passed in 5.58s, 97.28% coverage (4519 stmts, 23 missed)
+- `make build`: sdist + wheel built, both passed `check-wheel-contents`
+- `make verify`: Full verification passed

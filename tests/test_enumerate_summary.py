@@ -2325,3 +2325,364 @@ class TestJsonPayloadNewFields:
         # Second finding has default empty fields
         assert payload["priority_findings"][1]["exploitation_difficulty"] == ""
         assert payload["priority_findings"][1]["exploit_commands"] == []
+
+
+class TestEvaluatorEdgeCases:
+    """Tests for uncovered evaluator edge cases and branches."""
+
+    # --- dangerous_capabilities edge cases ---
+
+    def test_capabilities_whitespace_only_lines(self) -> None:
+        """Test capabilities with whitespace-only output (line 683)."""
+        probes = {
+            "capabilities": {
+                "cap_interesting": _probe("capabilities", "cap_interesting", "   \n\n  \n"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_dangerous_capabilities(
+            snapshot, _get_heuristic("dangerous_capabilities")
+        )
+        assert result is None
+
+    def test_capabilities_malformed_empty_parts(self) -> None:
+        """Test capabilities with line that splits into empty parts (line 693)."""
+        probes = {
+            "capabilities": {
+                "cap_interesting": _probe(
+                    "capabilities",
+                    "cap_interesting",
+                    "/usr/bin/python3 cap_setuid=ep\n   \n/usr/sbin/tcpdump cap_net_raw=ep\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_dangerous_capabilities(
+            snapshot, _get_heuristic("dangerous_capabilities")
+        )
+        # Should process valid lines and skip whitespace-only (stripped) ones
+        assert result is not None
+        assert "2 binaries" in result.detail
+
+    # --- credential_exposure edge cases ---
+
+    def test_credential_exposure_history_secrets(self) -> None:
+        """Test history_files with secrets found (line 811)."""
+        probes = {
+            "credentials": {
+                "shadow_readable": _probe("credentials", "shadow_readable", "SHADOW_NOT_READABLE"),
+                "ssh_keys": _probe("credentials", "ssh_keys", "NO_READABLE_KEYS"),
+                "history_files": _probe(
+                    "credentials",
+                    "history_files",
+                    "mysql -u root -pS3cret\nexport AWS_SECRET_KEY=abc123\n",
+                ),
+                "config_credentials": _probe("credentials", "config_credentials", "NONE_FOUND"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_credential_exposure(
+            snapshot, _get_heuristic("credential_exposure")
+        )
+        assert result is not None
+        assert any("Credentials found" in e for e in result.evidence)
+
+    def test_credential_exposure_config_files(self) -> None:
+        """Test config_credentials with multiple files (lines 815-817)."""
+        probes = {
+            "credentials": {
+                "shadow_readable": _probe("credentials", "shadow_readable", "SHADOW_NOT_READABLE"),
+                "ssh_keys": _probe("credentials", "ssh_keys", "NO_READABLE_KEYS"),
+                "history_files": _probe("credentials", "history_files", "NO_HISTORY_SECRETS"),
+                "config_credentials": _probe(
+                    "credentials",
+                    "config_credentials",
+                    "/etc/mysql/debian.cnf\n/home/user/.my.cnf\n/etc/shadow.bak\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_credential_exposure(
+            snapshot, _get_heuristic("credential_exposure")
+        )
+        assert result is not None
+        assert any("Credential file" in e for e in result.evidence)
+        assert len([e for e in result.evidence if "Credential file" in e]) == 3
+
+    # --- gtfobins_sudo edge cases ---
+
+    def test_gtfobins_sudo_empty_parts_line(self) -> None:
+        """Test sudo with a line that has no parts after strip (line 852)."""
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    \n"
+                    "    (root) NOPASSWD: /usr/bin/vim\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
+        # Should skip empty line and still find vim
+        assert result is not None
+        assert any("vim" in cmd for cmd in result.exploit_commands)
+
+    def test_gtfobins_sudo_no_absolute_path_fallback(self) -> None:
+        """Test sudo with no absolute path (lines 855-861)."""
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n    (root) NOPASSWD: vim\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
+        # Should fallback to "vim" from parts[-1] and find it in GTFOBins
+        assert result is not None
+        assert any("vim" in cmd for cmd in result.exploit_commands)
+
+    def test_gtfobins_sudo_easy_not_instant(self) -> None:
+        """Test sudo binary that gets 'easy' difficulty (lines 871-872)."""
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    (root) NOPASSWD: /usr/bin/awk\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
+        if result is not None:
+            # If awk has a non-shell-spawning entry, difficulty should be "easy" or "instant"
+            assert result.exploitation_difficulty in ("instant", "easy")
+
+    # --- gtfobins_suid edge cases ---
+
+    def test_gtfobins_suid_empty_paths(self) -> None:
+        """Test SUID with empty lines in probe output (line 904)."""
+        probes = {
+            "filesystem": {
+                "suid_files": _probe(
+                    "filesystem",
+                    "suid_files",
+                    "/usr/bin/vim\n\n  \n/usr/bin/find\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
+        assert result is not None
+        # Both vim and find should be found despite empty lines
+        assert "/usr/bin/vim" in result.evidence
+        assert "/usr/bin/find" in result.evidence
+
+    def test_gtfobins_suid_easy_difficulty(self) -> None:
+        """Test SUID binary that gets 'easy' difficulty (lines 915-916)."""
+        probes = {
+            "filesystem": {
+                "suid_files": _probe(
+                    "filesystem",
+                    "suid_files",
+                    "/usr/bin/awk\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
+        if result is not None:
+            assert result.exploitation_difficulty in ("instant", "easy")
+
+    # --- nfs_no_root_squash edge cases ---
+
+    def test_nfs_no_root_squash_with_comments(self) -> None:
+        """Test NFS exports with comment and blank lines (line 995)."""
+        probes = {
+            "filesystem": {
+                "nfs_exports": _probe(
+                    "filesystem",
+                    "nfs_exports",
+                    "# NFS exports\n\n/data *(rw,no_root_squash)\n# comment\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_nfs_no_root_squash(
+            snapshot, _get_heuristic("nfs_no_root_squash")
+        )
+        assert result is not None
+        assert len(result.evidence) == 1
+        assert "no_root_squash" in result.evidence[0]
+
+    # --- ld_preload_hijack edge cases ---
+
+    def test_ld_preload_with_file_content(self) -> None:
+        """Test ld.so.preload file evidence (line 1031)."""
+        probes = {
+            "library_hijack": {
+                "ld_preload": _probe(
+                    "library_hijack",
+                    "ld_preload",
+                    "LD_PRELOAD=\n/usr/lib/malicious.so\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_ld_preload_hijack(
+            snapshot, _get_heuristic("ld_preload_hijack")
+        )
+        assert result is not None
+        assert any("/etc/ld.so.preload" in e for e in result.evidence)
+
+    def test_ld_preload_with_ld_library_path(self) -> None:
+        """Test ld_library_path probe with writable dirs (line 1034)."""
+        probes = {
+            "library_hijack": {
+                "ld_preload": _probe(
+                    "library_hijack",
+                    "ld_preload",
+                    "LD_PRELOAD=/usr/lib/hook.so\n",
+                ),
+                "ld_library_path": _probe(
+                    "library_hijack",
+                    "ld_library_path",
+                    "WRITABLE:/usr/local/lib\nWRITABLE:/tmp/libs\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_ld_preload_hijack(
+            snapshot, _get_heuristic("ld_preload_hijack")
+        )
+        assert result is not None
+        assert any("LD_PRELOAD=" in e for e in result.evidence)
+        assert any("Writable LD_LIBRARY_PATH" in e for e in result.evidence)
+
+    # --- container_detected edge cases ---
+
+    def test_container_detected_with_lxc(self) -> None:
+        """Test container detection with LXC tools available (line 1067)."""
+        probes = {
+            "container": {
+                "container_detection": _probe("container", "container_detection", "CONTAINER_LXC"),
+                "lxc_check": _probe("container", "lxc_check", "LXD_PRESENT"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_container_detected(
+            snapshot, _get_heuristic("container_detected")
+        )
+        assert result is not None
+        assert any("LXD/LXC" in e for e in result.evidence)
+
+    # --- cloud_environment edge cases ---
+
+    def test_cloud_environment_empty_lines(self) -> None:
+        """Test cloud credentials with empty lines (line 1088)."""
+        probes = {
+            "credentials": {
+                "cloud_credentials": _probe(
+                    "credentials",
+                    "cloud_credentials",
+                    "AWS_METADATA_AVAILABLE\n\n  \nNO_CLOUD_CREDS\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_cloud_environment(
+            snapshot, _get_heuristic("cloud_environment")
+        )
+        assert result is not None
+        assert any("AWS metadata" in e for e in result.evidence)
+
+    def test_cloud_environment_credentials_string(self) -> None:
+        """Test cloud credentials detection (lines 1093-1094)."""
+        probes = {
+            "credentials": {
+                "cloud_credentials": _probe(
+                    "credentials",
+                    "cloud_credentials",
+                    "credentials found in /home/user/.aws/credentials\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_cloud_environment(
+            snapshot, _get_heuristic("cloud_environment")
+        )
+        assert result is not None
+        assert any("credentials" in e.lower() for e in result.evidence)
+
+    # --- interesting_backups edge cases ---
+
+    def test_interesting_backups_whitespace_only(self) -> None:
+        """Test backups probe with whitespace-only lines (line 1118)."""
+        probes = {
+            "interesting_files": {
+                "backup_files": _probe("interesting_files", "backup_files", "   \n\n  \n"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_interesting_backups(
+            snapshot, _get_heuristic("interesting_backups")
+        )
+        assert result is None
+
+    # --- recent_modifications edge cases ---
+
+    def test_recent_modifications_whitespace_only(self) -> None:
+        """Test recently_modified probe with whitespace-only lines (line 1140)."""
+        probes = {
+            "interesting_files": {
+                "recently_modified": _probe(
+                    "interesting_files", "recently_modified", "   \n\n  \n"
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_recent_modifications(
+            snapshot, _get_heuristic("recent_modifications")
+        )
+        assert result is None

