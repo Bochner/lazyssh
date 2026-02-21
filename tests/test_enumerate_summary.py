@@ -2733,3 +2733,844 @@ class TestEvaluatorEdgeCases:
             snapshot, _get_heuristic("recent_modifications")
         )
         assert result is None
+
+
+class TestSeverityBadge:
+    """Tests for _severity_badge() Rich Text helper."""
+
+    def test_critical_badge(self) -> None:
+        """Test critical severity gets bold reverse error style."""
+        from rich.text import Text
+
+        badge = enumerate_plugin._severity_badge("critical")
+        assert isinstance(badge, Text)
+        assert "CRITICAL" in badge.plain
+        assert str(badge.style) == "bold reverse error"
+
+    def test_high_badge(self) -> None:
+        """Test high severity gets bold reverse error style."""
+        from rich.text import Text
+
+        badge = enumerate_plugin._severity_badge("high")
+        assert isinstance(badge, Text)
+        assert "HIGH" in badge.plain
+        assert str(badge.style) == "bold reverse error"
+
+    def test_medium_badge(self) -> None:
+        """Test medium severity gets bold warning style."""
+        from rich.text import Text
+
+        badge = enumerate_plugin._severity_badge("medium")
+        assert isinstance(badge, Text)
+        assert "MEDIUM" in badge.plain
+        assert str(badge.style) == "bold warning"
+
+    def test_info_badge(self) -> None:
+        """Test info severity gets info style."""
+        from rich.text import Text
+
+        badge = enumerate_plugin._severity_badge("info")
+        assert isinstance(badge, Text)
+        assert "INFO" in badge.plain
+        assert str(badge.style) == "info"
+
+
+class TestSeverityBadgePlain:
+    """Tests for _severity_badge_plain() plain text helper."""
+
+    def test_critical_plain(self) -> None:
+        assert enumerate_plugin._severity_badge_plain("critical") == "[CRITICAL]"
+
+    def test_high_plain(self) -> None:
+        assert enumerate_plugin._severity_badge_plain("high") == "[HIGH]"
+
+    def test_medium_plain(self) -> None:
+        assert enumerate_plugin._severity_badge_plain("medium") == "[MEDIUM]"
+
+    def test_info_plain(self) -> None:
+        assert enumerate_plugin._severity_badge_plain("info") == "[INFO]"
+
+
+class TestRenderStatsHeader:
+    """Tests for _render_stats_header() Rich Text helper."""
+
+    def test_counts_match_findings(self) -> None:
+        """Test that severity counts in stats header match input findings."""
+        from rich.text import Text
+
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="c",
+                severity="critical",
+                headline="h",
+                detail="d",
+                evidence=[],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="b",
+                category="c",
+                severity="high",
+                headline="h",
+                detail="d",
+                evidence=[],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="c",
+                category="c",
+                severity="medium",
+                headline="h",
+                detail="d",
+                evidence=[],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="d",
+                category="c",
+                severity="info",
+                headline="h",
+                detail="d",
+                evidence=[],
+            ),
+        ]
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._render_stats_header(findings, snapshot)
+        assert isinstance(result, Text)
+        plain = result.plain
+        assert "1 critical" in plain
+        assert "1 high" in plain
+        assert "1 medium" in plain
+        assert "1 info" in plain
+        assert "1 total" in plain
+        assert "0 failed" in plain
+
+    def test_zero_findings(self) -> None:
+        """Test stats header with no findings."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._render_stats_header([], snapshot)
+        plain = result.plain
+        assert "0 critical" in plain
+        assert "0 high" in plain
+        assert "1 total" in plain
+
+    def test_probe_failure_counting(self) -> None:
+        """Test stats header counts failed probes correctly."""
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "5.10", status=0),
+                "os_release": _probe("system", "os_release", "", status=1),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._render_stats_header([], snapshot)
+        plain = result.plain
+        assert "2 total" in plain
+        assert "1 failed" in plain
+
+
+class TestRenderStatsHeaderPlain:
+    """Tests for _render_stats_header_plain() plain text helper."""
+
+    def test_plain_format(self) -> None:
+        """Test plain text stats header format."""
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="c",
+                severity="critical",
+                headline="h",
+                detail="d",
+                evidence=[],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="b",
+                category="c",
+                severity="high",
+                headline="h",
+                detail="d",
+                evidence=[],
+            ),
+        ]
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "5.10", status=0),
+                "os_release": _probe("system", "os_release", "", status=1),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._render_stats_header_plain(findings, snapshot)
+        assert "1 critical" in result
+        assert "1 high" in result
+        assert "0 medium" in result
+        assert "0 info" in result
+        assert "2 total" in result
+        assert "1 failed" in result
+
+    def test_plain_format_zero_findings(self) -> None:
+        """Test plain text stats header with no findings or probes."""
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes={}, warnings=[]
+        )
+        result = enumerate_plugin._render_stats_header_plain([], snapshot)
+        assert "0 critical" in result
+        assert "0 total" in result
+        assert "0 failed" in result
+
+
+class TestRenderRichStatsHeader:
+    """Tests for stats header integration in render_rich output."""
+
+    def test_render_rich_displays_stats(self) -> None:
+        """Test that render_rich runs without errors with stats header."""
+        probes = {
+            "system": {"kernel": _probe("system", "kernel", "5.10.100")},
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="Test Finding",
+                detail="d",
+                evidence=["ev"],
+            ),
+        ]
+        # Should not crash — stats header is now printed
+        enumerate_plugin.render_rich(snapshot, findings)
+
+
+class TestRenderRichDisplayNames:
+    """Tests for human-friendly display names in render_rich category tables."""
+
+    def test_display_name_used_in_rich_output(self) -> None:
+        """Test that render_rich uses display names without crashing."""
+        probes = {
+            "filesystem": {
+                "suid_files": _probe("filesystem", "suid_files", "/usr/bin/sudo"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        # Should not crash — display names are now used
+        enumerate_plugin.render_rich(snapshot, [])
+
+    def test_display_name_mapping_exists(self) -> None:
+        """Test that PROBE_DISPLAY_NAMES has entries for common probe keys."""
+        assert "suid_files" in enumerate_plugin.PROBE_DISPLAY_NAMES
+        assert enumerate_plugin.PROBE_DISPLAY_NAMES["suid_files"] == "SUID Binaries"
+        assert "docker_group" in enumerate_plugin.PROBE_DISPLAY_NAMES
+        assert enumerate_plugin.PROBE_DISPLAY_NAMES["docker_group"] == "Docker Group Membership"
+
+    def test_display_name_fallback_for_unknown_key(self) -> None:
+        """Test that unknown keys fall back to raw key name."""
+        assert (
+            enumerate_plugin.PROBE_DISPLAY_NAMES.get("unknown_key_xyz", "unknown_key_xyz")
+            == "unknown_key_xyz"
+        )
+
+
+class TestRenderRichSeverityBadgeIntegration:
+    """Tests for _severity_badge() integration in render_rich."""
+
+    def test_severity_badge_in_priority_findings(self) -> None:
+        """Test that render_rich uses severity badges in Priority Findings without crash."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="critical",
+                headline="Critical Finding",
+                detail="d",
+                evidence=["ev1"],
+                exploitation_difficulty="instant",
+                exploit_commands=["cmd1"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="b",
+                category="test",
+                severity="high",
+                headline="High Finding",
+                detail="d",
+                evidence=["ev2"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="c",
+                category="test",
+                severity="medium",
+                headline="Medium Finding",
+                detail="d",
+                evidence=[],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="d",
+                category="test",
+                severity="info",
+                headline="Info Finding",
+                detail="d",
+                evidence=[],
+            ),
+        ]
+        # Should not crash — severity badges are now used instead of inline markup
+        enumerate_plugin.render_rich(snapshot, findings)
+
+    def test_evidence_in_priority_findings_detail(self) -> None:
+        """Test that evidence items appear in Priority Findings rich output."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="Test",
+                detail="detail text",
+                evidence=["evidence item 1", "evidence item 2"],
+            ),
+        ]
+        # Should not crash — evidence is now rendered in detail column
+        enumerate_plugin.render_rich(snapshot, findings)
+
+
+class TestQuickWinsTierSeparators:
+    """Tests for Quick Wins tier separators and tier label rows in render_rich."""
+
+    def test_render_rich_quick_wins_with_multiple_tiers(self) -> None:
+        """Test render_rich displays tier separators and label rows for Quick Wins."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="critical",
+                headline="Instant Win A",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=["cmd_instant_a"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="b",
+                category="test",
+                severity="high",
+                headline="Easy Win B",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="easy",
+                exploit_commands=["cmd_easy_b"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="c",
+                category="test",
+                severity="medium",
+                headline="Moderate Win C",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="moderate",
+                exploit_commands=["cmd_moderate_c"],
+            ),
+        ]
+        # Should not crash — tier separators and label rows are rendered
+        enumerate_plugin.render_rich(snapshot, findings)
+
+    def test_render_rich_quick_wins_single_tier(self) -> None:
+        """Test render_rich with a single tier doesn't add unnecessary separators."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="critical",
+                headline="Instant Win",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=["cmd1"],
+            ),
+        ]
+        # Should not crash
+        enumerate_plugin.render_rich(snapshot, findings)
+
+    def test_render_rich_quick_wins_tier_labels_present(self) -> None:
+        """Test that tier label rows with counts are added to the table."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="critical",
+                headline="Win A",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=["cmd_a"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="b",
+                category="test",
+                severity="critical",
+                headline="Win B",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=["cmd_b"],
+            ),
+            enumerate_plugin.PriorityFinding(
+                key="c",
+                category="test",
+                severity="high",
+                headline="Win C",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="easy",
+                exploit_commands=["cmd_c"],
+            ),
+        ]
+        buf = StringIO()
+        test_console = Console(
+            file=buf, width=200, force_terminal=False, no_color=True, theme=LAZYSSH_THEME
+        )
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            enumerate_plugin.render_rich(snapshot, findings)
+        output = buf.getvalue()
+        # Tier label: badge in Difficulty column, count in Finding column
+        assert "INSTANT" in output
+        assert "2 findings" in output
+        assert "EASY" in output
+        assert "1 findings" in output
+
+    def test_render_rich_exploit_commands_have_dollar_prefix(self) -> None:
+        """Test that exploit commands in Quick Wins get $ prefix."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="a",
+                category="test",
+                severity="critical",
+                headline="Win",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="instant",
+                exploit_commands=["echo exploit"],
+            ),
+        ]
+        buf = StringIO()
+        test_console = Console(
+            file=buf, width=200, force_terminal=False, no_color=True, theme=LAZYSSH_THEME
+        )
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            enumerate_plugin.render_rich(snapshot, findings)
+        output = buf.getvalue()
+        assert "$ echo exploit" in output
+
+    def test_render_rich_evidence_in_priority_findings_with_star(self) -> None:
+        """Test that evidence items appear in Priority Findings with * prefix."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="Test Finding",
+                detail="some detail",
+                evidence=["evidence item 1", "evidence item 2", "evidence item 3"],
+            ),
+        ]
+        buf = StringIO()
+        test_console = Console(
+            file=buf, width=200, force_terminal=False, no_color=True, theme=LAZYSSH_THEME
+        )
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            enumerate_plugin.render_rich(snapshot, findings)
+        output = buf.getvalue()
+        assert "* evidence item 1" in output
+        assert "* evidence item 2" in output
+        assert "* evidence item 3" in output
+
+    def test_render_rich_evidence_limited_to_four(self) -> None:
+        """Test that at most 4 evidence items are rendered."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="Test",
+                detail="d",
+                evidence=["ev1", "ev2", "ev3", "ev4", "ev5_should_not_appear"],
+            ),
+        ]
+        buf = StringIO()
+        test_console = Console(
+            file=buf, width=200, force_terminal=False, no_color=True, theme=LAZYSSH_THEME
+        )
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            enumerate_plugin.render_rich(snapshot, findings)
+        output = buf.getvalue()
+        assert "* ev1" in output
+        assert "* ev4" in output
+        assert "ev5_should_not_appear" not in output
+
+    def test_render_rich_exploit_commands_dollar_in_priority_findings(self) -> None:
+        """Test that exploit commands in Priority Findings get $ prefix."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="test",
+                severity="high",
+                headline="Test",
+                detail="d",
+                evidence=[],
+                exploitation_difficulty="easy",
+                exploit_commands=["exploit_command_here"],
+            ),
+        ]
+        buf = StringIO()
+        test_console = Console(
+            file=buf, width=200, force_terminal=False, no_color=True, theme=LAZYSSH_THEME
+        )
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            enumerate_plugin.render_rich(snapshot, findings)
+        output = buf.getvalue()
+        assert "$ exploit_command_here" in output
+
+
+class TestCategoryBorderLogic:
+    """Tests for category panel border differentiation based on findings/failures."""
+
+    def test_category_with_critical_finding_gets_error_border(self) -> None:
+        """Test that a category with a critical finding gets 'error' border style."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {
+            "system": {"kernel": _probe("system", "kernel", "5.10.100")},
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test_crit",
+                category="system",
+                severity="critical",
+                headline="Critical in System",
+                detail="detail",
+                evidence=[],
+            ),
+        ]
+        buf = StringIO()
+        test_console = Console(file=buf, width=120, force_terminal=True, theme=LAZYSSH_THEME)
+        panels_created: list[dict[str, str]] = []
+        original_print = test_console.print
+
+        def capture_print(*args: object, **kwargs: object) -> None:
+            from rich.panel import Panel as RichPanel
+
+            for arg in args:
+                if isinstance(arg, RichPanel) and arg.title is not None:
+                    title_str = str(arg.title)
+                    if "System" in title_str:
+                        panels_created.append({"title": title_str, "border": str(arg.border_style)})
+            original_print(*args, **kwargs)
+
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            test_console.print = capture_print  # type: ignore[assignment]
+            enumerate_plugin.render_rich(snapshot, findings)
+
+        assert len(panels_created) >= 1
+        system_panel = panels_created[0]
+        assert system_panel["border"] == "error"
+
+    def test_category_with_probe_failure_gets_warning_border(self) -> None:
+        """Test that a category with probe failure gets 'warning' border style."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "", status=1, stderr="permission denied"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        # No critical findings for system category
+        findings: list[enumerate_plugin.PriorityFinding] = []
+
+        buf = StringIO()
+        test_console = Console(file=buf, width=120, force_terminal=True, theme=LAZYSSH_THEME)
+        panels_created: list[dict[str, str]] = []
+        original_print = test_console.print
+
+        def capture_print(*args: object, **kwargs: object) -> None:
+            from rich.panel import Panel as RichPanel
+
+            for arg in args:
+                if isinstance(arg, RichPanel) and arg.title is not None:
+                    title_str = str(arg.title)
+                    if "System" in title_str:
+                        panels_created.append({"title": title_str, "border": str(arg.border_style)})
+            original_print(*args, **kwargs)
+
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            test_console.print = capture_print  # type: ignore[assignment]
+            enumerate_plugin.render_rich(snapshot, findings)
+
+        assert len(panels_created) >= 1
+        system_panel = panels_created[0]
+        assert system_panel["border"] == "warning"
+
+    def test_category_all_pass_gets_success_border(self) -> None:
+        """Test that a category with all passing probes gets 'success' border style."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {
+            "system": {"kernel": _probe("system", "kernel", "5.10.100")},
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        # No findings at all
+        findings: list[enumerate_plugin.PriorityFinding] = []
+
+        buf = StringIO()
+        test_console = Console(file=buf, width=120, force_terminal=True, theme=LAZYSSH_THEME)
+        panels_created: list[dict[str, str]] = []
+        original_print = test_console.print
+
+        def capture_print(*args: object, **kwargs: object) -> None:
+            from rich.panel import Panel as RichPanel
+
+            for arg in args:
+                if isinstance(arg, RichPanel) and arg.title is not None:
+                    title_str = str(arg.title)
+                    if "System" in title_str:
+                        panels_created.append({"title": title_str, "border": str(arg.border_style)})
+            original_print(*args, **kwargs)
+
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            test_console.print = capture_print  # type: ignore[assignment]
+            enumerate_plugin.render_rich(snapshot, findings)
+
+        assert len(panels_created) >= 1
+        system_panel = panels_created[0]
+        assert system_panel["border"] == "success"
+
+    def test_critical_overrides_failure(self) -> None:
+        """Test that critical finding takes precedence over probe failure for border."""
+        from io import StringIO
+        from unittest import mock
+
+        from rich.console import Console
+
+        from lazyssh.console_instance import LAZYSSH_THEME
+
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "", status=1, stderr="failed"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test_crit",
+                category="system",
+                severity="critical",
+                headline="Critical Finding",
+                detail="detail",
+                evidence=[],
+            ),
+        ]
+
+        buf = StringIO()
+        test_console = Console(file=buf, width=120, force_terminal=True, theme=LAZYSSH_THEME)
+        panels_created: list[dict[str, str]] = []
+        original_print = test_console.print
+
+        def capture_print(*args: object, **kwargs: object) -> None:
+            from rich.panel import Panel as RichPanel
+
+            for arg in args:
+                if isinstance(arg, RichPanel) and arg.title is not None:
+                    title_str = str(arg.title)
+                    if "System" in title_str:
+                        panels_created.append({"title": title_str, "border": str(arg.border_style)})
+            original_print(*args, **kwargs)
+
+        with mock.patch.object(enumerate_plugin, "console", test_console):
+            test_console.print = capture_print  # type: ignore[assignment]
+            enumerate_plugin.render_rich(snapshot, findings)
+
+        assert len(panels_created) >= 1
+        # Critical should win over failure
+        assert panels_created[0]["border"] == "error"
+
+
+class TestRenderPlainParity:
+    """Tests for plain-text rendering parity with rich output."""
+
+    def test_plain_stats_header_format(self) -> None:
+        """Test that plain-text stats header has correct format."""
+        probes = {
+            "system": {"kernel": _probe("system", "kernel", "5.10.100")},
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="system",
+                severity="critical",
+                headline="Test",
+                detail="detail",
+                evidence=[],
+            ),
+        ]
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        assert "Findings: 1 critical" in report
+        assert "Probes: 1 total" in report
+        assert "0 failed" in report
+
+    def test_plain_display_names_used(self) -> None:
+        """Test that plain-text uses PROBE_DISPLAY_NAMES for category highlights."""
+        probes = {
+            "system": {
+                "os_release": _probe("system", "os_release", "NAME=Ubuntu"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings: list[enumerate_plugin.PriorityFinding] = []
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        # Check that display name is used (os_release -> "OS Release" or similar)
+        display_name = enumerate_plugin.PROBE_DISPLAY_NAMES.get("os_release", "os_release")
+        assert display_name in report
+
+    def test_plain_evidence_in_findings(self) -> None:
+        """Test that evidence items appear in plain-text output."""
+        probes = {"system": {"kernel": _probe("system", "kernel", "5.10.100")}}
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="test",
+                category="system",
+                severity="high",
+                headline="Test Finding",
+                detail="detail here",
+                evidence=["evidence_item_1", "evidence_item_2"],
+            ),
+        ]
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        assert "evidence_item_1" in report
+        assert "evidence_item_2" in report
+
+    def test_plain_probe_failure_shown(self) -> None:
+        """Test that probe failures are shown in plain-text output."""
+        probes = {
+            "system": {
+                "kernel": _probe("system", "kernel", "output", status=1, stderr="command failed"),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        findings: list[enumerate_plugin.PriorityFinding] = []
+        report = enumerate_plugin.render_plain(snapshot, findings)
+        assert "exit 1: command failed" in report
+        # Stats header should reflect 1 failed probe
+        assert "1 failed" in report
