@@ -135,7 +135,8 @@ Wire the GTFOBins database into the existing SUID and sudo evaluators so they pr
 
 **Spec references:** Sections 1.2, 1.3, 1.6
 
-### [ ] Step 5: Autopwn Engine
+### [x] Step 5: Autopwn Engine
+<!-- chat-id: b5678749-ba6b-40b7-b29d-08a4185306f6 -->
 
 Create the autopwn exploitation engine that takes enumeration findings and attempts automated exploitation with user confirmation and dry-run support.
 

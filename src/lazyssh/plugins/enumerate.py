@@ -1405,6 +1405,8 @@ def main() -> int:  # pragma: no cover - CLI entry point
     ui_config = get_ui_config()
     use_plain = ui_config.get("plain_text") or ui_config.get("no_rich")
     is_json_output = "--json" in sys.argv
+    is_autopwn = "--autopwn" in sys.argv
+    is_dry_run = "--dry-run" in sys.argv
 
     try:
         snapshot = collect_remote_snapshot()
@@ -1435,6 +1437,12 @@ def main() -> int:  # pragma: no cover - CLI entry point
         console.print(f"[success]Saved survey to {json_path}[/success]")
         if txt_path:
             console.print(f"[dim]Plain-text copy: {txt_path}[/dim]")
+
+    if is_autopwn:
+        from lazyssh.plugins._autopwn import AutopwnEngine
+
+        engine = AutopwnEngine(snapshot, findings, dry_run=is_dry_run)
+        engine.run()
 
     return 0
 
