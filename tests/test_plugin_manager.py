@@ -1245,7 +1245,7 @@ print(f"COLUMNS={os.environ.get('COLUMNS', 'not set')}")
     def mock_terminal_size(fallback):
         raise OSError("No terminal")
 
-    monkeypatch.setattr("shutil.get_terminal_size", mock_terminal_size)
+    monkeypatch.setattr("lazyssh.plugin_manager.shutil.get_terminal_size", mock_terminal_size)
 
     pm = PluginManager(plugins_dir=plugins_dir)
     conn = SSHConnection(host="1.2.3.4", port=22, username="test", socket_path="/tmp/test")
