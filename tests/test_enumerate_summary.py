@@ -1173,7 +1173,33 @@ class TestNewEvaluators:
         assert result is not None
         assert result.key == "dangerous_capabilities"
         assert "2 binaries" in result.detail
+        # python3 has capabilities entries in GTFOBins DB, so exploit_commands should be populated
+        assert len(result.exploit_commands) > 0
+        assert any("python3" in cmd for cmd in result.exploit_commands)
+        # With GTFOBins match, difficulty should be "easy" (escalation keyword)
+        assert result.exploitation_difficulty == "easy"
+
+    def test_evaluate_dangerous_capabilities_no_gtfobins_match(self) -> None:
+        """Test capabilities evaluator with binary not in GTFOBins DB."""
+        probes = {
+            "capabilities": {
+                "cap_interesting": _probe(
+                    "capabilities",
+                    "cap_interesting",
+                    "/usr/sbin/tcpdump cap_net_raw=ep\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_dangerous_capabilities(
+            snapshot, _get_heuristic("dangerous_capabilities")
+        )
+        assert result is not None
+        # tcpdump has no capabilities entry in GTFOBins DB
         assert result.exploitation_difficulty == "moderate"
+        assert result.exploit_commands == []
 
     def test_evaluate_dangerous_capabilities_empty(self) -> None:
         probes = {
@@ -1401,8 +1427,11 @@ class TestNewEvaluators:
         )
         result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
         assert result is not None
-        assert result.exploitation_difficulty == "easy"
+        assert result.exploitation_difficulty in ("instant", "easy")
         assert len(result.evidence) >= 2
+        # Cross-reference should produce exploit commands from GTFOBins DB
+        assert len(result.exploit_commands) > 0
+        assert any("vim" in cmd for cmd in result.exploit_commands)
 
     def test_evaluate_gtfobins_sudo_safe(self) -> None:
         probes = {
@@ -1428,6 +1457,25 @@ class TestNewEvaluators:
         result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
         assert result is None
 
+    def test_evaluate_gtfobins_sudo_shell_binary_instant(self) -> None:
+        """Test that shell-spawning sudo binaries get 'instant' difficulty."""
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n    (root) NOPASSWD: /bin/bash\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
+        assert result is not None
+        assert result.exploitation_difficulty == "instant"
+        assert any("bash" in cmd.lower() for cmd in result.exploit_commands)
+
     # --- gtfobins_suid ---
 
     def test_evaluate_gtfobins_suid_found(self) -> None:
@@ -1445,10 +1493,13 @@ class TestNewEvaluators:
         )
         result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
         assert result is not None
-        assert result.exploitation_difficulty == "easy"
-        # vim and find are dangerous, passwd is not in the dangerous set
+        assert result.exploitation_difficulty in ("instant", "easy")
+        # vim and find are in GTFOBins DB, passwd is not
         assert "/usr/bin/vim" in result.evidence
         assert "/usr/bin/find" in result.evidence
+        # Cross-reference should produce exploit commands from GTFOBins DB
+        assert len(result.exploit_commands) > 0
+        assert any("vim" in cmd or "find" in cmd for cmd in result.exploit_commands)
 
     def test_evaluate_gtfobins_suid_only_safe(self) -> None:
         probes = {
@@ -1465,6 +1516,26 @@ class TestNewEvaluators:
         )
         result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
         assert result is None
+
+    def test_evaluate_gtfobins_suid_exploit_commands_populated(self) -> None:
+        """Test that SUID findings include actual GTFOBins command templates."""
+        probes = {
+            "filesystem": {
+                "suid_files": _probe(
+                    "filesystem",
+                    "suid_files",
+                    "/usr/bin/python3\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
+        assert result is not None
+        assert len(result.exploit_commands) >= 2  # comment + command
+        # Should contain the actual exploit command from the DB
+        assert any("python3" in cmd for cmd in result.exploit_commands)
 
     # --- writable_path ---
 

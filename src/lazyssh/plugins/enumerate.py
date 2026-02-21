@@ -51,6 +51,7 @@ from lazyssh.plugins._enumeration_plan import (
     PriorityHeuristic,
     RemoteProbe,
 )
+from lazyssh.plugins._gtfobins_data import lookup_capabilities, lookup_sudo, lookup_suid
 from lazyssh.plugins._kernel_exploits import suggest_exploits
 
 Severity = str  # alias for readability; values constrained to "high", "medium", "info"
@@ -680,6 +681,25 @@ def _evaluate_dangerous_capabilities(
     lines = [line.strip() for line in probe.stdout.splitlines() if line.strip()]
     if not lines:
         return None
+
+    exploit_commands: list[str] = []
+    best_difficulty = "moderate"
+
+    for cap_line in lines:
+        # Format: "/usr/bin/python3 cap_setuid=ep"
+        # Extract binary name from the path portion
+        parts = cap_line.split()
+        if not parts:
+            continue
+        binary_path = parts[0]
+        binary_name = binary_path.rsplit("/", 1)[-1] if "/" in binary_path else binary_path
+        entries = lookup_capabilities(binary_name)
+        for entry in entries:
+            exploit_commands.append(f"# {binary_name} ({binary_path}): {entry.description}")
+            exploit_commands.append(entry.command_template)
+            if any(kw in entry.description.lower() for kw in ("shell", "spawn", "escalation")):
+                best_difficulty = "easy"
+
     detail = f"Found {len(lines)} binaries with dangerous capabilities"
     return PriorityFinding(
         key=meta.key,
@@ -688,7 +708,8 @@ def _evaluate_dangerous_capabilities(
         headline=meta.headline,
         detail=detail,
         evidence=lines[:6],
-        exploitation_difficulty="moderate",
+        exploitation_difficulty=best_difficulty if exploit_commands else "moderate",
+        exploit_commands=exploit_commands[:12],
     )
 
 
@@ -811,79 +832,44 @@ def _evaluate_credential_exposure(
 def _evaluate_gtfobins_sudo(
     snapshot: EnumerationSnapshot, meta: PriorityHeuristic
 ) -> PriorityFinding | None:
-    """Evaluate sudo-allowed binaries for GTFOBins exploitability.
-
-    Note: Full GTFOBins cross-referencing is wired in Step 4.
-    This initial version flags known-dangerous sudo binaries.
-    """
+    """Evaluate sudo-allowed binaries for GTFOBins exploitability via database cross-reference."""
     sudo_check = _get_probe(snapshot, "users", "sudo_check")
     if not sudo_check or not sudo_check.stdout:
         return None
 
-    known_dangerous = {
-        "vim",
-        "vi",
-        "nano",
-        "less",
-        "more",
-        "man",
-        "find",
-        "awk",
-        "gawk",
-        "mawk",
-        "python",
-        "python3",
-        "perl",
-        "ruby",
-        "php",
-        "node",
-        "lua",
-        "env",
-        "bash",
-        "sh",
-        "dash",
-        "zsh",
-        "ksh",
-        "nmap",
-        "ftp",
-        "gdb",
-        "strace",
-        "ltrace",
-        "docker",
-        "screen",
-        "tmux",
-        "tar",
-        "zip",
-        "sed",
-        "ed",
-        "tee",
-        "cp",
-        "mv",
-        "wget",
-        "curl",
-        "socat",
-        "nc",
-        "ssh",
-        "scp",
-        "rsync",
-        "git",
-        "pip",
-        "pip3",
-        "mount",
-        "openssl",
-        "gcc",
-        "make",
-    }
-
     matches: list[str] = []
+    exploit_commands: list[str] = []
+    best_difficulty = "moderate"
+
     for line in sudo_check.stdout.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("User ") or stripped.startswith("Matching"):
             continue
-        for binary_name in known_dangerous:
-            if f"/{binary_name}" in stripped or stripped.endswith(f" {binary_name}"):
-                matches.append(stripped)
+        # Extract binary name from sudo line — typically ends with /path/to/binary or args
+        # e.g. "(root) NOPASSWD: /usr/bin/vim" → "vim"
+        parts = stripped.split()
+        if not parts:
+            continue
+        # The binary path is usually the last segment that starts with /
+        binary_path = ""
+        for part in parts:
+            if part.startswith("/"):
+                binary_path = part
                 break
+        if not binary_path:
+            # Try the last token as a potential binary
+            binary_path = parts[-1]
+        binary_name = binary_path.rsplit("/", 1)[-1] if "/" in binary_path else binary_path
+        entries = lookup_sudo(binary_name)
+        if entries:
+            matches.append(stripped)
+            for entry in entries:
+                exploit_commands.append(f"# {binary_name}: {entry.description}")
+                exploit_commands.append(entry.command_template)
+                if any(kw in entry.description.lower() for kw in ("shell", "spawn", "escape")):
+                    best_difficulty = "instant"
+                elif best_difficulty != "instant":
+                    best_difficulty = "easy"
 
     if not matches:
         return None
@@ -895,84 +881,39 @@ def _evaluate_gtfobins_sudo(
         headline=meta.headline,
         detail=detail,
         evidence=matches[:6],
-        exploitation_difficulty="easy",
+        exploitation_difficulty=best_difficulty,
+        exploit_commands=exploit_commands[:12],
     )
 
 
 def _evaluate_gtfobins_suid(
     snapshot: EnumerationSnapshot, meta: PriorityHeuristic
 ) -> PriorityFinding | None:
-    """Evaluate SUID binaries for GTFOBins exploitability.
-
-    Note: Full GTFOBins cross-referencing is wired in Step 4.
-    This initial version flags known-dangerous SUID binaries.
-    """
+    """Evaluate SUID binaries for GTFOBins exploitability via database cross-reference."""
     suid_probe = _get_probe(snapshot, "filesystem", "suid_files")
     if not suid_probe or not suid_probe.stdout:
         return None
 
-    known_dangerous_suid = {
-        "vim",
-        "vi",
-        "nano",
-        "less",
-        "more",
-        "man",
-        "find",
-        "awk",
-        "gawk",
-        "python",
-        "python3",
-        "perl",
-        "ruby",
-        "php",
-        "node",
-        "lua",
-        "env",
-        "bash",
-        "sh",
-        "dash",
-        "zsh",
-        "ksh",
-        "nmap",
-        "gdb",
-        "strace",
-        "ltrace",
-        "docker",
-        "screen",
-        "tmux",
-        "tar",
-        "zip",
-        "sed",
-        "ed",
-        "tee",
-        "cp",
-        "mv",
-        "wget",
-        "curl",
-        "socat",
-        "nc",
-        "ssh",
-        "scp",
-        "rsync",
-        "git",
-        "pip",
-        "pip3",
-        "mount",
-        "openssl",
-        "gcc",
-        "make",
-        "pkexec",
-    }
-
     matches: list[str] = []
+    exploit_commands: list[str] = []
+    best_difficulty = "moderate"  # track easiest exploit found
+
     for line in suid_probe.stdout.splitlines():
         path = line.strip()
         if not path:
             continue
         binary_name = path.rsplit("/", 1)[-1] if "/" in path else path
-        if binary_name in known_dangerous_suid:
+        entries = lookup_suid(binary_name)
+        if entries:
             matches.append(path)
+            for entry in entries:
+                exploit_commands.append(f"# {binary_name} ({path}): {entry.description}")
+                exploit_commands.append(entry.command_template)
+                # Shell-spawning entries are instant/easy wins
+                if any(kw in entry.description.lower() for kw in ("shell", "spawn", "escape")):
+                    best_difficulty = "instant"
+                elif best_difficulty != "instant":
+                    best_difficulty = "easy"
 
     if not matches:
         return None
@@ -984,7 +925,8 @@ def _evaluate_gtfobins_suid(
         headline=meta.headline,
         detail=detail,
         evidence=matches[:6],
-        exploitation_difficulty="easy",
+        exploitation_difficulty=best_difficulty,
+        exploit_commands=exploit_commands[:12],
     )
 
 

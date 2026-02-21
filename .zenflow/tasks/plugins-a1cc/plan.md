@@ -116,7 +116,8 @@ Create the kernel exploit database with version-range matching and a lookup func
 
 **Spec references:** Section 1.4
 
-### [ ] Step 4: GTFOBins Cross-Reference Integration
+### [x] Step 4: GTFOBins Cross-Reference Integration
+<!-- chat-id: 225eaf8b-da38-4c9f-acfe-f3a89901284f -->
 
 Wire the GTFOBins database into the existing SUID and sudo evaluators so they produce actionable exploit commands in findings.
 
