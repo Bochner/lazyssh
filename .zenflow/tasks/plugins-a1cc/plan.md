@@ -74,7 +74,8 @@ Expand `_enumeration_plan.py` with ~40 new probes across 7 new categories and ~1
 
 **Spec references:** Sections 1.1, 1.2, 1.6 (PriorityFinding extension)
 
-### [ ] Step 2: GTFOBins Database and Lookup Functions
+### [x] Step 2: GTFOBins Database and Lookup Functions
+<!-- chat-id: 4a6203e4-99f6-45ee-bbd9-20dcb10682af -->
 
 Create the embedded GTFOBins database covering ~100 common exploitable binaries with SUID, sudo, and capabilities exploitation techniques. Implement lookup functions and unit tests.
 
