@@ -214,3 +214,14 @@ Modernize pytest configuration with best-practice plugins and strict settings.
 - [x] Added `filterwarnings = ["error", "default::ResourceWarning"]` — all warnings treated as errors except ResourceWarnings (subprocess pipe cleanup handled by GC)
 - [x] Updated CHANGELOG with new testing entries
 - [x] Run `make check && make test && make build` — zero ruff violations, zero mypy errors, 966 tests passed, 97% branch coverage, build clean
+
+### [x] Step: error fix
+<!-- chat-id: 09ab0d15-a91b-4dda-9630-1fbc95ed4f8d -->
+
+Fix ResourceWarning errors in CI test suite caused by unclosed file descriptors.
+
+- [x] Root-caused 2 sources: unclosed `Popen` pipes in `plugin_manager.py` and unclosed `FileHandler` objects in `test_logging_module.py`
+- [x] In `plugin_manager.py`: added explicit `process.stdout.close()` / `process.stderr.close()` after draining in `execute_plugin()`, and in `finally` block of `execute_plugin_streaming()`
+- [x] In `test_logging_module.py`: replaced all `logger.handlers.clear()` with `_close_handlers(logger)` helper that calls `handler.close()` before clearing
+- [x] In `pyproject.toml`: promoted `ResourceWarning` from `"default"` to `"error"` (removed the downgrade exception) so these never silently regress
+- [x] Run `make check && make test` — zero ruff violations, zero mypy errors, 966 tests passed, 97.04% branch coverage, zero warnings

@@ -187,8 +187,6 @@ strict_markers = true
 strict_config = true
 filterwarnings = [
     "error",
-    # subprocess.Popen pipes in plugin execution tests are cleaned up by GC
-    "default::ResourceWarning",
 ]
 timeout = 30
 timeout_method = "thread"

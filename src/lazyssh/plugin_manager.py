@@ -437,6 +437,10 @@ class PluginManager:
                 if not read_any:  # pragma: no cover
                     continue
 
+            # Explicitly close pipes to avoid ResourceWarning for unclosed files
+            process.stdout.close()
+            process.stderr.close()
+
             execution_time = time.time() - start_time
             returncode = process.returncode if process.returncode is not None else 1
             success = returncode == 0
@@ -590,6 +594,13 @@ class PluginManager:
             return
 
         finally:
+            # Explicitly close pipes to avoid ResourceWarning for unclosed files;
+            # process may be unbound if Popen failed, stdout/stderr typed as IO | None
+            with contextlib.suppress(Exception):
+                process.stdout.close()  # type: ignore[union-attr]
+            with contextlib.suppress(Exception):
+                process.stderr.close()  # type: ignore[union-attr]
+
             execution_time = time.time() - start_time
             if APP_LOGGER:
                 rc = None
