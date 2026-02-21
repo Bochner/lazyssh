@@ -160,6 +160,7 @@ Fix the critical hang issue by isolating stdin and sanitizing docker commands at
 **Verification:** `make check && make test`
 
 ### [ ] Step 5: Autopwn interactive command detection (R2.2)
+<!-- chat-id: 812b0237-3763-4ed4-ba57-ce0e4901d261 -->
 
 Add pre-flight classification of interactive commands with appropriate warnings.
 
