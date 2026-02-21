@@ -2460,14 +2460,18 @@ class TestEvaluatorEdgeCases:
         assert any("vim" in cmd for cmd in result.exploit_commands)
 
     def test_gtfobins_sudo_easy_not_instant(self) -> None:
-        """Test sudo binary that gets 'easy' difficulty (lines 871-872)."""
+        """Test sudo binary that gets 'easy' difficulty (lines 871-872).
+
+        Uses base64 because its sudo entry description ("Read files via base64")
+        does NOT contain "shell", "spawn", or "escape", triggering the 'easy' branch.
+        """
         probes = {
             "users": {
                 "sudo_check": _probe(
                     "users",
                     "sudo_check",
                     "User user may run the following commands:\n"
-                    "    (root) NOPASSWD: /usr/bin/awk\n",
+                    "    (root) NOPASSWD: /usr/bin/base64\n",
                 ),
             },
         }
@@ -2475,9 +2479,29 @@ class TestEvaluatorEdgeCases:
             collected_at=datetime.now(UTC), probes=probes, warnings=[]
         )
         result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
-        if result is not None:
-            # If awk has a non-shell-spawning entry, difficulty should be "easy" or "instant"
-            assert result.exploitation_difficulty in ("instant", "easy")
+        assert result is not None
+        assert result.exploitation_difficulty == "easy"
+
+    def test_gtfobins_sudo_instant_then_easy(self) -> None:
+        """Test sudo with both instant and easy binaries — instant is preserved (line 871->866)."""
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    (root) NOPASSWD: /usr/bin/vim\n"
+                    "    (root) NOPASSWD: /usr/bin/base64\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_sudo(snapshot, _get_heuristic("gtfobins_sudo"))
+        assert result is not None
+        # vim sets instant, base64 should NOT downgrade to easy
+        assert result.exploitation_difficulty == "instant"
 
     # --- gtfobins_suid edge cases ---
 
@@ -2502,13 +2526,17 @@ class TestEvaluatorEdgeCases:
         assert "/usr/bin/find" in result.evidence
 
     def test_gtfobins_suid_easy_difficulty(self) -> None:
-        """Test SUID binary that gets 'easy' difficulty (lines 915-916)."""
+        """Test SUID binary that gets 'easy' difficulty (lines 915-916).
+
+        Uses base64 because its suid entry description ("SUID file read via base64")
+        does NOT contain "shell", "spawn", or "escape", triggering the 'easy' branch.
+        """
         probes = {
             "filesystem": {
                 "suid_files": _probe(
                     "filesystem",
                     "suid_files",
-                    "/usr/bin/awk\n",
+                    "/usr/bin/base64\n",
                 ),
             },
         }
@@ -2516,8 +2544,27 @@ class TestEvaluatorEdgeCases:
             collected_at=datetime.now(UTC), probes=probes, warnings=[]
         )
         result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
-        if result is not None:
-            assert result.exploitation_difficulty in ("instant", "easy")
+        assert result is not None
+        assert result.exploitation_difficulty == "easy"
+
+    def test_gtfobins_suid_instant_then_easy(self) -> None:
+        """Test SUID with both instant and easy binaries — instant is preserved (line 915->909)."""
+        probes = {
+            "filesystem": {
+                "suid_files": _probe(
+                    "filesystem",
+                    "suid_files",
+                    "/usr/bin/find\n/usr/bin/base64\n",
+                ),
+            },
+        }
+        snapshot = enumerate_plugin.EnumerationSnapshot(
+            collected_at=datetime.now(UTC), probes=probes, warnings=[]
+        )
+        result = enumerate_plugin._evaluate_gtfobins_suid(snapshot, _get_heuristic("gtfobins_suid"))
+        assert result is not None
+        # find sets instant, base64 should NOT downgrade to easy
+        assert result.exploitation_difficulty == "instant"
 
     # --- nfs_no_root_squash edge cases ---
 

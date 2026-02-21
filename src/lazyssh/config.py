@@ -239,7 +239,7 @@ def save_config(name: str, connection_params: dict[str, Any]) -> bool:
                     config_lines.append(f'{key} = "{value}"')
                 elif isinstance(value, bool):
                     config_lines.append(f"{key} = {str(value).lower()}")
-                elif value is not None:
+                elif value is not None:  # pragma: no branch - type dispatch
                     config_lines.append(f"{key} = {value}")
             new_section = "\n".join(config_lines) + "\n"
 

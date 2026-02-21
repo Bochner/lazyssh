@@ -1138,6 +1138,51 @@ class TestAutopwnSudoEdgeCases:
             result = engine.run()
             assert len(result.attempts) == 0
 
+    def test_sudo_live_failed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test sudo exploit live failure (line 372)."""
+        monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")
+        monkeypatch.setenv("LAZYSSH_HOST", "testhost")
+        monkeypatch.setenv("LAZYSSH_USER", "testuser")
+
+        probes = {
+            "users": {
+                "sudo_check": _probe(
+                    "users",
+                    "sudo_check",
+                    "User user may run the following commands:\n"
+                    "    (root) NOPASSWD: /usr/bin/vim\n",
+                ),
+            },
+        }
+        snapshot = _snapshot(probes)
+        findings = [
+            enumerate_plugin.PriorityFinding(
+                key="gtfobins_sudo",
+                category="users",
+                severity="high",
+                headline="Sudo exploitable",
+                detail="Found 1",
+                evidence=["(root) NOPASSWD: /usr/bin/vim"],
+                exploitation_difficulty="instant",
+                exploit_commands=["sudo vim -c ':!/bin/sh'"],
+            )
+        ]
+
+        mock_result = mock.MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "permission denied"
+
+        with (
+            mock.patch("lazyssh.plugins._autopwn._confirm", return_value=True),
+            mock.patch("subprocess.run", return_value=mock_result),
+        ):
+            engine = AutopwnEngine(snapshot, findings, dry_run=False)
+            result = engine.run()
+            assert len(result.attempts) == 1
+            assert result.attempts[0].success is False
+            assert result.attempts[0].technique == "gtfobins_sudo"
+
     def test_sudo_live_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test sudo exploit live success (lines 365-386)."""
         monkeypatch.setenv("LAZYSSH_SOCKET_PATH", "/tmp/sock")

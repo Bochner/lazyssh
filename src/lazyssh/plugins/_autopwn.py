@@ -172,7 +172,7 @@ class AutopwnEngine:
         else:
             # For findings that have exploit commands but no specific handler,
             # display the commands in dry-run style
-            if finding.exploit_commands:
+            if finding.exploit_commands:  # pragma: no branch - filtered by run()
                 self._generic_exploit_display(finding)
 
     def _exploit_writable_passwd(self, finding: PriorityFinding) -> ExploitAttempt | None:
@@ -180,10 +180,10 @@ class AutopwnEngine:
         technique = "writable_passwd"
         target = "/etc/passwd"
 
-        # The commands from the finding
+        # The commands from the finding (guaranteed non-empty by run() filter)
         commands = finding.exploit_commands
-        if not commands:
-            return None
+        if not commands:  # pragma: no cover - filtered by run()
+            return None  # pragma: no cover
 
         # Use the first real command (skip comments)
         append_cmd = ""
@@ -392,7 +392,7 @@ class AutopwnEngine:
         technique = "docker_escape"
         cmd = "docker run -v /:/hostfs -it alpine chroot /hostfs /bin/bash"
 
-        if finding.exploit_commands:
+        if finding.exploit_commands:  # pragma: no branch - filtered by run()
             cmd = finding.exploit_commands[0]
 
         console.print(

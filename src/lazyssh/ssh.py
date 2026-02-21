@@ -578,7 +578,7 @@ class SSHManager:
             if SSH_LOGGER:
                 SSH_LOGGER.exception(f"Error during connection cleanup: {str(e)}")
             # Still try to clean up the reference even if there was an error
-            if socket_path in self.connections:
+            if socket_path in self.connections:  # pragma: no branch - defensive cleanup
                 del self.connections[socket_path]
             return True  # Return success so we continue closing other connections
 

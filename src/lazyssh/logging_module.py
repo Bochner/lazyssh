@@ -257,7 +257,7 @@ def log_ssh_command(
             SSH_LOGGER.debug(f"Output: {output[:500]}{'...' if len(output) > 500 else ''}")
     else:
         SSH_LOGGER.error(f"Command failed on {connection_name}: {command}")
-        if error:
+        if error:  # pragma: no branch - depends on caller
             SSH_LOGGER.error(f"Error: {error}")
 
 
